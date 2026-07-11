@@ -10,6 +10,10 @@
 * S3 methods for class `"simplex_fast_mixed"`: `print`, `summary`, `coef`,
   `ranef`, `VarCorr` (re-exported from `nlme`), `vcov`, `logLik`, `nobs`,
   `ngrps`, `fitted`, `residuals`, `predict` (with `re.form`) and `plot`.
+* The vignettes now analyse real data: the `sdac` (CD34+ cell recovery) and
+  `retinal` (longitudinal intraocular gas) data sets from `simplexreg`.
+* A `pkgdown` documentation website, GitHub Actions workflows (R-CMD-check,
+  pkgdown, test-coverage), and an MIT license.
 
 # fastsimplexreg 0.1.0
 

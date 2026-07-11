@@ -16,7 +16,20 @@ knitr::opts_chunk$set(
 # fastsimplexreg
 
 <!-- badges: start -->
+[![R-CMD-check](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml)
+[![CRAN status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg)
+[![Downloads](https://cranlogs.r-pkg.org/badges/grand-total/fastsimplexreg)](https://cran.r-project.org/package=fastsimplexreg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
 <!-- badges: end -->
+
+A high-performance implementation of simplex regression for continuous
+proportions in the open interval $(0, 1)$, with separate submodels for the mean
+and the dispersion, and both fixed- and mixed-effects fitting. The numerical
+core (log-likelihood, analytic score, native BFGS, adaptive Gauss-Hermite
+quadrature, density, random generation, prediction) is written in C++ with
+`RcppArmadillo`, `BLAS`/`LAPACK` and optional `OpenMP`. Documentation website:
+<https://evandeilton.github.io/fastsimplexreg/>.
 
 `fastsimplexreg` provides high-performance maximum-likelihood estimation of
 **simplex regression** models for continuous proportions in the open interval

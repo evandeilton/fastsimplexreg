@@ -1,0 +1,81 @@
+url: https://evandeilton.github.io/fastsimplexreg/
+
+template:
+  bootstrap: 5
+  bootswatch: litera
+  bslib:
+    primary: "#1a5276"
+    base_font:
+      google: "Source Sans 3"
+    heading_font:
+      google: "Source Serif 4"
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/fastsimplexreg.html
+    news:
+      text: Changelog
+      href: news/index.html
+    github:
+      icon: fab fa-github
+      href: https://github.com/evandeilton/fastsimplexreg
+      aria-label: GitHub
+
+footer:
+  structure:
+    left: [authors]
+    right: [github]
+  components:
+    authors:
+      text: José Evandeilton Lopes
+    github:
+      icon: fab fa-github
+      href: https://github.com/evandeilton/fastsimplexreg
+      aria-label: GitHub
+
+articles:
+  - title: "Articles"
+    navbar: ~
+    contents:
+      - fastsimplexreg
+      - fastsimplexregmixed
+
+reference:
+  - title: "Model fitting"
+    desc: "Fit fixed- and mixed-effects simplex regression models."
+    contents:
+      - fastsimplexreg
+      - fastsimplexregmixed
+  - title: "The simplex distribution"
+    desc: "Density, random generation and the mean link inverse."
+    contents:
+      - dsimplex
+      - rsimplex
+      - simplex_linkinv
+  - title: "S3 methods: fixed-effects fits"
+    desc: "Methods for objects of class simplex_fast."
+    contents:
+      - simplex_fast-methods
+      - summary.simplex_fast
+      - print.simplex_fast
+      - predict.simplex_fast
+      - plot.simplex_fast
+      - simulate.simplex_fast
+  - title: "S3 methods: mixed-effects fits"
+    desc: "Methods for objects of class simplex_fast_mixed."
+    contents:
+      - simplex_fast_mixed-methods
+      - summary.simplex_fast_mixed
+      - print.simplex_fast_mixed
+      - predict.simplex_fast_mixed
+      - plot.simplex_fast_mixed
+      - ngrps
+      - reexports
+  - title: "Package"
+    contents:
+      - fastsimplexreg-package

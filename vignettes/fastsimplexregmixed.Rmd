@@ -8,121 +8,167 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
+has_simplexreg <- requireNamespace("simplexreg", quietly = TRUE)
 ```
 
-## 1. Motivation
+## 1. Nested proportion data
 
-Proportion responses in the open interval $(0, 1)$ are frequently **nested**:
-repeated measurements within subjects, students within schools, plots within
-sites. Ignoring the clustering understates uncertainty and can bias the mean and
-dispersion estimates. `fastsimplexregmixed()` fits a two-level simplex mixed
-model with a random effect per cluster while retaining the variable-dispersion
-structure of [`fastsimplexreg()`](fastsimplexreg.html).
+Continuous proportions in $(0, 1)$ are frequently **nested**: repeated
+measurements within a subject, students within schools, plots within sites. The
+observations within a cluster are correlated, and treating them as independent
+understates uncertainty and can bias both the mean and the dispersion estimates.
+`fastsimplexregmixed()` extends the simplex regression of
+[`fastsimplexreg()`](fastsimplexreg.html) with a cluster-specific random effect,
+while keeping the variable-dispersion structure.
 
-## 2. The model
+## 2. The two-level simplex mixed model
 
-For observation $i$ in cluster $j$, conditional on a cluster random effect
+For observation $i$ in cluster $j$, conditionally on a cluster random effect
 $b_j \sim N_q(0, \Sigma)$,
 $$
 y_{ij} \mid b_j \sim \mathrm{Simplex}(\mu_{ij}, \phi_{ij}), \qquad
 g(\mu_{ij}) = x_{ij}^\top\beta + z_{ij}^\top b_j, \qquad
 \log\phi_{ij} = w_{ij}^\top\gamma .
 $$
-The mean link $g$ is one of `logit`, `probit`, `cloglog`, `neglog`; the
-dispersion link is log. The random effects enter the mean submodel; the
-dispersion submodel carries fixed effects only.
+The fixed effects $\beta$ (mean) and $\gamma$ (dispersion) use the same
+multi-part `Formula` as the fixed-effects fit; the $q$-dimensional random effect
+$b_j$ enters the mean submodel and induces the within-cluster correlation. The
+mean link $g$ is one of `logit`, `probit`, `cloglog`, `neglog`; the dispersion
+uses a log link and carries fixed effects only.
 
-The marginal likelihood integrates the random effects out,
+Because the random effects are unobserved, the likelihood is the **marginal**
+likelihood obtained by integrating them out,
 $$
 \ell(\theta) = \sum_j \log \int_{\mathbb{R}^q}
-  \exp\Big\{\textstyle\sum_i \log f(y_{ij}\mid b)\Big\}\, N(b; 0, \Sigma)\, \mathrm{d}b ,
+  \exp\!\Big\{\textstyle\sum_i \log f(y_{ij}\mid b)\Big\}\,
+  N(b; 0, \Sigma)\, \mathrm{d}b ,
 $$
-which has no closed form and is approximated by **adaptive Gauss-Hermite
-quadrature** (AGHQ). With `nAGQ = 1` this is the Laplace approximation; larger
-`nAGQ` refines the integral. The covariance $\Sigma = D D^\top$ is estimated on
-an unconstrained log-Cholesky scale, so the estimate is always positive
-definite.
+which has no closed form.
 
-## 3. The `random` interface
+### Adaptive Gauss-Hermite quadrature
 
-Random effects and the grouping factor are given through `random`, using the
-familiar lme4-style bar:
+The integral is approximated by **adaptive Gauss-Hermite quadrature** (AGHQ). For
+each cluster the integrand is centred at its posterior mode and rescaled by the
+curvature there, after which a Gauss-Hermite rule with `nAGQ` points per
+dimension is applied. `nAGQ = 1` recovers the **Laplace approximation**; larger
+`nAGQ` refines the integral, at the cost of `nAGQ^q` evaluations per cluster.
+The random-effect covariance $\Sigma = D D^\top$ is estimated on an
+unconstrained log-Cholesky scale, so the estimate is always positive definite.
+The per-cluster inner mode-finding, the quadrature and the analytic score run in
+C++ and are parallelised over clusters with OpenMP.
+
+### The `random` interface
+
+Random effects and the grouping factor are supplied through `random`, using the
+lme4-style bar:
 
 * `random = ~ 1 | subject` — a random intercept;
-* `random = ~ 1 + x1 | subject` — a random intercept and a random slope in `x1`;
-* `random = ~ 0 + x1 | subject` — a random slope only.
+* `random = ~ 1 + t | subject` — a random intercept and a random slope in `t`;
+* `random = ~ 0 + t | subject` — a random slope only.
 
-The mean and dispersion fixed effects use the same multi-part `Formula` as
-`fastsimplexreg()`, e.g. `y ~ x1 + x2 | z1`.
+## 3. A worked example: intraocular gas decay
 
-## 4. A worked example
+We use the `retinal` data from the **simplexreg** package: the response `Gas` is
+the fraction of intraocular gas remaining in the eye after retinal surgery,
+measured **repeatedly over time** for each of 31 patients (variable `ID`),
+with `LogT`/`LogT2` the (log) time since surgery and `Level` the gas
+concentration level. Successive measurements on the same eye are correlated — a
+textbook nested structure.
 
-```{r simulate}
-set.seed(2026)
-J <- 150; nj <- 10; n <- J * nj
-dat <- data.frame(
-  subject = factor(rep(seq_len(J), each = nj)),
-  x1 = rnorm(n),
-  z1 = rnorm(n)
-)
-b <- rnorm(J, 0, 0.7)[dat$subject]          # true random intercepts
-mu  <- simplex_linkinv(0.4 - 0.7 * dat$x1 + b, "logit")
-phi <- exp(-0.3 + 0.4 * dat$z1)
-dat$y <- rsimplex(n, mu, phi)
+```{r data}
+if (has_simplexreg) {
+  data("retinal", package = "simplexreg")
+} else {
+  # Synthetic longitudinal stand-in so the vignette renders without 'simplexreg'.
+  set.seed(1)
+  J <- 31; nj <- 6; n <- J * nj
+  ID <- rep(seq_len(J), each = nj); Time <- rep(seq_len(nj) * 10, J)
+  LogT <- log(Time); LogT2 <- LogT^2
+  b <- rnorm(J, 0, 0.8)[ID]
+  mu <- simplex_linkinv(2.5 - 1.2 * LogT + 0.1 * LogT2 + b, "logit")
+  retinal <- data.frame(Gas = rsimplex(n, mu, exp(-0.5)),
+                        Time = Time, LogT = LogT, LogT2 = LogT2, ID = ID)
+}
+retinal$ID <- factor(retinal$ID)
+str(retinal)
 ```
+
+The gas fraction decays with time; we model the mean decay through `LogT` and
+`LogT2`, let the dispersion depend on `Time`, and add a **random intercept per
+eye** to capture between-subject heterogeneity:
 
 ```{r fit}
 fit <- fastsimplexregmixed(
-  y ~ x1 | z1,
-  random = ~ 1 | subject,
-  data = dat,
+  Gas ~ LogT + LogT2 | Time,
+  random = ~ 1 | ID,
+  data = retinal,
   link = "logit",
-  nAGQ = 9,
+  nAGQ = 15,
   n_threads = 1
 )
 summary(fit)
 ```
 
-The estimated variance component and the group-level random effects:
+The estimated between-subject variance and the group-level random effects:
 
-```{r ranef}
+```{r varcorr}
 VarCorr(fit)
 head(ranef(fit))
 ```
 
-Predictions are conditional on the estimated random effects by default; set
-`re.form = NA` for population-level (marginal-mode) predictions:
+A non-negligible random-intercept variance confirms that eyes differ
+systematically in their baseline gas retention beyond what the time covariates
+explain. The number of groups and the marginal fit statistics:
 
-```{r predict}
-head(predict(fit, type = "response"))                 # includes random effects
-head(predict(fit, type = "response", re.form = NA))   # population level
+```{r info}
+c(groups = ngrps(fit), nobs = nobs(fit))
+c(logLik = as.numeric(logLik(fit)), AIC = AIC(fit), BIC = BIC(fit))
 ```
 
-Diagnostic plots (built with **ggplot2**, residuals conditional on the random
-effects):
+### Conditional vs population predictions
 
-```{r plot, fig.width = 7, fig.height = 5.5, out.width = "100%"}
+By default `predict()` is **conditional** on the estimated random effects (a
+subject-specific curve); `re.form = NA` gives the **population-level**
+(marginal-mode) prediction with $b = 0$:
+
+```{r predict}
+newd <- data.frame(LogT = log(c(5, 20, 60)), LogT2 = log(c(5, 20, 60))^2,
+                   Time = c(5, 20, 60), ID = factor(levels(retinal$ID)[1],
+                                                    levels = levels(retinal$ID)))
+data.frame(
+  Time        = c(5, 20, 60),
+  conditional = predict(fit, newdata = newd, type = "response"),
+  population  = predict(fit, newdata = newd, type = "response", re.form = NA)
+)
+```
+
+### Diagnostics
+
+The `plot()` method mirrors the fixed-effects diagnostics, with residuals
+computed **conditional on the empirical-Bayes random effects**:
+
+```{r diagnostics, fig.width = 7, fig.height = 5.5, out.width = "100%"}
 plot(fit, which = 1:4)
 ```
 
-## 5. Choosing `nAGQ` and performance
+## 4. Choosing `nAGQ` and performance
 
-`nAGQ` trades accuracy for cost: `nAGQ = 1` (Laplace) is the fastest and is often
-adequate when clusters are large, while `nAGQ = 9`-`15` gives high accuracy for
-small clusters. The tensor grid has `nAGQ^q` nodes, so keep `q` small (`q <= 3`)
-and reduce `nAGQ` as `q` grows (`11` for `q = 1`, `9` for `q = 2`, `7` for
-`q = 3` are good defaults). Because clusters are conditionally independent, the
-work is parallelised over clusters; set `n_threads = 0` to use all available
-cores.
+`nAGQ` trades accuracy for cost. `nAGQ = 1` (Laplace) is fastest and is often
+adequate when clusters are large; `nAGQ = 9`-`15` gives high accuracy for small
+clusters. Since the tensor grid has $\mathtt{nAGQ}^q$ nodes, keep the number of
+random effects small ($q \le 3$) and lower `nAGQ` as $q$ grows (good defaults:
+`11` for $q = 1$, `9` for $q = 2$, `7` for $q = 3$). Because clusters are
+conditionally independent, the work is parallelised over clusters — set
+`n_threads = 0` to use all available cores.
 
-## 6. Scope and extensions
+## 5. Scope and extensions
 
 This version supports a single grouping factor (two-level nesting), Gaussian
-random effects in the mean, and fixed-effect dispersion. Crossed or three-level
-random effects, and random effects in the dispersion submodel, are natural
-extensions for future releases.
+random effects in the mean submodel, and fixed-effect (variable) dispersion.
+Crossed or three-level random effects, and random effects in the dispersion
+submodel, are natural extensions for future releases.
 
 ## References
 
@@ -132,3 +178,6 @@ simplex. *Journal of Multivariate Analysis*, **39**(1), 106-116.
 Pinheiro, J. C. and Bates, D. M. (1995). Approximations to the log-likelihood
 function in the nonlinear mixed-effects model. *Journal of Computational and
 Graphical Statistics*, **4**(1), 12-35.
+
+Song, P. X.-K. and Tan, M. (2000). Marginal models for longitudinal continuous
+proportional data. *Biometrics*, **56**(2), 496-502.

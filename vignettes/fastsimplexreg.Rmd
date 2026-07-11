@@ -8,242 +8,193 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.width = 6,
-  fig.height = 4
-)
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
+has_simplexreg <- requireNamespace("simplexreg", quietly = TRUE)
 ```
 
-## 1. The simplex distribution
+## 1. Bounded proportions and the simplex distribution
 
-`fastsimplexreg` implements maximum-likelihood regression for continuous
-responses on the open unit interval $(0, 1)$ using the **simplex distribution**
-of Barndorff-Nielsen and Jørgensen (1991). A response $Y$ with mean
-$\mu \in (0, 1)$ and dispersion $\phi > 0$ has density
+Responses that are continuous **proportions** or **rates** restricted to the open
+interval $(0, 1)$ — the fraction of a resource used, a recovery rate, a
+concentration relative to a maximum — violate the assumptions of ordinary linear
+regression: their support is bounded and their variance is inherently
+heteroscedastic, shrinking towards the boundaries $0$ and $1$. Two likelihood
+based models dominate this setting: **beta regression** and **simplex
+regression**. This package implements the latter.
 
+The simplex distribution (Barndorff-Nielsen and Jørgensen, 1991) is a member of the class of *dispersion
+models*. A random variable $Y \in (0, 1)$ has a simplex distribution with mean
+$\mu \in (0, 1)$ and dispersion $\phi > 0$, written
+$Y \sim \mathrm{Simplex}(\mu, \phi)$, if its density is
 $$
-f(y; \mu, \phi) =
-\bigl[\, 2\pi\,\phi\,\{y(1-y)\}^{3} \,\bigr]^{-1/2}
-\exp\!\left\{
--\frac{1}{2\phi}\,
-\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}
-\right\},
-\qquad 0 < y < 1 .
-$$
-
-The parameter $\mu$ is the mean of $Y$, while $\phi$ (equivalently
-$\sigma^2$) controls the dispersion. It is convenient to work with the
-**log-density**
-
-$$
-\log f(y; \mu, \phi) =
--\tfrac{1}{2}\bigl(\log 2\pi + \log \phi\bigr)
--\tfrac{3}{2}\bigl(\log y + \log(1-y)\bigr)
--\frac{1}{2\phi}\, d(y, \mu),
+f(y; \mu, \phi) = \bigl[2\pi\,\phi\,\{y(1-y)\}^3\bigr]^{-1/2}
+  \exp\!\left\{ -\frac{1}{2\phi}\, d(y; \mu) \right\},
 \qquad
-d(y, \mu) = \frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}.
+d(y; \mu) = \frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2},
 $$
+where $d(y; \mu)$ is the *unit deviance*. On the log scale,
+$$
+\log f(y; \mu, \phi) = -\tfrac12\bigl(\log 2\pi + \log\phi\bigr)
+  - \tfrac32\bigl(\log y + \log(1-y)\bigr) - \tfrac{1}{2\phi}\, d(y; \mu).
+$$
+The mean of $Y$ is exactly $\mu$, and to first order in the dispersion the
+variance is $\mathrm{Var}(Y) \approx \phi\, V(\mu)$ with the simplex **variance
+function** $V(\mu) = \mu^3(1-\mu)^3$ — the variance is largest near
+$\mu = 1/2$ and vanishes at the boundaries. The dispersion $\phi$ here is the
+$\sigma^2$ parameter of Barndorff-Nielsen and Jørgensen (1991).
 
-The density and its logarithm are available through `dsimplex()`, and random
-variates through `rsimplex()`:
-
-```{r density}
-# Density on a grid and a quick check that it integrates to one.
-x <- seq(0.01, 0.99, length.out = 99)
-d <- dsimplex(x, mu = 0.4, phi = 1, n_threads = 1L)
-integrate(function(t) dsimplex(t, mu = 0.4, phi = 1), 0, 1)$value
+```{r density-shape, fig.width = 6, fig.height = 3.4, out.width = "85%"}
+grid <- seq(0.001, 0.999, length.out = 400)
+op <- par(mar = c(4, 4, 1, 1))
+plot(grid, dsimplex(grid, mu = 0.5, phi = 1), type = "l", lwd = 2,
+     xlab = "y", ylab = "density", ylim = c(0, 4))
+lines(grid, dsimplex(grid, mu = 0.5, phi = 0.3), lwd = 2, lty = 2, col = "#1a5276")
+lines(grid, dsimplex(grid, mu = 0.3, phi = 1),   lwd = 2, lty = 3, col = "#a93226")
+legend("topright", bty = "n",
+       legend = c("mu=0.5, phi=1", "mu=0.5, phi=0.3", "mu=0.3, phi=1"),
+       lwd = 2, lty = 1:3, col = c("black", "#1a5276", "#a93226"))
+par(op)
 ```
 
-```{r rng}
-set.seed(1)
-y <- rsimplex(2000L, mu = 0.4, phi = 1)
-c(sample_mean = mean(y), target_mu = 0.4)
-```
+Smaller $\phi$ concentrates the mass around the mean; changing $\mu$ shifts and
+skews the density.
 
 ## 2. The regression model
 
-Given covariates, each observation $Y_i$ follows a simplex distribution with its
-own mean $\mu_i$ and dispersion $\phi_i$. Two linear submodels are fitted
-jointly:
-
+`fastsimplexreg()` models both the mean and the dispersion as functions of
+covariates. For observation $i$,
 $$
-g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta,
-\qquad
-\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma .
+Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
+g(\mu_i) = x_i^\top\beta, \qquad
+\log\phi_i = z_i^\top\gamma.
 $$
+The dispersion always uses a log link (so $\phi_i > 0$). The mean link $g$ can be
+**logit**, **probit**, **cloglog** or **neglog**:
 
-The mean submodel uses one of four link functions $g$, and the dispersion
-submodel always uses the logarithmic link, guaranteeing $\phi_i > 0$.
-
-| Link | $g(\mu)$ | $g^{-1}(\eta)$ |
+| link | $g(\mu)$ | $g^{-1}(\eta)$ |
 |------|----------|----------------|
-| `logit`   | $\log\{\mu/(1-\mu)\}$ | $1/(1 + e^{-\eta})$ |
-| `probit`  | $\Phi^{-1}(\mu)$ | $\Phi(\eta)$ |
-| `cloglog` | $\log\{-\log(1-\mu)\}$ | $1 - \exp\{-\exp(\eta)\}$ |
-| `neglog`  | $-\log\{-\log(\mu)\}$ | $\exp\{-\exp(-\eta)\}$ |
+| logit | $\log\{\mu/(1-\mu)\}$ | $1/(1+e^{-\eta})$ |
+| probit | $\Phi^{-1}(\mu)$ | $\Phi(\eta)$ |
+| cloglog | $\log\{-\log(1-\mu)\}$ | $1 - \exp(-e^{\eta})$ |
+| neglog | $-\log\{-\log\mu\}$ | $\exp(-e^{-\eta})$ |
 
-The `neglog` link follows the definition used by the CRAN package
-`simplexreg`. All four inverse links are exposed through `simplex_linkinv()`:
+Estimation is by maximum likelihood. The log-likelihood, the **analytic score**,
+a native **BFGS** optimiser, and the link inverses all run in C++; the
+per-observation loop can use OpenMP, so the fit scales to very large data sets.
 
-```{r links}
-eta <- c(-1, 0, 1)
-sapply(c("logit", "probit", "cloglog", "neglog"),
-       function(lk) simplex_linkinv(eta, lk))
-```
+### The multi-part formula interface
 
-## 3. The multi-part formula API
-
-The mean and dispersion submodels are specified in a single multi-part formula
-from the `Formula` package, with the two parts separated by the `|` operator:
+The mean and dispersion submodels are separated by `|` in a
+[`Formula`](https://CRAN.R-project.org/package=Formula):
 
 ```r
-y ~ x1 + x2 | z1 + z2
+fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
 ```
 
-The first right-hand-side part models the mean $\mu$; the second models the
-dispersion $\phi$. Omitting the second part, as in `y ~ x1 + x2`, assumes a
-constant dispersion (equivalent to `| 1`). Both components are built from a
-single shared `model.frame`, so `subset`, missing-value handling, factors and
-their levels are treated consistently across $X$ and $Z$, avoiding any
-misalignment between the two design matrices.
+Here `y ~ x1 + x2` is the mean model and `z1 + z2` the dispersion model. Omitting
+the second part, `y ~ x1 + x2`, gives constant dispersion.
 
-## 4. A worked example
+## 3. A worked example: recovery of CD34+ cells
 
-We simulate a moderate data set with a known mean structure (logit link) and a
-covariate-dependent dispersion (log link), fit the model, and inspect the
-results. Everything runs on a single thread for reproducibility.
+We use the `sdac` data from the **simplexreg** package: for 239 patients
+undergoing autologous peripheral blood stem cell transplantation, the response
+`rcd` is the (bounded) recovery rate of CD34+ cells, with covariates `ageadj`
+(adjusted age), `chemo` (whether chemotherapy was received) and `age`.
 
-```{r simulate}
-set.seed(20260710)
-n <- 2000L
-dat <- data.frame(
-  x1 = rnorm(n),
-  x2 = rbinom(n, size = 1L, prob = 0.4),
-  z1 = rnorm(n)
-)
-
-eta_mu   <- -0.3 + 0.9 * dat$x1 - 0.5 * dat$x2
-mu_true  <- simplex_linkinv(eta_mu, link = "logit")
-phi_true <- exp(-0.8 + 0.6 * dat$z1)
-dat$y    <- rsimplex(n, mu = mu_true, phi = phi_true)
+```{r data}
+if (has_simplexreg) {
+  data("sdac", package = "simplexreg")
+} else {
+  # Synthetic stand-in so the vignette renders without 'simplexreg'.
+  set.seed(1)
+  n <- 239
+  sdac <- data.frame(age = round(rnorm(n, 45, 12)),
+                     ageadj = pmax(0, round(rnorm(n, 8, 6))),
+                     chemo = rbinom(n, 1, 0.5))
+  mu <- simplex_linkinv(1.1 + 0.013 * sdac$ageadj + 0.25 * sdac$chemo, "logit")
+  sdac$rcd <- rsimplex(n, mu, exp(2.6 - 0.015 * sdac$age))
+}
+head(sdac)
 ```
+
+We model the mean recovery rate through `ageadj` and `chemo`, and let the
+dispersion depend on `age`:
 
 ```{r fit}
-fit <- fastsimplexreg(
-  y ~ x1 + x2 | z1,
-  data = dat,
-  link = "logit",
-  n_threads = 1L
-)
-fit
-```
-
-The estimated coefficients recover the data-generating values. A full inference
-table, including standard errors and Wald tests, is produced by `summary()`:
-
-```{r summary}
+fit <- fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = "logit")
 summary(fit)
 ```
 
-Standard extractors work as expected:
+Positive mean coefficients indicate higher recovery with adjusted age and with
+chemotherapy; the negative `age` coefficient in the dispersion model means the
+recovery rate is **less variable** in older patients. The fitted mean and
+dispersion are available directly:
 
-```{r extractors}
-coef(fit)
-logLik(fit)
-c(AIC = AIC(fit), BIC = BIC(fit), nobs = nobs(fit))
+```{r extract}
+head(cbind(mu = fitted(fit), phi = fitted(fit, "dispersion")))
+confint(fit)
 ```
 
-Wald confidence intervals are available through `confint()`:
+### Diagnostics
 
-```{r confint}
-confint(fit, level = 0.95)
-```
-
-Prediction supports several output types. With `newdata` the stored `terms`,
-`xlevels`, and `contrasts` are reused, so predictions on fresh data are
-consistent with the fitted model:
-
-```{r predict}
-head(predict(fit, type = "both"))
-new <- data.frame(x1 = c(-1, 0, 1), x2 = c(0, 1, 0), z1 = c(0, 0, 0))
-predict(fit, newdata = new, type = "response")
-```
-
-Residuals are available on the response and Pearson scales:
-
-```{r residuals}
-summary(residuals(fit, type = "pearson"))
-```
-
-## 5. Performance and design notes
-
-`fastsimplexreg` is designed for large data sets and keeps the entire critical
-path in C++:
-
-- **C++ log-likelihood and analytic score.** The derivative of the
-  log-likelihood with respect to $\mu$ is computed in closed form and combined
-  with the link-specific derivative $\partial\mu/\partial\eta_\mu$ via the chain
-  rule,
-  $$
-  \frac{\partial \ell_i}{\partial \eta_{\mu_i}}
-  = \frac{\partial \ell_i}{\partial \mu_i}\,
-    \frac{\partial \mu_i}{\partial \eta_{\mu_i}} ,
-  $$
-  which avoids numerical differentiation during optimisation.
-- **Native BFGS.** The optimiser iterates entirely in C++, avoiding repeated
-  crossings of the R/C++ boundary at every objective evaluation.
-- **BLAS matrix-vector products.** The linear predictors
-  $\boldsymbol\eta_\mu = X\boldsymbol\beta$ and
-  $\boldsymbol\eta_\phi = Z\boldsymbol\gamma$ use Armadillo/BLAS.
-- **Optional OpenMP.** The per-observation likelihood and score evaluation can
-  be parallelised. Passing `n_threads = 0L` requests the maximum number of
-  threads available to the backend; random number generation always runs in
-  serial to preserve reproducibility.
-- **Optional inference.** The Hessian, covariance matrix, and standard errors
-  are computed only when `inference = TRUE` (the default). For exploratory fits
-  on massive data, set `inference = FALSE` to skip this step.
-
-```{r perf-note, eval = FALSE}
-# On large data, request all available threads and skip inference for speed:
-fit_fast <- fastsimplexreg(
-  y ~ x1 + x2 | z1,
-  data = dat,
-  link = "logit",
-  n_threads = 0L,
-  inference = FALSE
-)
-```
-
-## Model diagnostics
-
-The `plot()` method draws diagnostic panels built with **ggplot2**: residuals
-against the fitted mean, a normal Q-Q plot, a scale-location plot and observed
-against fitted values. By default it uses deviance residuals; the panels are
-combined with **patchwork** when that package is installed.
+The `plot()` method returns **ggplot2** panels (residuals vs fitted, a normal
+Q-Q plot, scale-location, and observed vs fitted):
 
 ```{r diagnostics, fig.width = 7, fig.height = 5.5, out.width = "100%"}
 plot(fit, which = 1:4)
 ```
 
-Several standard extractor methods are available, mirroring `lm`/`glm` fits:
+### Choosing a link
 
-```{r methods}
-deviance(fit)
-head(residuals(fit, type = "deviance"))
-AIC(fit)
-BIC(fit)
-head(model.matrix(fit, model = "mean"))
-# simulate new responses from the fitted model
-sims <- simulate(fit, nsim = 2, seed = 1)
-head(sims)
-# refit through an updated (multi-part) formula
-update(fit, . ~ . - x2 | z1)
+Because all four mean links are supported, they can be compared by AIC:
+
+```{r links}
+links <- c("logit", "probit", "cloglog", "neglog")
+aic <- sapply(links, function(lk)
+  AIC(fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = lk)))
+round(sort(aic), 2)
 ```
+
+### Agreement with the reference implementation
+
+On a constant-dispersion model the estimates coincide with the established
+`simplexreg` package up to optimiser tolerance:
+
+```{r crosscheck, eval = has_simplexreg}
+ours <- coef(fastsimplexreg(rcd ~ ageadj + chemo, data = sdac, link = "logit"), "mean")
+ref  <- coef(simplexreg::simplexreg(rcd ~ ageadj + chemo, data = sdac, link = "logit"))[1:3]
+round(rbind(fastsimplexreg = ours, simplexreg = ref), 4)
+```
+
+## 4. Density and simulation
+
+The distribution utilities are vectorised and share the C++ backend:
+
+```{r dist-utils}
+dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
+set.seed(42)
+y <- rsimplex(1e4, mu = 0.35, phi = 0.8)
+c(mean = mean(y), target_mu = 0.35)   # sample mean approximates mu
+```
+
+## 5. Performance notes
+
+The critical path is entirely in C++: the log-likelihood and its analytic score
+(so no numerical differentiation during optimisation), a native BFGS that avoids
+repeated R/C++ crossings, BLAS matrix-vector products for the linear predictors,
+and an optional OpenMP-parallelised observation loop (`n_threads = 0` uses all
+cores). Inference (the Hessian and standard errors) is computed only when
+`inference = TRUE`, so exploratory fits on massive data can skip it.
 
 ## References
 
-Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric models on
-the simplex. *Journal of Multivariate Analysis*, **39**(1), 106–116.
+Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric models on the
+simplex. *Journal of Multivariate Analysis*, **39**(1), 106-116.
+
+Song, P. X.-K. and Tan, M. (2000). Marginal models for longitudinal continuous
+proportional data. *Biometrics*, **56**(2), 496-502.
+
+Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R package for regression
+analysis of proportional data using the simplex distribution. *Journal of
+Statistical Software*, **71**(11), 1-21.

@@ -8,3 +8,6 @@
 ^\.claude$
 ^LICENSE\.md$
 ^Rplots\.pdf$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

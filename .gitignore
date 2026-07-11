@@ -44,3 +44,6 @@ Rplots.pdf
 # Archived originals and local tooling
 .attic/
 .claude/
+
+# pkgdown site
+docs/
