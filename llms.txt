@@ -15,7 +15,7 @@ interval $`(0, 1)`$, following Barndorff-Nielsen and Jorgensen (1991).
 It fits separate submodels for the mean and the dispersion,
 
 ``` math
-Y_i \sim \operatorname{Simplex}(\mu_i, \phi_i), \qquad
+Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
 g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta, \qquad
 \log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,
 ```
