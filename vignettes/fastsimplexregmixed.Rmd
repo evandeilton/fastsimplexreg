@@ -1,0 +1,134 @@
+---
+title: "Simplex mixed models for nested proportion data"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Simplex mixed models for nested proportion data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(fastsimplexreg)
+```
+
+## 1. Motivation
+
+Proportion responses in the open interval $(0, 1)$ are frequently **nested**:
+repeated measurements within subjects, students within schools, plots within
+sites. Ignoring the clustering understates uncertainty and can bias the mean and
+dispersion estimates. `fastsimplexregmixed()` fits a two-level simplex mixed
+model with a random effect per cluster while retaining the variable-dispersion
+structure of [`fastsimplexreg()`](fastsimplexreg.html).
+
+## 2. The model
+
+For observation $i$ in cluster $j$, conditional on a cluster random effect
+$b_j \sim N_q(0, \Sigma)$,
+$$
+y_{ij} \mid b_j \sim \mathrm{Simplex}(\mu_{ij}, \phi_{ij}), \qquad
+g(\mu_{ij}) = x_{ij}^\top\beta + z_{ij}^\top b_j, \qquad
+\log\phi_{ij} = w_{ij}^\top\gamma .
+$$
+The mean link $g$ is one of `logit`, `probit`, `cloglog`, `neglog`; the
+dispersion link is log. The random effects enter the mean submodel; the
+dispersion submodel carries fixed effects only.
+
+The marginal likelihood integrates the random effects out,
+$$
+\ell(\theta) = \sum_j \log \int_{\mathbb{R}^q}
+  \exp\Big\{\textstyle\sum_i \log f(y_{ij}\mid b)\Big\}\, N(b; 0, \Sigma)\, \mathrm{d}b ,
+$$
+which has no closed form and is approximated by **adaptive Gauss-Hermite
+quadrature** (AGHQ). With `nAGQ = 1` this is the Laplace approximation; larger
+`nAGQ` refines the integral. The covariance $\Sigma = D D^\top$ is estimated on
+an unconstrained log-Cholesky scale, so the estimate is always positive
+definite.
+
+## 3. The `random` interface
+
+Random effects and the grouping factor are given through `random`, using the
+familiar lme4-style bar:
+
+* `random = ~ 1 | subject` — a random intercept;
+* `random = ~ 1 + x1 | subject` — a random intercept and a random slope in `x1`;
+* `random = ~ 0 + x1 | subject` — a random slope only.
+
+The mean and dispersion fixed effects use the same multi-part `Formula` as
+`fastsimplexreg()`, e.g. `y ~ x1 + x2 | z1`.
+
+## 4. A worked example
+
+```{r simulate}
+set.seed(2026)
+J <- 150; nj <- 10; n <- J * nj
+dat <- data.frame(
+  subject = factor(rep(seq_len(J), each = nj)),
+  x1 = rnorm(n),
+  z1 = rnorm(n)
+)
+b <- rnorm(J, 0, 0.7)[dat$subject]          # true random intercepts
+mu  <- simplex_linkinv(0.4 - 0.7 * dat$x1 + b, "logit")
+phi <- exp(-0.3 + 0.4 * dat$z1)
+dat$y <- rsimplex(n, mu, phi)
+```
+
+```{r fit}
+fit <- fastsimplexregmixed(
+  y ~ x1 | z1,
+  random = ~ 1 | subject,
+  data = dat,
+  link = "logit",
+  nAGQ = 9,
+  n_threads = 1
+)
+summary(fit)
+```
+
+The estimated variance component and the group-level random effects:
+
+```{r ranef}
+VarCorr(fit)
+head(ranef(fit))
+```
+
+Predictions are conditional on the estimated random effects by default; set
+`re.form = NA` for population-level (marginal-mode) predictions:
+
+```{r predict}
+head(predict(fit, type = "response"))                 # includes random effects
+head(predict(fit, type = "response", re.form = NA))   # population level
+```
+
+Diagnostic plots (built with **ggplot2**, residuals conditional on the random
+effects):
+
+```{r plot, fig.width = 7, fig.height = 5.5, out.width = "100%"}
+plot(fit, which = 1:4)
+```
+
+## 5. Choosing `nAGQ` and performance
+
+`nAGQ` trades accuracy for cost: `nAGQ = 1` (Laplace) is the fastest and is often
+adequate when clusters are large, while `nAGQ = 9`-`15` gives high accuracy for
+small clusters. The tensor grid has `nAGQ^q` nodes, so keep `q` small (`q <= 3`)
+and reduce `nAGQ` as `q` grows (`11` for `q = 1`, `9` for `q = 2`, `7` for
+`q = 3` are good defaults). Because clusters are conditionally independent, the
+work is parallelised over clusters; set `n_threads = 0` to use all available
+cores.
+
+## 6. Scope and extensions
+
+This version supports a single grouping factor (two-level nesting), Gaussian
+random effects in the mean, and fixed-effect dispersion. Crossed or three-level
+random effects, and random effects in the dispersion submodel, are natural
+extensions for future releases.
+
+## References
+
+Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric models on the
+simplex. *Journal of Multivariate Analysis*, **39**(1), 106-116.
+
+Pinheiro, J. C. and Bates, D. M. (1995). Approximations to the log-likelihood
+function in the nonlinear mixed-effects model. *Journal of Computational and
+Graphical Statistics*, **4**(1), 12-35.

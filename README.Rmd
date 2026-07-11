@@ -1,0 +1,147 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+
+# fastsimplexreg
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+`fastsimplexreg` provides high-performance maximum-likelihood estimation of
+**simplex regression** models for continuous proportions in the open interval
+$(0, 1)$, following Barndorff-Nielsen and Jorgensen (1991). It fits separate
+submodels for the mean and the dispersion,
+
+$$
+Y_i \sim \operatorname{Simplex}(\mu_i, \phi_i), \qquad
+g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta, \qquad
+\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,
+$$
+
+with the density
+
+$$
+f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
+\exp\!\left\{-\frac{1}{2\phi}\,
+\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\}, \qquad 0 < y < 1.
+$$
+
+The entire numerical hot path -- log-likelihood, analytic score, a native
+BFGS optimiser, density, random generation, prediction and link inverses -- is
+implemented in C++ with `RcppArmadillo`, BLAS/LAPACK and optional OpenMP
+parallelism, so that models scale to large data sets.
+
+## Installation
+
+You can install the development version from
+[GitHub](https://github.com/evandeilton/fastsimplexreg):
+
+```r
+# install.packages("remotes")
+remotes::install_github("evandeilton/fastsimplexreg")
+```
+
+## The multi-part formula interface
+
+The API uses the `Formula` package and separates the two submodels with the
+`|` operator:
+
+```r
+fit <- fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
+```
+
+The first right-hand side component models the mean $\mu$; the second models the
+dispersion $\phi$. When the second component is omitted, as in `y ~ x1 + x2`,
+the dispersion is constant (equivalent to `| 1`).
+
+## Mean links
+
+The mean supports four links; the dispersion always uses a log link.
+
+| Link      | $g(\mu)$                  | $g^{-1}(\eta)$              |
+|-----------|---------------------------|----------------------------|
+| `logit`   | $\log\{\mu/(1-\mu)\}$     | $1/(1 + e^{-\eta})$        |
+| `probit`  | $\Phi^{-1}(\mu)$          | $\Phi(\eta)$               |
+| `cloglog` | $\log\{-\log(1-\mu)\}$    | $1 - \exp(-\exp(\eta))$    |
+| `neglog`  | $-\log\{-\log(\mu)\}$     | $\exp(-\exp(-\eta))$       |
+
+The `neglog` definition matches the CRAN `simplexreg` package.
+
+## A worked example
+
+```{r example, eval = requireNamespace("fastsimplexreg", quietly = TRUE)}
+library(fastsimplexreg)
+
+set.seed(20260710)
+n <- 2000
+dat <- data.frame(
+  x1 = rnorm(n),
+  x2 = rbinom(n, size = 1, prob = 0.35),
+  z1 = rnorm(n)
+)
+
+mu_true  <- simplex_linkinv(-0.30 + 0.90 * dat$x1 - 0.55 * dat$x2, link = "logit")
+phi_true <- exp(-1.10 + 0.65 * dat$z1)
+dat$y <- rsimplex(n, mu = mu_true, phi = phi_true)
+
+fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = dat, link = "logit", n_threads = 1L)
+summary(fit)
+```
+
+Coefficients, the variance-covariance matrix, the log-likelihood and predictions
+are available through the usual extractor methods:
+
+```{r extractors, eval = requireNamespace("fastsimplexreg", quietly = TRUE)}
+coef(fit)
+confint(fit)
+logLik(fit)
+head(predict(fit, type = "both"))
+```
+
+## Prediction
+
+The available prediction types are `"response"`/`"mean"`, `"dispersion"`,
+`"link"` and `"both"`. Prediction on new data reuses the `terms`, `xlevels` and
+`contrasts` stored at fitting time:
+
+```r
+predict(fit, newdata = new_dat, type = "both")
+```
+
+## Performance notes
+
+* **Analytic score** for every link, avoiding numerical differentiation during
+  optimisation.
+* **Native BFGS in C++**, so the optimiser does not cross the R/C++ boundary at
+  each objective evaluation.
+* **Armadillo/BLAS** linear algebra for the linear predictors.
+* **OpenMP** parallelism over observations; `n_threads = 0` requests all
+  available threads.
+* **A single `model.frame`** for both submodels, guaranteeing consistent
+  handling of `subset`, `NA`, factors and levels.
+* **Optional inference**: pass `inference = FALSE` to skip the Hessian for
+  exploratory fits on massive data.
+
+## References
+
+Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on
+the simplex. *Journal of Multivariate Analysis*, **39**(1), 106--116.
+
+Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for Regression
+Analysis of Proportional Data Using the Simplex Distribution. *Journal of
+Statistical Software*, **71**(11), 1--21.
+
+## License
+
+GPL-3.

@@ -1,0 +1,46 @@
+# History files
+.Rhistory
+.Rapp.history
+
+# Session data files
+.RData
+.RDataTmp
+
+# User-specific files
+.Ruserdata
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build / check
+/*.tar.gz
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+*.Rproj
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# Compiled objects
+*.o
+*.so
+*.dll
+src/*.o
+src/*.so
+src/*.dll
+src/RcppExports.o
+
+# knitr / rmarkdown cache
+*_cache/
+/cache/
+
+# OS files
+.DS_Store
+Rplots.pdf
+
+# Archived originals and local tooling
+.attic/
+.claude/

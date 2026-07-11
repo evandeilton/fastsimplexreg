@@ -1,0 +1,49 @@
+Package: fastsimplexreg
+Type: Package
+Title: Fast Simplex Regression with Variable Dispersion
+Version: 0.2.0
+Authors@R:
+    person(given = "José Evandeilton",
+           family = "Lopes",
+           email = "evandeilton@gmail.com",
+           role = c("aut", "cre"))
+Description: High-performance maximum-likelihood estimation of simplex
+    regression models for continuous proportions in the open interval (0, 1),
+    following Barndorff-Nielsen and Jorgensen (1991)
+    <doi:10.1016/0047-259X(91)90008-P>. Separate submodels for the mean and the
+    dispersion are specified through a multi-part 'Formula' interface
+    (y ~ x1 + x2 | z1 + z2), with 'logit', 'probit', 'cloglog' and 'neglog'
+    links for the mean and a log link for the dispersion. The numerical hot path
+    -- log-likelihood, analytic score, a native 'BFGS' optimiser, density,
+    random generation, prediction and link inverses -- is implemented in C++
+    using 'RcppArmadillo', 'BLAS'/'LAPACK' and optional 'OpenMP' parallelism,
+    so that models scale to large data sets. Density, random generation and a
+    full set of extractor and prediction methods are provided.
+License: GPL-3
+Encoding: UTF-8
+Depends:
+    R (>= 4.1.0)
+Imports:
+    Rcpp,
+    Formula,
+    stats,
+    ggplot2,
+    rlang,
+    nlme
+LinkingTo:
+    Rcpp,
+    RcppArmadillo
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    simplexreg,
+    patchwork,
+    numDeriv
+VignetteBuilder: knitr
+SystemRequirements: C++17
+URL: https://github.com/evandeilton/fastsimplexreg
+BugReports: https://github.com/evandeilton/fastsimplexreg/issues
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3

@@ -1,0 +1,10 @@
+^\.attic$
+^cran-comments\.md$
+^README\.Rmd$
+^\.github$
+^.*\.Rproj$
+^\.Rproj\.user$
+^scratchpad$
+^\.claude$
+^LICENSE\.md$
+^Rplots\.pdf$
