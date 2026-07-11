@@ -41,6 +41,28 @@ f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
 \frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\rbrace, \qquad 0 < y < 1.
 $$
 
+For nested or clustered proportion data, the package also fits **simplex
+mixed-effects models** with cluster-specific random effects
+$\mathbf{b}_j \sim N_q(\mathbf{0}, \boldsymbol\Sigma)$ in the mean
+submodel:
+
+$$
+Y_{ij} \mid \mathbf{b}_j \sim \mathrm{Simplex}(\mu_{ij}, \phi_{ij}), \qquad
+g(\mu_{ij}) = \mathbf{x}_{ij}^\top \boldsymbol\beta + \mathbf{z}_{ij}^\top \mathbf{b}_j, \qquad
+\log(\phi_{ij}) = \mathbf{w}_{ij}^\top \boldsymbol\gamma.
+$$
+
+Since the random effects are unobserved, estimation is performed by
+maximizing the marginal likelihood:
+
+$$
+L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,
+$$
+
+where $f(\mathbf{b}_j; \boldsymbol\Sigma)$ is the multivariate normal
+density. This high-dimensional integral is approximated using
+high-performance **adaptive Gauss-Hermite quadrature** (AGHQ).
+
 The entire numerical hot path – log-likelihood, analytic score, a native
 BFGS optimiser, density, random generation, prediction and link inverses
 – is implemented in C++ with `RcppArmadillo`, BLAS/LAPACK and optional
