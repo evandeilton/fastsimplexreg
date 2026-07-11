@@ -16,11 +16,13 @@ knitr::opts_chunk$set(
 # fastsimplexreg
 
 <!-- badges: start -->
+
+[![CRAN
+status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg)
 [![R-CMD-check](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml)
-[![CRAN status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg)
 [![Downloads](https://cranlogs.r-pkg.org/badges/grand-total/fastsimplexreg)](https://cran.r-project.org/package=fastsimplexreg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Lifecycle: stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html#stable)
+[![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 <!-- badges: end -->
 
 A high-performance implementation of simplex regression for continuous
