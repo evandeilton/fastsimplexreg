@@ -154,25 +154,5 @@ test_that("all four mean links fit and converge", {
   }
 })
 
-test_that("mean coefficients agree with simplexreg on constant dispersion", {
-  skip_if_not_installed("simplexreg")
-  # Same data, same logit mean model, constant dispersion. The MLEs should
-  # coincide up to optimiser tolerance; 1e-2 is a safe bound (agreement is
-  # usually far tighter).
-  set.seed(31415L)
-  n <- 1500L
-  dat <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1L, 0.4))
-  mu_true <- simplex_linkinv(-0.3 + 0.8 * dat$x1 - 0.5 * dat$x2, "logit")
-  dat$y <- rsimplex(n, mu = mu_true, phi = 1)
 
-  ours <- fastsimplexreg(y ~ x1 + x2, data = dat, link = "logit", n_threads = 1L)
-  # simplexreg's internal IWLS can emit harmless "NaNs produced" warnings from
-  # intermediate steps; they are unrelated to the returned MLE we compare against.
-  ref  <- suppressWarnings(
-    simplexreg::simplexreg(y ~ x1 + x2, data = dat, link = "logit")
-  )
 
-  ours_mean <- coef(ours, model = "mean")
-  ref_mean  <- coef(ref)[c("(Intercept)", "x1", "x2")]
-  expect_equal(unname(ours_mean), unname(ref_mean), tolerance = 1e-2)
-})

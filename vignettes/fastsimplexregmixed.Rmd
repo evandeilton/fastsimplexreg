@@ -10,7 +10,6 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
-has_simplexreg <- requireNamespace("simplexreg", quietly = TRUE)
 ```
 
 ## 1. Nested proportion data
@@ -68,29 +67,24 @@ lme4-style bar:
 * `random = ~ 1 + t | subject` — a random intercept and a random slope in `t`;
 * `random = ~ 0 + t | subject` — a random slope only.
 
-## 3. A worked example: intraocular gas decay
+## 3. A worked example: simulated intraocular gas decay
 
-We use the `retinal` data from the **simplexreg** package: the response `Gas` is
-the fraction of intraocular gas remaining in the eye after retinal surgery,
+We simulate longitudinal data loosely inspired by intraocular gas decay after
+retinal surgery: the response `Gas` is the fraction of gas remaining in the eye,
 measured **repeatedly over time** for each of 31 patients (variable `ID`),
-with `LogT`/`LogT2` the (log) time since surgery and `Level` the gas
-concentration level. Successive measurements on the same eye are correlated — a
-textbook nested structure.
+with `LogT`/`LogT2` the (log) time since surgery and `Time` the raw time.
+Successive measurements on the same eye are correlated — a textbook nested
+structure.
 
 ```{r data}
-if (has_simplexreg) {
-  data("retinal", package = "simplexreg")
-} else {
-  # Synthetic longitudinal stand-in so the vignette renders without 'simplexreg'.
-  set.seed(1)
-  J <- 31; nj <- 6; n <- J * nj
-  ID <- rep(seq_len(J), each = nj); Time <- rep(seq_len(nj) * 10, J)
-  LogT <- log(Time); LogT2 <- LogT^2
-  b <- rnorm(J, 0, 0.8)[ID]
-  mu <- simplex_linkinv(2.5 - 1.2 * LogT + 0.1 * LogT2 + b, "logit")
-  retinal <- data.frame(Gas = rsimplex(n, mu, exp(-0.5)),
-                        Time = Time, LogT = LogT, LogT2 = LogT2, ID = ID)
-}
+set.seed(1)
+J <- 31; nj <- 6; n <- J * nj
+ID <- rep(seq_len(J), each = nj); Time <- rep(seq_len(nj) * 10, J)
+LogT <- log(Time); LogT2 <- LogT^2
+b <- rnorm(J, 0, 0.8)[ID]
+mu <- simplex_linkinv(2.5 - 1.2 * LogT + 0.1 * LogT2 + b, "logit")
+retinal <- data.frame(Gas = rsimplex(n, mu, exp(-0.5)),
+                      Time = Time, LogT = LogT, LogT2 = LogT2, ID = ID)
 retinal$ID <- factor(retinal$ID)
 str(retinal)
 ```

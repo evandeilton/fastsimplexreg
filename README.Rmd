@@ -91,7 +91,7 @@ The mean supports four links; the dispersion always uses a log link.
 | `cloglog` | $\log\{-\log(1-\mu)\}$    | $1 - \exp(-\exp(\eta))$    |
 | `neglog`  | $-\log\{-\log(\mu)\}$     | $\exp(-\exp(-\eta))$       |
 
-The `neglog` definition matches the CRAN `simplexreg` package.
+The `neglog` definition follows Zhang et al. (2016).
 
 ## A worked example
 

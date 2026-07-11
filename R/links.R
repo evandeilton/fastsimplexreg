@@ -21,7 +21,7 @@
 #'   \item{`probit`}{\eqn{g^{-1}(\eta) = \Phi(\eta)}.}
 #'   \item{`cloglog`}{\eqn{g^{-1}(\eta) = 1 - \exp(-\exp(\eta))}.}
 #'   \item{`neglog`}{\eqn{g^{-1}(\eta) = \exp(-\exp(-\eta))}, following the
-#'     definition used by the \pkg{simplexreg} package.}
+#'     definition in Zhang et al. (2016).}
 #' }
 #'
 #' @param eta Numeric vector; the linear predictor for the mean.

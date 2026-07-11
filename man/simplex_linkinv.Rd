@@ -25,7 +25,7 @@ using the same C++ backend employed when fitting a model with
 \item{\code{probit}}{\eqn{g^{-1}(\eta) = \Phi(\eta)}.}
 \item{\code{cloglog}}{\eqn{g^{-1}(\eta) = 1 - \exp(-\exp(\eta))}.}
 \item{\code{neglog}}{\eqn{g^{-1}(\eta) = \exp(-\exp(-\eta))}, following the
-definition used by the \pkg{simplexreg} package.}
+definition in Zhang et al. (2016).}
 }
 }
 \examples{

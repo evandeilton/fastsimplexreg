@@ -26,8 +26,6 @@ jobs:
         with:
           extra-packages: any::covr, any::xml2
           needs: coverage
-          pak-version: devel
-          packages-to-ignore: simplexreg
 
       - name: Test coverage
         run: |

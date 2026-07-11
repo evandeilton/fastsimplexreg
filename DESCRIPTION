@@ -37,7 +37,6 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    simplexreg,
     patchwork,
     numDeriv
 VignetteBuilder: knitr

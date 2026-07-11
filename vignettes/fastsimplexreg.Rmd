@@ -10,7 +10,6 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
-has_simplexreg <- requireNamespace("simplexreg", quietly = TRUE)
 ```
 
 ## 1. Bounded proportions and the simplex distribution
@@ -95,26 +94,20 @@ fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
 Here `y ~ x1 + x2` is the mean model and `z1 + z2` the dispersion model. Omitting
 the second part, `y ~ x1 + x2`, gives constant dispersion.
 
-## 3. A worked example: recovery of CD34+ cells
+## 3. A worked example: simulated recovery data
 
-We use the `sdac` data from the **simplexreg** package: for 239 patients
-undergoing autologous peripheral blood stem cell transplantation, the response
-`rcd` is the (bounded) recovery rate of CD34+ cells, with covariates `ageadj`
-(adjusted age), `chemo` (whether chemotherapy was received) and `age`.
+We simulate data loosely inspired by the recovery of CD34+ cells after stem cell
+transplantation: the response `rcd` is a bounded recovery rate, with covariates
+`ageadj` (adjusted age), `chemo` (chemotherapy indicator) and `age`.
 
 ```{r data}
-if (has_simplexreg) {
-  data("sdac", package = "simplexreg")
-} else {
-  # Synthetic stand-in so the vignette renders without 'simplexreg'.
-  set.seed(1)
-  n <- 239
-  sdac <- data.frame(age = round(rnorm(n, 45, 12)),
-                     ageadj = pmax(0, round(rnorm(n, 8, 6))),
-                     chemo = rbinom(n, 1, 0.5))
-  mu <- simplex_linkinv(1.1 + 0.013 * sdac$ageadj + 0.25 * sdac$chemo, "logit")
-  sdac$rcd <- rsimplex(n, mu, exp(2.6 - 0.015 * sdac$age))
-}
+set.seed(1)
+n <- 239
+sdac <- data.frame(age = round(rnorm(n, 45, 12)),
+                   ageadj = pmax(0, round(rnorm(n, 8, 6))),
+                   chemo = rbinom(n, 1, 0.5))
+mu <- simplex_linkinv(1.1 + 0.013 * sdac$ageadj + 0.25 * sdac$chemo, "logit")
+sdac$rcd <- rsimplex(n, mu, exp(2.6 - 0.015 * sdac$age))
 head(sdac)
 ```
 
@@ -154,17 +147,6 @@ links <- c("logit", "probit", "cloglog", "neglog")
 aic <- sapply(links, function(lk)
   AIC(fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = lk)))
 round(sort(aic), 2)
-```
-
-### Agreement with the reference implementation
-
-On a constant-dispersion model the estimates coincide with the established
-`simplexreg` package up to optimiser tolerance:
-
-```{r crosscheck, eval = has_simplexreg}
-ours <- coef(fastsimplexreg(rcd ~ ageadj + chemo, data = sdac, link = "logit"), "mean")
-ref  <- coef(simplexreg::simplexreg(rcd ~ ageadj + chemo, data = sdac, link = "logit"))[1:3]
-round(rbind(fastsimplexreg = ours, simplexreg = ref), 4)
 ```
 
 ## 4. Density and simulation
