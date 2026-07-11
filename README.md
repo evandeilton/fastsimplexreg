@@ -4,9 +4,9 @@
 # fastsimplexreg
 
 <!-- badges: start -->
+<!-- [![CRAN -->
+<!-- status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg) -->
 
-[![CRAN
-status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg)
 [![R-CMD-check](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml)
 [![Downloads](https://cranlogs.r-pkg.org/badges/grand-total/fastsimplexreg)](https://cran.r-project.org/package=fastsimplexreg)
 [![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -27,15 +27,19 @@ of **simplex regression** models for continuous proportions in the open
 interval $(0, 1)$, following Barndorff-Nielsen and Jorgensen (1991). It
 fits separate submodels for the mean and the dispersion,
 
-$$Y_i \sim \operatorname{Simplex}(\mu_i, \phi_i), \qquad
+$$
+Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
 g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta, \qquad
-\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,$$
+\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,
+$$
 
 with the density
 
-$$f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
+$$
+f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
 \exp\!\left\{-\frac{1}{2\phi}\,
-\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\}, \qquad 0 < y < 1.$$
+\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\}, \qquad 0 < y < 1.
+$$
 
 The entire numerical hot path – log-likelihood, analytic score, a native
 BFGS optimiser, density, random generation, prediction and link inverses
@@ -76,7 +80,7 @@ The mean supports four links; the dispersion always uses a log link.
 | `cloglog` | $\log\{-\log(1-\mu)\}$ | $1 - \exp(-\exp(\eta))$ |
 | `neglog`  | $-\log\{-\log(\mu)\}$  | $\exp(-\exp(-\eta))$    |
 
-The `neglog` definition follows Zhang et al. (2016).
+The `neglog` definition follows Zhang et al. (2016).
 
 ## A worked example
 

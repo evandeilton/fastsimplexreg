@@ -17,8 +17,8 @@ knitr::opts_chunk$set(
 
 <!-- badges: start -->
 
-[![CRAN
-status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg)
+<!-- [![CRAN -->
+<!-- status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg) -->
 [![R-CMD-check](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml)
 [![Downloads](https://cranlogs.r-pkg.org/badges/grand-total/fastsimplexreg)](https://cran.r-project.org/package=fastsimplexreg)
 [![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -39,7 +39,7 @@ $(0, 1)$, following Barndorff-Nielsen and Jorgensen (1991). It fits separate
 submodels for the mean and the dispersion,
 
 $$
-Y_i \sim \operatorname{Simplex}(\mu_i, \phi_i), \qquad
+Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
 g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta, \qquad
 \log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,
 $$
