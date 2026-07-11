@@ -37,8 +37,8 @@ with the density
 
 $$
 f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
-\exp\!\left\{-\frac{1}{2\phi}\,
-\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\}, \qquad 0 < y < 1.
+\exp\!\left\lbrace -\frac{1}{2\phi}\,
+\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\rbrace, \qquad 0 < y < 1.
 $$
 
 The entire numerical hot path – log-likelihood, analytic score, a native
