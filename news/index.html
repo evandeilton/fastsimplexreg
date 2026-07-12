@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">fastsimplexreg</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,6 +37,18 @@
       <small>Source: <a href="https://github.com/evandeilton/fastsimplexreg/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.1" id="fastsimplexreg-021">fastsimplexreg 0.2.1<a class="anchor" aria-label="anchor" href="#fastsimplexreg-021"></a></h2>
+<p>Stability and performance release, following a three-way audit.</p>
+<p>Stability / correctness:</p>
+<ul><li>Non-convergence is now signalled: <code><a href="../reference/fastsimplexreg.html">fastsimplexreg()</a></code> and <code><a href="../reference/fastsimplexregmixed.html">fastsimplexregmixed()</a></code> emit a warning and withhold (NA) standard errors when the optimiser does not converge, and <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> prints a prominent banner. Previously a non-converged fit could return a confident-looking coefficient table.</li>
+<li>The mean-link inverse now keeps the analytic score and Hessian consistent with the objective at saturation (zeroing the derivatives when the mean clamps), fixing near-boundary line-search failures.</li>
+<li>The native BFGS declares soft convergence when the objective is already stationary but the gradient cannot be pushed below the tolerance (e.g. at the adaptive-quadrature noise floor).</li>
+<li>Malformed cluster offsets now raise a clean R error instead of aborting the process; the mixed finite-difference Hessian guards on evaluation validity (no more silent zero-variance columns); the <code>nAGQ^q</code> quadrature grid is capped.</li>
+</ul><p>Performance (mixed model):</p>
+<ul><li>Single-pass adaptive quadrature with cached scores and hoisted constant terms, and tensor-weight pruning for <code>q &gt;= 2</code>. A random-slope (<code>q = 2</code>) fit that took ~2 minutes now runs in a few seconds.</li>
+<li>Exact symmetrisation of the curvature matrix removes spurious Cholesky failures and redundant recomputation.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="fastsimplexreg-020">fastsimplexreg 0.2.0<a class="anchor" aria-label="anchor" href="#fastsimplexreg-020"></a></h2>
 <ul><li>New <code><a href="../reference/fastsimplexregmixed.html">fastsimplexregmixed()</a></code>: a two-level (nested) simplex mixed model with variable dispersion, estimated by adaptive Gauss-Hermite quadrature (AGHQ; <code>nAGQ = 1</code> gives the Laplace approximation). Gaussian random effects in the mean submodel are specified with an lme4-style <code>random = ~ terms | group</code> bar; the covariance is estimated on an unconstrained log-Cholesky scale. The per-cluster inner mode-finding, quadrature and analytic score run in C++ and are parallelised over clusters with OpenMP.</li>

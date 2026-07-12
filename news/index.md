@@ -1,5 +1,39 @@
 # Changelog
 
+## fastsimplexreg 0.2.1
+
+Stability and performance release, following a three-way audit.
+
+Stability / correctness:
+
+- Non-convergence is now signalled:
+  [`fastsimplexreg()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexreg.md)
+  and
+  [`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md)
+  emit a warning and withhold (NA) standard errors when the optimiser
+  does not converge, and
+  [`summary()`](https://rdrr.io/r/base/summary.html) prints a prominent
+  banner. Previously a non-converged fit could return a
+  confident-looking coefficient table.
+- The mean-link inverse now keeps the analytic score and Hessian
+  consistent with the objective at saturation (zeroing the derivatives
+  when the mean clamps), fixing near-boundary line-search failures.
+- The native BFGS declares soft convergence when the objective is
+  already stationary but the gradient cannot be pushed below the
+  tolerance (e.g. at the adaptive-quadrature noise floor).
+- Malformed cluster offsets now raise a clean R error instead of
+  aborting the process; the mixed finite-difference Hessian guards on
+  evaluation validity (no more silent zero-variance columns); the
+  `nAGQ^q` quadrature grid is capped.
+
+Performance (mixed model):
+
+- Single-pass adaptive quadrature with cached scores and hoisted
+  constant terms, and tensor-weight pruning for `q >= 2`. A random-slope
+  (`q = 2`) fit that took ~2 minutes now runs in a few seconds.
+- Exact symmetrisation of the curvature matrix removes spurious Cholesky
+  failures and redundant recomputation.
+
 ## fastsimplexreg 0.2.0
 
 - New
