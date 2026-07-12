@@ -52,6 +52,23 @@ inline double clamp_prob(const double x, const double eps = DEFAULT_EPS) noexcep
   return std::min(1.0 - eps, std::max(eps, x));
 }
 
+// Clamp mu to [eps, 1 - eps] and, when clamping actually occurs, ZERO the
+// supplied derivatives. At saturation the mean lies on a frozen (constant) part
+// of the inverse-link surface, so d mu / d eta is genuinely zero there. Zeroing
+// it keeps the analytic score and Hessian consistent with the (clamped)
+// objective and removes the 1 / (mu (1-mu))^3 blow-up of the score that would
+// otherwise make the analytic gradient disagree with the objective by many
+// orders of magnitude, breaking the line search near the boundary.
+inline void clamp_prob_deriv(double& mu, double& dmu) noexcept {
+  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; }
+  else if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; }
+}
+
+inline void clamp_prob_deriv2(double& mu, double& dmu, double& d2mu) noexcept {
+  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; }
+  else if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; }
+}
+
 // Numerically stable logistic (inverse-logit) function. The two branches
 // avoid overflow of exp() for large-magnitude arguments of either sign.
 inline double logistic_stable(const double x) noexcept {
@@ -86,7 +103,7 @@ inline bool mean_from_eta(
       // g(mu) = log(mu/(1-mu)); mu = 1/(1+exp(-eta)); dmu/deta = mu(1-mu).
       mu = logistic_stable(eta);
       dmu_deta = mu * (1.0 - mu);
-      mu = clamp_prob(mu);
+      clamp_prob_deriv(mu, dmu_deta);
       return true;
 
     case PROBIT:
@@ -94,7 +111,7 @@ inline bool mean_from_eta(
       // dmu/deta = phi(eta) = exp(-eta^2/2)/sqrt(2*pi).
       mu = 0.5 * std::erfc(-eta * INV_SQRT_2);
       dmu_deta = INV_SQRT_2PI * std::exp(-0.5 * eta * eta);
-      mu = clamp_prob(mu);
+      clamp_prob_deriv(mu, dmu_deta);
       return std::isfinite(mu) && std::isfinite(dmu_deta);
 
     case CLOGLOG: {
@@ -104,7 +121,7 @@ inline bool mean_from_eta(
       const double survival = std::exp(-exp_eta);
       mu = -std::expm1(-exp_eta);
       dmu_deta = exp_eta * survival;
-      mu = clamp_prob(mu);
+      clamp_prob_deriv(mu, dmu_deta);
       return std::isfinite(mu) && std::isfinite(dmu_deta);
     }
 
@@ -115,7 +132,7 @@ inline bool mean_from_eta(
       const double exp_minus_eta = safe_exp(-eta);
       mu = std::exp(-exp_minus_eta);
       dmu_deta = mu * exp_minus_eta;
-      mu = clamp_prob(mu);
+      clamp_prob_deriv(mu, dmu_deta);
       return std::isfinite(mu) && std::isfinite(dmu_deta);
     }
 
@@ -147,14 +164,14 @@ inline bool mean_deriv2_from_eta(
       mu = logistic_stable(eta);
       dmu = mu * (1.0 - mu);
       d2mu = dmu * (1.0 - 2.0 * mu);
-      mu = clamp_prob(mu);
+      clamp_prob_deriv2(mu, dmu, d2mu);
       return true;
     }
     case PROBIT: {
       mu = 0.5 * std::erfc(-eta * INV_SQRT_2);
       dmu = INV_SQRT_2PI * std::exp(-0.5 * eta * eta);
       d2mu = -eta * dmu;
-      mu = clamp_prob(mu);
+      clamp_prob_deriv2(mu, dmu, d2mu);
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     case CLOGLOG: {
@@ -163,7 +180,7 @@ inline bool mean_deriv2_from_eta(
       mu = -std::expm1(-exp_eta);
       dmu = exp_eta * survival;
       d2mu = dmu * (1.0 - exp_eta);
-      mu = clamp_prob(mu);
+      clamp_prob_deriv2(mu, dmu, d2mu);
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     case NEGLOG: {
@@ -171,7 +188,7 @@ inline bool mean_deriv2_from_eta(
       mu = std::exp(-exp_minus_eta);
       dmu = mu * exp_minus_eta;
       d2mu = dmu * (exp_minus_eta - 1.0);
-      mu = clamp_prob(mu);
+      clamp_prob_deriv2(mu, dmu, d2mu);
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     default:
@@ -302,6 +319,7 @@ inline Rcpp::List bfgs_minimize(
   int iter_done = 0;
   int fn_evals = 1;
   int grad_evals = 1;
+  double last_rel_change = std::numeric_limits<double>::infinity();
   std::string message = "Maximum number of iterations reached.";
 
   for (int iter = 0; iter < maxit; ++iter) {
@@ -340,8 +358,18 @@ inline Rcpp::List bfgs_minimize(
     }
 
     if (!accepted) {
-      convergence = 2;
-      message = "Line search failed to find a sufficient decrease.";
+      // Soft convergence: if the objective was already numerically stationary
+      // on the previous accepted step, the line search cannot improve because we
+      // have reached the objective's floor (e.g. the adaptive-quadrature noise
+      // floor of the marginal likelihood, where the gradient tolerance is
+      // unreachable). Report this as convergence rather than a hard failure.
+      if (iter > 0 && last_rel_change <= rel_tol) {
+        convergence = 0;
+        message = "Converged: objective stationary (line search reached its floor).";
+      } else {
+        convergence = 2;
+        message = "Line search failed to find a sufficient decrease.";
+      }
       break;
     }
 
@@ -362,6 +390,7 @@ inline Rcpp::List bfgs_minimize(
 
     const double rel_change = std::abs(current.nll - candidate.nll) /
                               (1.0 + std::abs(current.nll));
+    last_rel_change = rel_change;
 
     theta = theta_new;
     current = std::move(candidate);

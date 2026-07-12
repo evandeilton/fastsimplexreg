@@ -270,10 +270,19 @@ fastsimplexreg <- function(
   k <- length(theta)
   n <- length(response)
 
+  converged <- as.integer(opt$convergence) == 0L
+  if (!converged) {
+    warning("fastsimplexreg() did not converge (code ", opt$convergence, ": ",
+            opt$message, "). Estimates and standard errors are unreliable.",
+            call. = FALSE)
+  }
+
   vc <- NULL
   se <- rep(NA_real_, k)
   hessian <- NULL
-  if (isTRUE(inference)) {
+  # Standard errors are only computed at a converged (stationary) fit; at a
+  # non-converged point the Hessian is meaningless, so leave them NA.
+  if (isTRUE(inference) && converged) {
     hessian <- simplex_hessian_fd_cpp(
       theta = theta,
       y = response,

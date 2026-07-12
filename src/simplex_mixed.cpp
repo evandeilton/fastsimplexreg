@@ -118,6 +118,22 @@ inline void build_tensor(const int nAGQ, const int q,
       mi[d] = 0;
     }
   }
+
+  // Weight pruning for q >= 2: the corners of the tensor grid carry product
+  // weights many orders of magnitude below the peak and contribute nothing to
+  // the log-sum-exp. Dropping them shrinks the per-cluster node loop (the
+  // dominant cost at q >= 2) with no measurable loss of accuracy. Not applied
+  // for q = 1, where every node matters.
+  if (q >= 2) {
+    const double log_tol = std::log(1e-10);          // relative weight floor
+    const double lw_max = logW.max();
+    const arma::uvec keep = arma::find(logW - lw_max >= log_tol);
+    if (keep.n_elem > 0 && keep.n_elem < K) {
+      T = T.rows(keep);
+      logW = logW.elem(keep);
+      t2 = t2.elem(keep);
+    }
+  }
 }
 
 // Log-sum-exp of a vector.
@@ -132,6 +148,21 @@ inline double log_sum_exp(const vec& a) {
 // Updates `Bhat` (J x q) with the per-cluster empirical-Bayes modes (warm
 // start in / out). Parallel over clusters.
 // ---------------------------------------------------------------------------
+// Validate the CSR cluster offsets. A malformed 'starts' (empty, not starting
+// at 0, not ending at N, or not strictly increasing) would otherwise index out
+// of bounds; inside the OpenMP region a thrown exception aborts the process, so
+// we reject it here, in serial code, as a clean R error.
+inline void check_starts(const uvec& starts, const uword N) {
+  if (starts.n_elem < 2 || starts[0] != 0 || starts[starts.n_elem - 1] != N) {
+    Rcpp::stop("Invalid cluster offsets 'starts': must run 0, ..., nrow(data).");
+  }
+  for (uword j = 0; j + 1 < starts.n_elem; ++j) {
+    if (starts[j + 1] <= starts[j]) {
+      Rcpp::stop("Invalid cluster offsets 'starts': must be strictly increasing (no empty clusters).");
+    }
+  }
+}
+
 EvalResult mixed_core(
     const vec& theta, const vec& y, const mat& X, const mat& Z, const mat& W,
     const uvec& starts, const int q, const int mean_link,
@@ -139,6 +170,7 @@ EvalResult mixed_core(
     const int n_threads, const int inner_maxit, const double inner_tol,
     const bool need_grad, mat& Bhat) {
 
+  check_starts(starts, y.n_elem);
   const uword p = X.n_cols;
   const uword r = W.n_cols;
   const uword m = static_cast<uword>(q) * (q + 1) / 2;
@@ -207,10 +239,13 @@ EvalResult mixed_core(
       const uword bb = starts[j + 1];
       const uword nj = bb - a;
 
-      const mat Xj = X.rows(a, bb - 1);
-      const mat Zj = Z.rows(a, bb - 1);
-      const mat Wj = W.rows(a, bb - 1);
-      const vec yj = y.subvec(a, bb - 1);
+      // Zero-copy views over the cluster's contiguous rows (no per-cluster
+      // allocation/memcpy). Zj is kept as a materialised matrix because it is
+      // consumed with .each_col().
+      const auto Xj = X.rows(a, bb - 1);
+      const mat  Zj = Z.rows(a, bb - 1);
+      const auto Wj = W.rows(a, bb - 1);
+      const auto yj = y.subvec(a, bb - 1);
 
       const vec eta_mu_fixed = Xj * beta;
       const vec eta_phi = Wj * gamma;
@@ -302,10 +337,13 @@ EvalResult mixed_core(
           Iinfo[i] = (dmu * dmu) / (phi[i] * (mu * (1.0 - mu)) * (mu * (1.0 - mu)) * (mu * (1.0 - mu)));
         }
         if (!ok) { invalid = 1; continue; }
-        Q = Sigma_inv - Zj.t() * (Zj.each_col() % w2);   // -Hessian (observed)
+        // symmatu() forces exact symmetry: Q is symmetric in exact arithmetic
+        // but floating-point rounding leaves it slightly asymmetric, which makes
+        // arma::chol warn and spuriously fail, triggering a needless fallback.
+        Q = arma::symmatu(Sigma_inv - Zj.t() * (Zj.each_col() % w2));  // -Hessian (observed)
         mat Rchk;
         if (!arma::chol(Rchk, Q)) {
-          Q = Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo);  // Fisher fallback (SPD)
+          Q = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));  // Fisher fallback (SPD)
         }
       }
 
@@ -315,31 +353,54 @@ EvalResult mixed_core(
       for (int d = 0; d < q; ++d) logdetQ += 2.0 * std::log(R(d, d));
       const mat C = arma::inv(arma::trimatu(R));           // C C' = Q^{-1}, |C| = |Q|^{-1/2}
 
-      // ---- AGHQ sweep: unnormalized log-weights a_k ----
+      // ---- Node-invariant precomputations, hoisted out of the node loop:
+      //      the constant part of the log-density, 1/phi, 1/(y(1-y)), the fixed
+      //      linear predictor eta_b = X beta + Z bhat, and the scaled node basis
+      //      Zj * (sqrt2 C), so a node's eta is eta_b + (Zj sqrt2 C) t_k. ----
+      const mat Cs = sqrt2 * C;                 // q x q
+      const mat ZjCs = Zj * Cs;                 // nj x q
+      const vec eta_b = eta_mu_fixed + Zj * b;   // nj
+      vec inv_phi(nj), inv_yv(nj);
+      double cst = 0.0;
+      for (uword i = 0; i < nj; ++i) {
+        inv_phi[i] = 1.0 / phi[i];
+        const double one_y = 1.0 - yj[i];
+        inv_yv[i] = 1.0 / (yj[i] * one_y);
+        cst += -0.5 * (LOG_2PI + std::log(phi[i]))
+               - 1.5 * (std::log(yj[i]) + std::log(one_y));
+      }
+
+      // ---- Single AGHQ pass: build the unnormalized log-weights a_k and, when
+      //      needed, cache the per-observation scores for a BLAS-based gradient
+      //      (the kernel is thus evaluated once per node, not twice). ----
       vec avec(K);
       mat Bnodes(q, K);
+      mat Smu, Sphi;
+      if (need_grad) { Smu.set_size(nj, K); Sphi.set_size(nj, K); }
       bool ok_nodes = true;
       for (uword k = 0; k < K; ++k) {
         const vec tk = T.row(k).t();
-        const vec bk = b + sqrt2 * (C * tk);
+        const vec bk = b + Cs * tk;
         Bnodes.col(k) = bk;
-        const vec eta = eta_mu_fixed + Zj * bk;
-        double sumlogf = 0.0;
+        const vec eta = eta_b + ZjCs * tk;
+        double devsum = 0.0;
         for (uword i = 0; i < nj; ++i) {
           double mu, dmu;
           if (!mean_from_eta(eta[i], mean_link, mu, dmu)) { ok_nodes = false; break; }
-          const double one_y = 1.0 - yj[i];
           const double u = mu * (1.0 - mu);
           const double diff = yj[i] - mu;
-          const double dev = diff * diff / (yj[i] * one_y * u * u);
-          const double lf = -0.5 * (LOG_2PI + std::log(phi[i]))
-                            - 1.5 * (std::log(yj[i]) + std::log(one_y))
-                            - 0.5 * dev / phi[i];
-          sumlogf += lf;
+          const double dev = diff * diff * inv_yv[i] / (u * u);
+          devsum += dev * inv_phi[i];
+          if (need_grad) {
+            const double u3 = u * u * u;
+            const double Pterm = diff * (mu * mu - 2.0 * mu * yj[i] + yj[i]);
+            Smu(i, k) = Pterm * inv_yv[i] * inv_phi[i] / u3 * dmu;  // dl/deta_mu
+            Sphi(i, k) = -0.5 + 0.5 * dev * inv_phi[i];            // dl/deta_phi
+          }
         }
         if (!ok_nodes) break;
         const double quad = 0.5 * arma::dot(bk, Sigma_inv * bk);
-        avec[k] = logW[k] + t2[k] + sumlogf - quad;
+        avec[k] = logW[k] + t2[k] + cst - 0.5 * devsum - quad;
       }
       if (!ok_nodes) { invalid = 1; continue; }
 
@@ -349,34 +410,17 @@ EvalResult mixed_core(
       if (!std::isfinite(loglik_j)) { invalid = 1; continue; }
       local_nll -= loglik_j;
 
-      // ---- posterior-weighted analytic gradient ----
+      // ---- posterior-weighted analytic gradient: contract the cached scores
+      //      with the normalized weights via BLAS. ----
       if (need_grad) {
-        const vec Wjk = arma::exp(avec - lse);   // normalized posterior weights
-        vec gbeta(p, arma::fill::zeros);
-        vec ggamma(r, arma::fill::zeros);
-        vec gomega(m, arma::fill::zeros);
-        vec og(m);
+        const vec Wjk = arma::exp(avec - lse);        // normalized weights, sum 1
+        const vec gbeta = Xj.t() * (Smu * Wjk);
+        const vec ggamma = Wj.t() * (Sphi * Wjk);
+        vec gomega(m, arma::fill::zeros), og(m);
         for (uword k = 0; k < K; ++k) {
           const double wk = Wjk[k];
           if (wk <= 0.0) continue;
-          const vec bk = Bnodes.col(k);
-          const vec eta = eta_mu_fixed + Zj * bk;
-          vec s_mu(nj), s_phi(nj);
-          for (uword i = 0; i < nj; ++i) {
-            double mu, dmu;
-            mean_from_eta(eta[i], mean_link, mu, dmu);
-            const double u = mu * (1.0 - mu);
-            const double u3 = u * u * u;
-            const double one_y = 1.0 - yj[i];
-            const double diff = yj[i] - mu;
-            const double dev = diff * diff / (yj[i] * one_y * u * u);
-            const double Pterm = diff * (mu * mu - 2.0 * mu * yj[i] + yj[i]);
-            s_mu[i] = (Pterm / (yj[i] * one_y)) / (phi[i] * u3) * dmu;
-            s_phi[i] = -0.5 + 0.5 * dev / phi[i];
-          }
-          gbeta += wk * (Xj.t() * s_mu);
-          ggamma += wk * (Wj.t() * s_phi);
-          omega_grad(bk, Sigma_inv, D, q, og);
+          omega_grad(Bnodes.col(k), Sigma_inv, D, q, og);
           gomega += wk * og;
         }
         // gradient of the NEGATIVE log-likelihood
@@ -465,10 +509,12 @@ arma::mat simplex_mixed_hessian_fd_cpp(
   const uword d = theta.n_elem;
   mat Bhat(starts.n_elem - 1, q, arma::fill::zeros);
 
-  auto grad_at = [&](const arma::vec& th) {
-    return simplex_fast::mixed_core(th, y, X, Z, W, starts, q, mean_link,
-                                    T, logW, t2, n_threads, inner_maxit,
-                                    inner_tol, true, Bhat).grad;
+  auto grad_at = [&](const arma::vec& th, bool& ok) {
+    const auto res = simplex_fast::mixed_core(th, y, X, Z, W, starts, q, mean_link,
+                                              T, logW, t2, n_threads, inner_maxit,
+                                              inner_tol, true, Bhat);
+    ok = res.valid;
+    return res.grad;
   };
 
   mat H(d, d, arma::fill::zeros);
@@ -478,9 +524,13 @@ arma::mat simplex_mixed_hessian_fd_cpp(
     for (int attempt = 0; attempt < 12; ++attempt) {
       vec plus = theta, minus = theta;
       plus[jcol] += h; minus[jcol] -= h;
-      const vec gp = grad_at(plus);
-      const vec gm = grad_at(minus);
-      if (gp.is_finite() && gm.is_finite()) {
+      bool okp = false, okm = false;
+      const vec gp = grad_at(plus, okp);
+      const vec gm = grad_at(minus, okm);
+      // Guard on VALIDITY, not just finiteness: an invalid evaluation returns an
+      // all-zero (finite) gradient, which would silently produce a zero Hessian
+      // column and hence wrong standard errors.
+      if (okp && okm && gp.is_finite() && gm.is_finite()) {
         H.col(jcol) = (gp - gm) / (2.0 * h);
         success = true;
         break;
@@ -544,7 +594,7 @@ Rcpp::List simplex_mixed_ranef_cpp(
       const double u = mu * (1.0 - mu);
       Iinfo[i] = (dmu * dmu) / (phii * u * u * u);
     }
-    mat Q = okobs ? (mat)(Sigma_inv - Zj.t() * (Zj.each_col() % w2)) : Sigma_inv;
+    mat Q = okobs ? arma::symmatu(Sigma_inv - Zj.t() * (Zj.each_col() % w2)) : Sigma_inv;
     mat Rchk;
     if (!okobs || !arma::chol(Rchk, Q)) {
       Q = Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo);
@@ -568,6 +618,7 @@ Rcpp::List simplex_mixed_predict_cpp(
     const int mean_link = 1, const bool include_re = true) {
 
   const uword p = X.n_cols, r = W.n_cols, N = X.n_rows;
+  simplex_fast::check_starts(starts, N);
   const uword J = starts.n_elem - 1;
   const vec beta = theta.head(p);
   const vec gamma = theta.subvec(p, p + r - 1);

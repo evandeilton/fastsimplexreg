@@ -274,6 +274,20 @@ fastsimplexregmixed <- function(
   J <- nlevels(group)
   m <- q * (q + 1L) / 2L
 
+  # Guard the tensor-product quadrature against a node-count explosion: the grid
+  # has nAGQ^q points per cluster, which grows very fast with q.
+  n_nodes <- nAGQ^q
+  if (n_nodes > 1e5) {
+    stop("The adaptive quadrature grid would have nAGQ^q = ", format(n_nodes),
+         " nodes per cluster (q = ", q, " random effects, nAGQ = ", nAGQ,
+         "). Reduce 'nAGQ' or the number of random-effect terms.", call. = FALSE)
+  }
+  if (q > 3L) {
+    warning("q = ", q, " random-effect terms: adaptive Gauss-Hermite quadrature ",
+            "is intended for q <= 3. Estimation may be slow and less accurate.",
+            call. = FALSE)
+  }
+
   # Group-contiguous ordering + CSR offsets.
   gi <- as.integer(group)
   ord <- order(gi)
@@ -343,10 +357,18 @@ fastsimplexregmixed <- function(
   par_names <- c(colnames(X), colnames(W), .omega_labels(re_names))
   names(theta) <- par_names
 
+  converged <- as.integer(opt$convergence) == 0L
+  if (!converged) {
+    warning("fastsimplexregmixed() did not converge (code ", opt$convergence, ": ",
+            opt$message, "). Estimates and standard errors are unreliable; try a ",
+            "larger 'nAGQ' or different starting values.", call. = FALSE)
+  }
+
   vc <- NULL
   se <- rep(NA_real_, k)
   hessian <- NULL
-  if (isTRUE(inference)) {
+  # Standard errors only at a converged fit (see fastsimplexreg()).
+  if (isTRUE(inference) && converged) {
     hessian <- simplex_mixed_hessian_fd_cpp(
       theta = theta, y = y_ord, X = X_ord, Z = Z_ord, W = W_ord,
       starts = starts, q = as.integer(q), mean_link = link_spec$id, nAGQ = nAGQ,

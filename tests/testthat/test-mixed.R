@@ -165,3 +165,66 @@ test_that("the AGHQ evaluation is invariant to the number of threads", {
   expect_equal(r1$value, r2$value, tolerance = 1e-9)
   expect_equal(as.numeric(r1$gradient), as.numeric(r2$gradient), tolerance = 1e-9)
 })
+
+test_that("malformed cluster offsets error cleanly instead of crashing", {
+  ns <- getNamespace("fastsimplexreg")
+  y <- runif(12, 0.1, 0.9); X <- matrix(1, 12, 1); Z <- matrix(1, 12, 1); W <- matrix(1, 12, 1)
+  th <- rep(0, 3)
+  expect_error(ns$simplex_mixed_eval_cpp(th, y, X, Z, W, as.integer(c(0, 5, 5, 12)), 1L),
+               "strictly increasing")
+  expect_error(ns$simplex_mixed_eval_cpp(th, y, X, Z, W, as.integer(c(0, 8, 4, 12)), 1L),
+               "strictly increasing")
+  expect_error(ns$simplex_mixed_eval_cpp(th, y, X, Z, W, integer(0), 1L),
+               "0, ..., nrow", fixed = TRUE)
+})
+
+test_that("non-convergence is signalled and standard errors are withheld", {
+  # cloglog on this data does not reach the gradient tolerance; the fit must warn
+  # and return NA standard errors rather than a confident coefficient table.
+  set.seed(7); J <- 120; nj <- 8; n <- J * nj
+  g <- factor(rep(seq_len(J), each = nj)); x1 <- rnorm(n); z1 <- rnorm(n)
+  b <- rnorm(J, 0, 0.6)[g]
+  dat <- data.frame(g = g, x1 = x1, z1 = z1,
+                    y = rsimplex(n, simplex_linkinv(0.4 - 0.7 * x1 + b, "logit"), exp(-0.3 + 0.4 * z1)))
+  expect_warning(
+    fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                               link = "cloglog", nAGQ = 7, n_threads = 1),
+    "did not converge")
+  if (fit$convergence != 0L) {
+    expect_true(all(is.na(fit$standard_errors)))
+    expect_output(print(summary(fit)), "DID NOT CONVERGE")
+  }
+})
+
+test_that("the nAGQ^q node budget is enforced", {
+  set.seed(1); n <- 200
+  dat <- data.frame(g = factor(rep(1:20, each = 10)), x1 = rnorm(n), z1 = rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.3 * dat$x1, "logit"), 1)
+  expect_error(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 + x1 + z1 | g, data = dat, nAGQ = 60, n_threads = 1),
+    "nAGQ")
+})
+
+test_that("inference = FALSE skips standard errors in the mixed model", {
+  dat <- sim_mixed(J = 60L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 7L, n_threads = 1L, inference = FALSE)
+  expect_true(all(is.na(fit$standard_errors)))
+  expect_error(vcov(fit), "inference")
+})
+
+test_that("unbalanced clusters (including singletons) are handled", {
+  set.seed(3)
+  sizes <- sample(1:6, 80, replace = TRUE)          # includes singletons
+  g <- factor(rep(seq_along(sizes), sizes)); n <- length(g)
+  x1 <- rnorm(n)
+  b <- rnorm(nlevels(g), 0, 0.5)[g]
+  dat <- data.frame(g = g, x1 = x1,
+                    y = rsimplex(n, simplex_linkinv(0.3 - 0.5 * x1 + b, "logit"), 1))
+  # The fit must run and return well-formed output even if it does not fully
+  # converge on this small, ragged data (it warns in that case).
+  fit <- suppressWarnings(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7, n_threads = 1))
+  expect_length(fitted(fit), n)
+  expect_equal(ngrps(fit), nlevels(g))
+})

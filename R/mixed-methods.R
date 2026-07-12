@@ -348,6 +348,11 @@ summary.simplex_fast_mixed <- function(object, ...) {
 print.summary.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   cat("\nCall:\n"); print(x$call)
 
+  if (!is.null(x$convergence) && x$convergence != 0L) {
+    cat("\n*** MODEL DID NOT CONVERGE (code ", x$convergence, ": ", x$message,
+        ") -- results below are UNRELIABLE. ***\n", sep = "")
+  }
+
   cat("\nPearson residuals:\n")
   rq <- stats::quantile(x$pearson.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
   names(rq) <- c("Min", "1Q", "Median", "3Q", "Max")
