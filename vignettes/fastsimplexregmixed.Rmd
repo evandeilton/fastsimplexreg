@@ -10,6 +10,7 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
+has_betareg <- requireNamespace("betareg", quietly = TRUE)
 ```
 
 ## 1. Nested proportion data
@@ -67,37 +68,37 @@ lme4-style bar:
 * `random = ~ 1 + t | subject` — a random intercept and a random slope in `t`;
 * `random = ~ 0 + t | subject` — a random slope only.
 
-## 3. A worked example: simulated intraocular gas decay
+## 3. A worked example: gasoline yield by crude-oil batch
 
-We simulate longitudinal data loosely inspired by intraocular gas decay after
-retinal surgery: the response `Gas` is the fraction of gas remaining in the eye,
-measured **repeatedly over time** for each of 31 patients (variable `ID`),
-with `LogT`/`LogT2` the (log) time since surgery and `Time` the raw time.
-Successive measurements on the same eye are correlated — a textbook nested
-structure.
+We use the `GasolineYield` data from the **betareg** package: the response
+`yield` is the proportion of crude oil converted to gasoline, measured across
+experimental settings of temperature `temp` for 10 crude-oil `batch`es (2-4
+measurements each). Yields from the same batch share the crude oil's unmeasured
+properties — a natural nested structure. We model the mean yield through `temp`
+and add a **random intercept per batch**.
 
 ```{r data}
-set.seed(1)
-J <- 31; nj <- 6; n <- J * nj
-ID <- rep(seq_len(J), each = nj); Time <- rep(seq_len(nj) * 10, J)
-LogT <- log(Time); LogT2 <- LogT^2
-b <- rnorm(J, 0, 0.8)[ID]
-mu <- simplex_linkinv(2.5 - 1.2 * LogT + 0.1 * LogT2 + b, "logit")
-retinal <- data.frame(Gas = rsimplex(n, mu, exp(-0.5)),
-                      Time = Time, LogT = LogT, LogT2 = LogT2, ID = ID)
-retinal$ID <- factor(retinal$ID)
-str(retinal)
+if (has_betareg) {
+  data("GasolineYield", package = "betareg")
+} else {
+  # Synthetic stand-in so the vignette renders without 'betareg'.
+  set.seed(1)
+  J <- 10; nj <- 3; n <- J * nj
+  batch <- factor(rep(seq_len(J), each = nj))
+  temp <- rep(c(205, 275, 345), J) + rnorm(n, 0, 5)
+  b <- rnorm(J, 0, 0.5)[batch]
+  mu <- simplex_linkinv(-2.5 + 0.006 * temp + b, "logit")
+  GasolineYield <- data.frame(yield = rsimplex(n, mu, exp(-1)), temp = temp,
+                              batch = batch)
+}
+str(GasolineYield)
 ```
-
-The gas fraction decays with time; we model the mean decay through `LogT` and
-`LogT2`, let the dispersion depend on `Time`, and add a **random intercept per
-eye** to capture between-subject heterogeneity:
 
 ```{r fit}
 fit <- fastsimplexregmixed(
-  Gas ~ LogT + LogT2 | Time,
-  random = ~ 1 | ID,
-  data = retinal,
+  yield ~ temp,
+  random = ~ 1 | batch,
+  data = GasolineYield,
   link = "logit",
   nAGQ = 15,
   n_threads = 1
@@ -105,16 +106,17 @@ fit <- fastsimplexregmixed(
 summary(fit)
 ```
 
-The estimated between-subject variance and the group-level random effects:
+The estimated between-batch variance and the group-level random effects:
 
 ```{r varcorr}
 VarCorr(fit)
 head(ranef(fit))
 ```
 
-A non-negligible random-intercept variance confirms that eyes differ
-systematically in their baseline gas retention beyond what the time covariates
-explain. The number of groups and the marginal fit statistics:
+A non-negligible random-intercept variance confirms that batches differ
+systematically in baseline yield beyond what temperature explains — exactly the
+heterogeneity a fixed-effects fit on the pooled data would ignore. The number of
+groups and the marginal fit statistics:
 
 ```{r info}
 c(groups = ngrps(fit), nobs = nobs(fit))
@@ -124,15 +126,15 @@ c(logLik = as.numeric(logLik(fit)), AIC = AIC(fit), BIC = BIC(fit))
 ### Conditional vs population predictions
 
 By default `predict()` is **conditional** on the estimated random effects (a
-subject-specific curve); `re.form = NA` gives the **population-level**
+batch-specific curve); `re.form = NA` gives the **population-level**
 (marginal-mode) prediction with $b = 0$:
 
 ```{r predict}
-newd <- data.frame(LogT = log(c(5, 20, 60)), LogT2 = log(c(5, 20, 60))^2,
-                   Time = c(5, 20, 60), ID = factor(levels(retinal$ID)[1],
-                                                    levels = levels(retinal$ID)))
+b1 <- levels(GasolineYield$batch)[1]
+newd <- data.frame(temp = c(250, 350, 450),
+                   batch = factor(b1, levels = levels(GasolineYield$batch)))
 data.frame(
-  Time        = c(5, 20, 60),
+  temp        = newd$temp,
   conditional = predict(fit, newdata = newd, type = "response"),
   population  = predict(fit, newdata = newd, type = "response", re.form = NA)
 )

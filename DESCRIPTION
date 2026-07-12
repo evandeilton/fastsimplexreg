@@ -38,7 +38,8 @@ Suggests:
     knitr,
     rmarkdown,
     patchwork,
-    numDeriv
+    numDeriv,
+    betareg
 VignetteBuilder: knitr
 SystemRequirements: C++17
 URL: https://github.com/evandeilton/fastsimplexreg, https://evandeilton.github.io/fastsimplexreg/

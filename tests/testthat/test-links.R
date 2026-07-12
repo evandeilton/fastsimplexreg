@@ -10,7 +10,7 @@ eta <- seq(-4, 4, by = 0.25)
 inv_logit   <- function(eta) 1 / (1 + exp(-eta))
 inv_probit  <- function(eta) stats::pnorm(eta)
 inv_cloglog <- function(eta) 1 - exp(-exp(eta))
-inv_neglog  <- function(eta) exp(-exp(-eta))  # matches simplexreg
+inv_neglog  <- function(eta) exp(-exp(-eta))  # neglog inverse, per Zhang et al. (2016)
 
 # Forward links (eta = g(mu)).
 g_logit   <- function(mu) stats::qlogis(mu)

@@ -88,6 +88,7 @@ inverses and the BFGS optimiser run entirely in C++. Matrix-vector products
 use Armadillo/BLAS and the per-observation loop may use OpenMP.
 }
 \examples{
+# Simulated data with variable dispersion.
 set.seed(123)
 n <- 500
 dat <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1, 0.4), z1 = rnorm(n))
@@ -100,6 +101,14 @@ fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = dat, link = "logit",
 summary(fit)
 coef(fit)
 head(predict(fit, type = "both"))
+
+# Real data: reading accuracy from the 'betareg' package.
+if (requireNamespace("betareg", quietly = TRUE)) {
+  data("ReadingSkills", package = "betareg")
+  rs <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                       data = ReadingSkills, link = "logit")
+  summary(rs)
+}
 
 }
 \references{

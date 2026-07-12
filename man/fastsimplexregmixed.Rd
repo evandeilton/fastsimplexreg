@@ -117,6 +117,14 @@ fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
 summary(fit)
 VarCorr(fit)
 
+# Real data: gasoline yield with a random intercept per crude-oil batch.
+if (requireNamespace("betareg", quietly = TRUE)) {
+  data("GasolineYield", package = "betareg")
+  gy <- fastsimplexregmixed(yield ~ temp, random = ~ 1 | batch,
+                            data = GasolineYield, link = "logit", nAGQ = 15)
+  summary(gy)
+}
+
 }
 \references{
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on

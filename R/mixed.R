@@ -222,6 +222,14 @@
 #' summary(fit)
 #' VarCorr(fit)
 #'
+#' # Real data: gasoline yield with a random intercept per crude-oil batch.
+#' if (requireNamespace("betareg", quietly = TRUE)) {
+#'   data("GasolineYield", package = "betareg")
+#'   gy <- fastsimplexregmixed(yield ~ temp, random = ~ 1 | batch,
+#'                             data = GasolineYield, link = "logit", nAGQ = 15)
+#'   summary(gy)
+#' }
+#'
 #' @export
 fastsimplexregmixed <- function(
     formula,

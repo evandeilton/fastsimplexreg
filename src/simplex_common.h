@@ -109,7 +109,7 @@ inline bool mean_from_eta(
     }
 
     case NEGLOG: {
-      // Matches simplexreg exactly:
+      // neglog link per Zhang et al. (2016):
       // g(mu) = -log(-log(mu)); mu = exp(-exp(-eta));
       // dmu/deta = mu * exp(-eta).
       const double exp_minus_eta = safe_exp(-eta);

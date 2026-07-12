@@ -10,6 +10,7 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center")
 library(fastsimplexreg)
+has_betareg <- requireNamespace("betareg", quietly = TRUE)
 ```
 
 ## 1. Bounded proportions and the simplex distribution
@@ -94,35 +95,39 @@ fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
 Here `y ~ x1 + x2` is the mean model and `z1 + z2` the dispersion model. Omitting
 the second part, `y ~ x1 + x2`, gives constant dispersion.
 
-## 3. A worked example: simulated recovery data
+## 3. A worked example: reading skills
 
-We simulate data loosely inspired by the recovery of CD34+ cells after stem cell
-transplantation: the response `rcd` is a bounded recovery rate, with covariates
-`ageadj` (adjusted age), `chemo` (chemotherapy indicator) and `age`.
+We use the `ReadingSkills` data from the **betareg** package: the response
+`accuracy` is a reading-accuracy score in $(0, 1)$ for 44 children, `dyslexia`
+indicates a diagnosis of dyslexia, and `iq` is a standardised nonverbal IQ score.
 
 ```{r data}
-set.seed(1)
-n <- 239
-sdac <- data.frame(age = round(rnorm(n, 45, 12)),
-                   ageadj = pmax(0, round(rnorm(n, 8, 6))),
-                   chemo = rbinom(n, 1, 0.5))
-mu <- simplex_linkinv(1.1 + 0.013 * sdac$ageadj + 0.25 * sdac$chemo, "logit")
-sdac$rcd <- rsimplex(n, mu, exp(2.6 - 0.015 * sdac$age))
-head(sdac)
+if (has_betareg) {
+  data("ReadingSkills", package = "betareg")
+} else {
+  # Synthetic stand-in so the vignette renders without 'betareg'.
+  set.seed(1)
+  n <- 44
+  ReadingSkills <- data.frame(dyslexia = factor(rep(c("no", "yes"), each = n / 2)),
+                              iq = rnorm(n))
+  mu <- simplex_linkinv(1.0 - 0.9 * (ReadingSkills$dyslexia == "yes") +
+                          0.4 * ReadingSkills$iq, "logit")
+  ReadingSkills$accuracy <- rsimplex(n, mu, exp(0.5))
+}
+head(ReadingSkills)
 ```
 
-We model the mean recovery rate through `ageadj` and `chemo`, and let the
-dispersion depend on `age`:
+We model the mean accuracy through `dyslexia` and `iq`, and let the **dispersion**
+depend on dyslexia status — a genuine variable-dispersion model:
 
 ```{r fit}
-fit <- fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = "logit")
+fit <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                      data = ReadingSkills, link = "logit")
 summary(fit)
 ```
 
-Positive mean coefficients indicate higher recovery with adjusted age and with
-chemotherapy; the negative `age` coefficient in the dispersion model means the
-recovery rate is **less variable** in older patients. The fitted mean and
-dispersion are available directly:
+Accuracy is lower for dyslexic children and increases with IQ; the dispersion
+also differs by group. The fitted mean and dispersion are available directly:
 
 ```{r extract}
 head(cbind(mu = fitted(fit), phi = fitted(fit, "dispersion")))
@@ -145,7 +150,8 @@ Because all four mean links are supported, they can be compared by AIC:
 ```{r links}
 links <- c("logit", "probit", "cloglog", "neglog")
 aic <- sapply(links, function(lk)
-  AIC(fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = lk)))
+  AIC(fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                     data = ReadingSkills, link = lk)))
 round(sort(aic), 2)
 ```
 

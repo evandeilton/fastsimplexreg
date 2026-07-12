@@ -30,8 +30,7 @@ proportions in the open interval $(0, 1)$, with separate submodels for the mean
 and the dispersion, and both fixed- and mixed-effects fitting. The numerical
 core (log-likelihood, analytic score, native BFGS, adaptive Gauss-Hermite
 quadrature, density, random generation, prediction) is written in C++ with
-`RcppArmadillo`, `BLAS`/`LAPACK` and optional `OpenMP`. Documentation website:
-<https://evandeilton.github.io/fastsimplexreg/>.
+`RcppArmadillo`, `BLAS`/`LAPACK` and optional `OpenMP`.
 
 `fastsimplexreg` provides high-performance maximum-likelihood estimation of
 **simplex regression** models for continuous proportions in the open interval
@@ -111,33 +110,45 @@ The `neglog` definition follows Zhang et al. (2016).
 
 ## A worked example
 
-```{r example, eval = requireNamespace("fastsimplexreg", quietly = TRUE)}
+We use the `ReadingSkills` data from the **betareg** package: the response
+`accuracy` is a reading-accuracy score in $(0, 1)$ for children with and without
+`dyslexia`, together with a standardised `iq`. We let the mean depend on both and
+the dispersion depend on dyslexia status.
+
+```{r example, eval = requireNamespace("betareg", quietly = TRUE)}
 library(fastsimplexreg)
+data("ReadingSkills", package = "betareg")
 
-set.seed(20260710)
-n <- 2000
-dat <- data.frame(
-  x1 = rnorm(n),
-  x2 = rbinom(n, size = 1, prob = 0.35),
-  z1 = rnorm(n)
-)
-
-mu_true  <- simplex_linkinv(-0.30 + 0.90 * dat$x1 - 0.55 * dat$x2, link = "logit")
-phi_true <- exp(-1.10 + 0.65 * dat$z1)
-dat$y <- rsimplex(n, mu = mu_true, phi = phi_true)
-
-fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = dat, link = "logit", n_threads = 1L)
+fit <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                      data = ReadingSkills, link = "logit")
 summary(fit)
 ```
 
 Coefficients, the variance-covariance matrix, the log-likelihood and predictions
 are available through the usual extractor methods:
 
-```{r extractors, eval = requireNamespace("fastsimplexreg", quietly = TRUE)}
+```{r extractors, eval = requireNamespace("betareg", quietly = TRUE)}
 coef(fit)
 confint(fit)
 logLik(fit)
 head(predict(fit, type = "both"))
+```
+
+## Mixed-effects models
+
+For nested or clustered proportion data, `fastsimplexregmixed()` adds a
+cluster-specific random effect, estimated by adaptive Gauss-Hermite quadrature.
+The `GasolineYield` data (also from **betareg**) records the proportion `yield`
+of crude oil converted to gasoline across several experimental conditions, in 10
+crude-oil `batch`es. We fit a random intercept per batch:
+
+```{r mixed, eval = requireNamespace("betareg", quietly = TRUE)}
+data("GasolineYield", package = "betareg")
+
+mfit <- fastsimplexregmixed(yield ~ temp, random = ~ 1 | batch,
+                            data = GasolineYield, link = "logit", nAGQ = 15)
+summary(mfit)
+VarCorr(mfit)
 ```
 
 ## Prediction
@@ -175,4 +186,4 @@ Statistical Software*, **71**(11), 1--21.
 
 ## License
 
-GPL-3.
+MIT © José Evandeilton Lopes.

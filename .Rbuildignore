@@ -7,7 +7,7 @@
 ^scratchpad$
 ^\.claude$
 ^LICENSE\.md$
-^Rplots\.pdf$
+Rplots\.pdf$
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$

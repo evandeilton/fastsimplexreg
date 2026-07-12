@@ -107,20 +107,22 @@ test_that("rsimplex recycles length-1 mu and phi", {
   expect_true(all(x > 0 & x < 1))
 })
 
-test_that("dsimplex agrees with simplexreg reference density on a grid", {
-  skip_if_not_installed("simplexreg")
-  # simplexreg::dsimplex(x, mu, sig) parameterises dispersion as sig = sqrt(phi),
-  # i.e. sig^2 = phi. Cross-check log-densities on an interior grid.
+test_that("dsimplex matches a direct implementation of the density formula", {
+  # Independent, dependency-free check of the C++ density against the closed-form
+  # simplex log-density: an alternative code path evaluated in pure R.
+  ld_ref <- function(y, mu, phi) {
+    dev <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
+    -0.5 * (log(2 * pi) + log(phi)) - 1.5 * (log(y) + log(1 - y)) - 0.5 * dev / phi
+  }
   x_grid   <- seq(0.05, 0.95, by = 0.05)
   mu_grid  <- c(0.3, 0.5, 0.7)
   phi_grid <- c(0.5, 1, 2)
   for (mu in mu_grid) {
     for (phi in phi_grid) {
-      ours <- dsimplex(x_grid, mu = mu, phi = phi, n_threads = 1L)
-      ref  <- simplexreg::dsimplex(x_grid, mu = mu, sig = sqrt(phi))
+      ours <- dsimplex(x_grid, mu = mu, phi = phi, log = TRUE, n_threads = 1L)
       expect_equal(
-        ours, as.numeric(ref),
-        tolerance = 1e-8,
+        ours, ld_ref(x_grid, mu, phi),
+        tolerance = 1e-10,
         info = sprintf("mu = %g, phi = %g", mu, phi)
       )
     }
