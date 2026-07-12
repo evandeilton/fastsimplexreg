@@ -181,8 +181,12 @@
 #' @param maxit Maximum number of BFGS iterations.
 #' @param rel_tol Relative objective tolerance.
 #' @param grad_tol Infinity-norm gradient tolerance.
-#' @param n_threads Number of OpenMP threads (over clusters). Zero uses all
-#'   available threads.
+#' @param n_threads Number of OpenMP threads (the cluster loop is parallelised).
+#'   Zero uses all available threads. Parallelism helps most when the per-cluster
+#'   work is substantial (two or more random effects, or larger clusters); for
+#'   many tiny clusters a small `n_threads` (or `1`) can be faster, because a
+#'   multi-threaded BLAS may otherwise oversubscribe the cores. Results can differ
+#'   by a negligible amount (around `1e-13`) between thread counts.
 #' @param inference Logical; compute the Hessian, covariance matrix and standard
 #'   errors.
 #' @param hessian_rel_step Relative step for the finite-difference Hessian.

@@ -53,8 +53,12 @@ fast link-specific values are used.}
 
 \item{grad_tol}{Infinity-norm gradient tolerance.}
 
-\item{n_threads}{Number of OpenMP threads (over clusters). Zero uses all
-available threads.}
+\item{n_threads}{Number of OpenMP threads (the cluster loop is parallelised).
+Zero uses all available threads. Parallelism helps most when the per-cluster
+work is substantial (two or more random effects, or larger clusters); for
+many tiny clusters a small \code{n_threads} (or \code{1}) can be faster, because a
+multi-threaded BLAS may otherwise oversubscribe the cores. Results can differ
+by a negligible amount (around \code{1e-13}) between thread counts.}
 
 \item{inference}{Logical; compute the Hessian, covariance matrix and standard
 errors.}
