@@ -24,7 +24,7 @@
 
     <a class="navbar-brand me-2" href="index.html">fastsimplexreg</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -39,6 +39,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="articles/fastsimplexregmixed.html">Simplex mixed models for nested proportion data</a></li>
+    <li><a class="dropdown-item" href="articles/benchmark.html">Benchmarks: fastsimplexreg vs simplexreg and betareg</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -265,6 +266,7 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <li>
 <strong>Optional inference</strong>: pass <code>inference = FALSE</code> to skip the Hessian for exploratory fits on massive data.</li>
 </ul>
+<p>In head-to-head benchmarks, <code>fastsimplexreg</code> returns <strong>numerically identical maximum-likelihood estimates</strong> to the CRAN package <code>simplexreg</code> (fitted-mean correlation = 1) while running roughly <strong>5-13x faster</strong> for sample sizes up to 1e5, and is ~2-4x faster than <code>betareg</code> while fitting a richer model. See the <a href="https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html">benchmark article</a> (the full reproducible study ships in <code>inst/benchmark/</code>).</p>
 </div>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>

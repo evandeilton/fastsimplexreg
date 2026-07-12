@@ -1,5 +1,14 @@
 # Changelog
 
+## fastsimplexreg 0.2.2
+
+- New `benchmark` vignette comparing `fastsimplexreg` with the CRAN
+  packages `simplexreg` and `betareg` on accuracy, speed (scaling to n =
+  5e5), the four mean links, real data, and the mixed model, with
+  professional ggplot2 figures. Estimates are numerically identical to
+  `simplexreg` while fitting ~5-13x faster. The full reproducible study
+  ships in `inst/benchmark/`.
+
 ## fastsimplexreg 0.2.1
 
 Stability and performance release, following a three-way audit.
