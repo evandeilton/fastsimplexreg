@@ -143,6 +143,7 @@ Regression Analysis of Proportional Data Using the Simplex Distribution.
 ## Examples
 
 ``` r
+# Simulated data with variable dispersion.
 set.seed(123)
 n <- 500
 dat <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1, 0.4), z1 = rnorm(n))
@@ -189,4 +190,37 @@ head(predict(fit, type = "both"))
 #> 4 0.2961153 0.4043430
 #> 5 0.3060928 0.3142088
 #> 6 0.7284008 0.3275010
+
+# Real data: reading accuracy from the 'betareg' package.
+if (requireNamespace("betareg", quietly = TRUE)) {
+  data("ReadingSkills", package = "betareg")
+  rs <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                       data = ReadingSkills, link = "logit")
+  summary(rs)
+}
+#> 
+#> Call:
+#> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
+#>     data = ReadingSkills, link = "logit")
+#> 
+#> Pearson residuals:
+#>      Min       1Q   Median       3Q      Max 
+#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
+#> 
+#> Coefficients (mean model with logit link):
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)  1.37697    0.15352   8.969  < 2e-16 ***
+#> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***
+#> iq          -0.04369    0.07130  -0.613     0.54    
+#> 
+#> Coefficients (dispersion model with log link):
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***
+#> dyslexia     -2.6917     0.2162 -12.450  < 2e-16 ***
+#> ---
+#> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#> 
+#> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
+#> Deviance:    44 | Observations: 44 | Iterations: 15 
+#> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 ```

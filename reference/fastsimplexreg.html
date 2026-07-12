@@ -198,7 +198,8 @@ the Simplex Distribution.
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Simulated data with variable dispersion.</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">500</span></span></span>
 <span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>x1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span>, x2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">n</span>, <span class="fl">1</span>, <span class="fl">0.4</span><span class="op">)</span>, z1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">mu</span> <span class="op">&lt;-</span> <span class="fu"><a href="simplex_linkinv.html">simplex_linkinv</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.4</span> <span class="op">+</span> <span class="fl">0.8</span> <span class="op">*</span> <span class="va">dat</span><span class="op">$</span><span class="va">x1</span> <span class="op">-</span> <span class="fl">0.5</span> <span class="op">*</span> <span class="va">dat</span><span class="op">$</span><span class="va">x2</span>, link <span class="op">=</span> <span class="st">"logit"</span><span class="op">)</span></span></span>
@@ -244,6 +245,39 @@ the Simplex Distribution.
 <span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.2961153 0.4043430</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 5 0.3060928 0.3142088</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6 0.7284008 0.3275010</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Real data: reading accuracy from the 'betareg' package.</span></span></span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"betareg"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"ReadingSkills"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">rs</span> <span class="op">&lt;-</span> <span class="fu">fastsimplexreg</span><span class="op">(</span><span class="va">accuracy</span> <span class="op">~</span> <span class="va">dyslexia</span> <span class="op">+</span> <span class="va">iq</span> <span class="op">|</span> <span class="va">dyslexia</span>,</span></span>
+<span class="r-in"><span>                       data <span class="op">=</span> <span class="va">ReadingSkills</span>, link <span class="op">=</span> <span class="st">"logit"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">rs</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Call:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     data = ReadingSkills, link = "logit")</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Pearson residuals:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      Min       1Q   Median       3Q      Max </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -2.39081 -0.62295  0.24243  0.43805  1.48447 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (mean model with logit link):</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             Estimate Std. Error z value Pr(&gt;|z|)    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)  1.37697    0.15352   8.969  &lt; 2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> iq          -0.04369    0.07130  -0.613     0.54    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (dispersion model with log link):</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             Estimate Std. Error z value Pr(&gt;|z|)    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia     -2.6917     0.2162 -12.450  &lt; 2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> ---</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Deviance:    44 | Observations: 44 | Iterations: 15 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Convergence: 0 - Converged: relative objective tolerance satisfied. </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

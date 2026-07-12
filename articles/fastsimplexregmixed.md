@@ -61,45 +61,51 @@ using the lme4-style bar:
   in `t`;
 - `random = ~ 0 + t | subject` — a random slope only.
 
-## 3. A worked example: simulated intraocular gas decay
+## 3. A worked example: gasoline yield by crude-oil batch
 
-We simulate longitudinal data loosely inspired by intraocular gas decay
-after retinal surgery: the response `Gas` is the fraction of gas
-remaining in the eye, measured **repeatedly over time** for each of 31
-patients (variable `ID`), with `LogT`/`LogT2` the (log) time since
-surgery and `Time` the raw time. Successive measurements on the same eye
-are correlated — a textbook nested structure.
+We use the `GasolineYield` data from the **betareg** package: the
+response `yield` is the proportion of crude oil converted to gasoline,
+measured across experimental settings of temperature `temp` for 10
+crude-oil `batch`es (2-4 measurements each). Yields from the same batch
+share the crude oil’s unmeasured properties — a natural nested
+structure. We model the mean yield through `temp` and add a **random
+intercept per batch**.
 
 ``` r
 
-set.seed(1)
-J <- 31; nj <- 6; n <- J * nj
-ID <- rep(seq_len(J), each = nj); Time <- rep(seq_len(nj) * 10, J)
-LogT <- log(Time); LogT2 <- LogT^2
-b <- rnorm(J, 0, 0.8)[ID]
-mu <- simplex_linkinv(2.5 - 1.2 * LogT + 0.1 * LogT2 + b, "logit")
-retinal <- data.frame(Gas = rsimplex(n, mu, exp(-0.5)),
-                      Time = Time, LogT = LogT, LogT2 = LogT2, ID = ID)
-retinal$ID <- factor(retinal$ID)
-str(retinal)
-#> 'data.frame':    186 obs. of  5 variables:
-#>  $ Gas  : num  0.516 0.288 0.336 0.23 0.286 ...
-#>  $ Time : num  10 20 30 40 50 60 10 20 30 40 ...
-#>  $ LogT : num  2.3 3 3.4 3.69 3.91 ...
-#>  $ LogT2: num  5.3 8.97 11.57 13.61 15.3 ...
-#>  $ ID   : Factor w/ 31 levels "1","2","3","4",..: 1 1 1 1 1 1 2 2 2 2 ...
+if (has_betareg) {
+  data("GasolineYield", package = "betareg")
+} else {
+  # Synthetic stand-in so the vignette renders without 'betareg'.
+  set.seed(1)
+  J <- 10; nj <- 3; n <- J * nj
+  batch <- factor(rep(seq_len(J), each = nj))
+  temp <- rep(c(205, 275, 345), J) + rnorm(n, 0, 5)
+  b <- rnorm(J, 0, 0.5)[batch]
+  mu <- simplex_linkinv(-2.5 + 0.006 * temp + b, "logit")
+  GasolineYield <- data.frame(yield = rsimplex(n, mu, exp(-1)), temp = temp,
+                              batch = batch)
+}
+str(GasolineYield)
+#> 'data.frame':    32 obs. of  6 variables:
+#>  $ yield   : num  0.122 0.223 0.347 0.457 0.08 0.131 0.266 0.074 0.182 0.304 ...
+#>  $ gravity : num  50.8 50.8 50.8 50.8 40.8 40.8 40.8 40 40 40 ...
+#>  $ pressure: num  8.6 8.6 8.6 8.6 3.5 3.5 3.5 6.1 6.1 6.1 ...
+#>  $ temp10  : num  190 190 190 190 210 210 210 217 217 217 ...
+#>  $ temp    : num  205 275 345 407 218 273 347 212 272 340 ...
+#>  $ batch   : Factor w/ 10 levels "1","2","3","4",..: 1 1 1 1 2 2 2 3 3 3 ...
+#>   ..- attr(*, "contrasts")= num [1:10, 1:9] 1 0 0 0 0 0 0 0 0 0 ...
+#>   .. ..- attr(*, "dimnames")=List of 2
+#>   .. .. ..$ : chr [1:10] "1" "2" "3" "4" ...
+#>   .. .. ..$ : chr [1:9] "1" "2" "3" "4" ...
 ```
-
-The gas fraction decays with time; we model the mean decay through
-`LogT` and `LogT2`, let the dispersion depend on `Time`, and add a
-**random intercept per eye** to capture between-subject heterogeneity:
 
 ``` r
 
 fit <- fastsimplexregmixed(
-  Gas ~ LogT + LogT2 | Time,
-  random = ~ 1 | ID,
-  data = retinal,
+  yield ~ temp,
+  random = ~ 1 | batch,
+  data = GasolineYield,
   link = "logit",
   nAGQ = 15,
   n_threads = 1
@@ -107,91 +113,88 @@ fit <- fastsimplexregmixed(
 summary(fit)
 #> 
 #> Call:
-#> fastsimplexregmixed(formula = Gas ~ LogT + LogT2 | Time, data = retinal, 
-#>     random = ~1 | ID, link = "logit", nAGQ = 15, n_threads = 1)
+#> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
+#>     random = ~1 | batch, link = "logit", nAGQ = 15, n_threads = 1)
 #> 
 #> Pearson residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -1.95864 -0.63377 -0.03089  0.51770  2.69270 
+#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
 #> 
 #> Coefficients (mean model with logit link):
-#>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept)   3.6650     0.7319   5.008 5.51e-07 ***
-#> LogT         -1.9227     0.4672  -4.115 3.87e-05 ***
-#> LogT2         0.2158     0.0734   2.940  0.00328 ** 
+#>               Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept) -5.5767677  0.2709674  -20.58   <2e-16 ***
+#> temp         0.0119791  0.0006187   19.36   <2e-16 ***
 #> 
 #> Coefficients (dispersion model with log link):
-#>              Estimate Std. Error z value Pr(>|z|)   
-#> (Intercept) -0.897638   0.288661  -3.110  0.00187 **
-#> Time         0.007232   0.007514   0.963  0.33579   
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> 
 #> Random effects:
-#> Random effects covariance (group: ID)
+#> Random effects covariance (group: batch)
 #>             Variance Std.Dev.
-#> (Intercept)   0.5242    0.724
+#> (Intercept)   0.3406   0.5836
 #> 
-#> Log-likelihood: 183.6 | AIC: -355.1 | BIC: -335.8 
-#> Observations: 186 | Groups: 31 | nAGQ: 15 | Iterations: 21 
+#> Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 
+#> Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied.
 ```
 
-The estimated between-subject variance and the group-level random
-effects:
+The estimated between-batch variance and the group-level random effects:
 
 ``` r
 
 VarCorr(fit)
-#> Random effects covariance (group: ID)
+#> Random effects covariance (group: batch)
 #>             Variance Std.Dev.
-#> (Intercept)   0.5242    0.724
+#> (Intercept)   0.3406   0.5836
 head(ranef(fit))
 #>   (Intercept)
-#> 1 -0.44088405
-#> 2  0.07652446
-#> 3 -0.72924923
-#> 4  1.02256040
-#> 5  0.04428093
-#> 6 -0.70221986
+#> 1   0.9356345
+#> 2   0.4541725
+#> 3   0.6156294
+#> 4   0.1598587
+#> 5   0.1528583
+#> 6   0.1309977
 ```
 
-A non-negligible random-intercept variance confirms that eyes differ
-systematically in their baseline gas retention beyond what the time
-covariates explain. The number of groups and the marginal fit
-statistics:
+A non-negligible random-intercept variance confirms that batches differ
+systematically in baseline yield beyond what temperature explains —
+exactly the heterogeneity a fixed-effects fit on the pooled data would
+ignore. The number of groups and the marginal fit statistics:
 
 ``` r
 
 c(groups = ngrps(fit), nobs = nobs(fit))
 #> groups   nobs 
-#>     31    186
+#>     10     32
 c(logLik = as.numeric(logLik(fit)), AIC = AIC(fit), BIC = BIC(fit))
 #>    logLik       AIC       BIC 
-#>  183.5747 -355.1495 -335.7950
+#>  53.17239 -98.34478 -92.48184
 ```
 
 ### Conditional vs population predictions
 
 By default [`predict()`](https://rdrr.io/r/stats/predict.html) is
-**conditional** on the estimated random effects (a subject-specific
+**conditional** on the estimated random effects (a batch-specific
 curve); `re.form = NA` gives the **population-level** (marginal-mode)
 prediction with $`b = 0`$:
 
 ``` r
 
-newd <- data.frame(LogT = log(c(5, 20, 60)), LogT2 = log(c(5, 20, 60))^2,
-                   Time = c(5, 20, 60), ID = factor(levels(retinal$ID)[1],
-                                                    levels = levels(retinal$ID)))
+b1 <- levels(GasolineYield$batch)[1]
+newd <- data.frame(temp = c(250, 350, 450),
+                   batch = factor(b1, levels = levels(GasolineYield$batch)))
 data.frame(
-  Time        = c(5, 20, 60),
+  temp        = newd$temp,
   conditional = predict(fit, newdata = newd, type = "response"),
   population  = predict(fit, newdata = newd, type = "response", re.form = NA)
 )
-#>   Time conditional population
-#> 1    5   0.6656749  0.7557598
-#> 2   20   0.3546044  0.4605877
-#> 3   60   0.2630857  0.3568396
+#>   temp conditional population
+#> 1  250   0.1616028 0.07030688
+#> 2  350   0.3897324 0.20035584
+#> 3  450   0.6790645 0.45359425
 ```
 
 ### Diagnostics

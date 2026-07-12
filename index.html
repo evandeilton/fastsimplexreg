@@ -63,7 +63,7 @@
 <!-- status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg) -->
 
 <!-- badges: end -->
-<p>A high-performance implementation of simplex regression for continuous proportions in the open interval <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math>, with separate submodels for the mean and the dispersion, and both fixed- and mixed-effects fitting. The numerical core (log-likelihood, analytic score, native BFGS, adaptive Gauss-Hermite quadrature, density, random generation, prediction) is written in C++ with <code>RcppArmadillo</code>, <code>BLAS</code>/<code>LAPACK</code> and optional <code>OpenMP</code>. Documentation website: <a href="https://evandeilton.github.io/fastsimplexreg/" class="uri">https://evandeilton.github.io/fastsimplexreg/</a>.</p>
+<p>A high-performance implementation of simplex regression for continuous proportions in the open interval <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math>, with separate submodels for the mean and the dispersion, and both fixed- and mixed-effects fitting. The numerical core (log-likelihood, analytic score, native BFGS, adaptive Gauss-Hermite quadrature, density, random generation, prediction) is written in C++ with <code>RcppArmadillo</code>, <code>BLAS</code>/<code>LAPACK</code> and optional <code>OpenMP</code>.</p>
 <p><code>fastsimplexreg</code> provides high-performance maximum-likelihood estimation of <strong>simplex regression</strong> models for continuous proportions in the open interval <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math>, following Barndorff-Nielsen and Jorgensen (1991). It fits separate submodels for the mean and the dispersion,</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mi>i</mi></msub><mo>∼</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>,</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>g</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐳</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛄</mi><mo>,</mo></mrow><annotation encoding="application/x-tex">
 Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
@@ -142,76 +142,110 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <div class="section level2">
 <h2 id="a-worked-example">A worked example<a class="anchor" aria-label="anchor" href="#a-worked-example"></a>
 </h2>
+<p>We use the <code>ReadingSkills</code> data from the <strong>betareg</strong> package: the response <code>accuracy</code> is a reading-accuracy score in <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math> for children with and without <code>dyslexia</code>, together with a standardised <code>iq</code>. We let the mean depend on both and the dispersion depend on dyslexia status.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/evandeilton/fastsimplexreg" class="external-link">fastsimplexreg</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"ReadingSkills"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">20260710</span><span class="op">)</span></span>
-<span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">2000</span></span>
-<span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  x1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span>,</span>
-<span>  x2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="va">n</span>, size <span class="op">=</span> <span class="fl">1</span>, prob <span class="op">=</span> <span class="fl">0.35</span><span class="op">)</span>,</span>
-<span>  z1 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">mu_true</span>  <span class="op">&lt;-</span> <span class="fu"><a href="reference/simplex_linkinv.html">simplex_linkinv</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.30</span> <span class="op">+</span> <span class="fl">0.90</span> <span class="op">*</span> <span class="va">dat</span><span class="op">$</span><span class="va">x1</span> <span class="op">-</span> <span class="fl">0.55</span> <span class="op">*</span> <span class="va">dat</span><span class="op">$</span><span class="va">x2</span>, link <span class="op">=</span> <span class="st">"logit"</span><span class="op">)</span></span>
-<span><span class="va">phi_true</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1.10</span> <span class="op">+</span> <span class="fl">0.65</span> <span class="op">*</span> <span class="va">dat</span><span class="op">$</span><span class="va">z1</span><span class="op">)</span></span>
-<span><span class="va">dat</span><span class="op">$</span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/rsimplex.html">rsimplex</a></span><span class="op">(</span><span class="va">n</span>, mu <span class="op">=</span> <span class="va">mu_true</span>, phi <span class="op">=</span> <span class="va">phi_true</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexreg.html">fastsimplexreg</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x1</span> <span class="op">+</span> <span class="va">x2</span> <span class="op">|</span> <span class="va">z1</span>, data <span class="op">=</span> <span class="va">dat</span>, link <span class="op">=</span> <span class="st">"logit"</span>, n_threads <span class="op">=</span> <span class="fl">1L</span><span class="op">)</span></span>
+<span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexreg.html">fastsimplexreg</a></span><span class="op">(</span><span class="va">accuracy</span> <span class="op">~</span> <span class="va">dyslexia</span> <span class="op">+</span> <span class="va">iq</span> <span class="op">|</span> <span class="va">dyslexia</span>,</span>
+<span>                      data <span class="op">=</span> <span class="va">ReadingSkills</span>, link <span class="op">=</span> <span class="st">"logit"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Call:</span></span>
-<span><span class="co">#&gt; fastsimplexreg(formula = y ~ x1 + x2 | z1, data = dat, link = "logit", </span></span>
-<span><span class="co">#&gt;     n_threads = 1L)</span></span>
+<span><span class="co">#&gt; fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, </span></span>
+<span><span class="co">#&gt;     data = ReadingSkills, link = "logit")</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Pearson residuals:</span></span>
 <span><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
-<span><span class="co">#&gt; -3.45204 -0.68367 -0.04273  0.64817  3.69627 </span></span>
+<span><span class="co">#&gt; -2.39081 -0.62295  0.24243  0.43805  1.48447 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (mean model with logit link):</span></span>
-<span><span class="co">#&gt;              Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
-<span><span class="co">#&gt; (Intercept) -0.295723   0.006053  -48.85   &lt;2e-16 ***</span></span>
-<span><span class="co">#&gt; x1           0.906999   0.003760  241.24   &lt;2e-16 ***</span></span>
-<span><span class="co">#&gt; x2          -0.539969   0.009846  -54.84   &lt;2e-16 ***</span></span>
+<span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span><span class="co">#&gt; (Intercept)  1.37697    0.15352   8.969  &lt; 2e-16 ***</span></span>
+<span><span class="co">#&gt; dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***</span></span>
+<span><span class="co">#&gt; iq          -0.04369    0.07130  -0.613     0.54    </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (dispersion model with log link):</span></span>
 <span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
-<span><span class="co">#&gt; (Intercept) -1.13841    0.03162  -36.00   &lt;2e-16 ***</span></span>
-<span><span class="co">#&gt; z1           0.67458    0.03161   21.34   &lt;2e-16 ***</span></span>
+<span><span class="co">#&gt; (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***</span></span>
+<span><span class="co">#&gt; dyslexia     -2.6917     0.2162 -12.450  &lt; 2e-16 ***</span></span>
 <span><span class="co">#&gt; ---</span></span>
 <span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Log-likelihood:  3298 | AIC: -6585 | BIC: -6557 </span></span>
-<span><span class="co">#&gt; Deviance:  2000 | Observations: 2000 | Iterations: 19 </span></span>
+<span><span class="co">#&gt; Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 </span></span>
+<span><span class="co">#&gt; Deviance:    44 | Observations: 44 | Iterations: 15 </span></span>
 <span><span class="co">#&gt; Convergence: 0 - Converged: relative objective tolerance satisfied.</span></span></code></pre></div>
 <p>Coefficients, the variance-covariance matrix, the log-likelihood and predictions are available through the usual extractor methods:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; (Intercept)          x1          x2 (Intercept)          z1 </span></span>
-<span><span class="co">#&gt;  -0.2957225   0.9069989  -0.5399693  -1.1384071   0.6745761</span></span>
+<span><span class="co">#&gt; (Intercept)    dyslexia          iq (Intercept)    dyslexia </span></span>
+<span><span class="co">#&gt;  1.37696520 -0.97656510 -0.04369204  1.42419092 -2.69174257</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt;                  2.5 %     97.5 %</span></span>
-<span><span class="co">#&gt; (Intercept) -0.3075866 -0.2838585</span></span>
-<span><span class="co">#&gt; x1           0.8996299  0.9143678</span></span>
-<span><span class="co">#&gt; x2          -0.5592677 -0.5206709</span></span>
-<span><span class="co">#&gt; (Intercept) -1.2003874 -1.0764269</span></span>
-<span><span class="co">#&gt; z1           0.6126137  0.7365385</span></span>
+<span><span class="co">#&gt;                  2.5 %      97.5 %</span></span>
+<span><span class="co">#&gt; (Intercept)  1.0760642  1.67786626</span></span>
+<span><span class="co">#&gt; dyslexia    -1.2800609 -0.67306929</span></span>
+<span><span class="co">#&gt; iq          -0.1834433  0.09605926</span></span>
+<span><span class="co">#&gt; (Intercept)  1.0023482  1.84603360</span></span>
+<span><span class="co">#&gt; dyslexia    -3.1155107 -2.26797445</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'log Lik.' 3297.736 (df=5)</span></span>
+<span><span class="co">#&gt; 'log Lik.' 68.00509 (df=5)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;          mu       phi</span></span>
-<span><span class="co">#&gt; 1 0.2530652 0.5034738</span></span>
-<span><span class="co">#&gt; 2 0.3016079 0.3234770</span></span>
-<span><span class="co">#&gt; 3 0.4111718 0.4302684</span></span>
-<span><span class="co">#&gt; 4 0.2548136 0.2273266</span></span>
-<span><span class="co">#&gt; 5 0.2216869 0.1832636</span></span>
-<span><span class="co">#&gt; 6 0.2087973 0.1607353</span></span></code></pre></div>
+<span><span class="co">#&gt;          mu      phi</span></span>
+<span><span class="co">#&gt; 1 0.9103076 61.30942</span></span>
+<span><span class="co">#&gt; 2 0.9111495 61.30942</span></span>
+<span><span class="co">#&gt; 3 0.9115695 61.30942</span></span>
+<span><span class="co">#&gt; 4 0.9091703 61.30942</span></span>
+<span><span class="co">#&gt; 5 0.9155269 61.30942</span></span>
+<span><span class="co">#&gt; 6 0.9159281 61.30942</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="mixed-effects-models">Mixed-effects models<a class="anchor" aria-label="anchor" href="#mixed-effects-models"></a>
+</h2>
+<p>For nested or clustered proportion data, <code><a href="reference/fastsimplexregmixed.html">fastsimplexregmixed()</a></code> adds a cluster-specific random effect, estimated by adaptive Gauss-Hermite quadrature. The <code>GasolineYield</code> data (also from <strong>betareg</strong>) records the proportion <code>yield</code> of crude oil converted to gasoline across several experimental conditions, in 10 crude-oil <code>batch</code>es. We fit a random intercept per batch:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"GasolineYield"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">mfit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexregmixed.html">fastsimplexregmixed</a></span><span class="op">(</span><span class="va">yield</span> <span class="op">~</span> <span class="va">temp</span>, random <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">|</span> <span class="va">batch</span>,</span>
+<span>                            data <span class="op">=</span> <span class="va">GasolineYield</span>, link <span class="op">=</span> <span class="st">"logit"</span>, nAGQ <span class="op">=</span> <span class="fl">15</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">mfit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Call:</span></span>
+<span><span class="co">#&gt; fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, </span></span>
+<span><span class="co">#&gt;     random = ~1 | batch, link = "logit", nAGQ = 15)</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Pearson residuals:</span></span>
+<span><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
+<span><span class="co">#&gt; -2.00837 -0.50439  0.09397  0.48606  1.32804 </span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Coefficients (mean model with logit link):</span></span>
+<span><span class="co">#&gt;               Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span><span class="co">#&gt; (Intercept) -5.5767677  0.2709674  -20.58   &lt;2e-16 ***</span></span>
+<span><span class="co">#&gt; temp         0.0119791  0.0006187   19.36   &lt;2e-16 ***</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Coefficients (dispersion model with log link):</span></span>
+<span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span><span class="co">#&gt; (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***</span></span>
+<span><span class="co">#&gt; ---</span></span>
+<span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Random effects:</span></span>
+<span><span class="co">#&gt; Random effects covariance (group: batch)</span></span>
+<span><span class="co">#&gt;             Variance Std.Dev.</span></span>
+<span><span class="co">#&gt; (Intercept)   0.3406   0.5836</span></span>
+<span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 </span></span>
+<span><span class="co">#&gt; Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 </span></span>
+<span><span class="co">#&gt; Convergence: 0 - Converged: relative objective tolerance satisfied.</span></span>
+<span><span class="fu"><a href="https://rdrr.io/pkg/nlme/man/VarCorr.html" class="external-link">VarCorr</a></span><span class="op">(</span><span class="va">mfit</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Random effects covariance (group: batch)</span></span>
+<span><span class="co">#&gt;             Variance Std.Dev.</span></span>
+<span><span class="co">#&gt; (Intercept)   0.3406   0.5836</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="prediction">Prediction<a class="anchor" aria-label="anchor" href="#prediction"></a>
 </h2>
 <p>The available prediction types are <code>"response"</code>/<code>"mean"</code>, <code>"dispersion"</code>, <code>"link"</code> and <code>"both"</code>. Prediction on new data reuses the <code>terms</code>, <code>xlevels</code> and <code>contrasts</code> stored at fitting time:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">new_dat</span>, type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -241,7 +275,7 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
 </h2>
-<p>GPL-3.</p>
+<p>MIT © José Evandeilton Lopes.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">

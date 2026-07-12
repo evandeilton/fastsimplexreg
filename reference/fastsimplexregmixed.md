@@ -205,4 +205,40 @@ VarCorr(fit)
 #> Random effects covariance (group: g)
 #>             Variance Std.Dev.
 #> (Intercept)   0.5437   0.7374
+
+# Real data: gasoline yield with a random intercept per crude-oil batch.
+if (requireNamespace("betareg", quietly = TRUE)) {
+  data("GasolineYield", package = "betareg")
+  gy <- fastsimplexregmixed(yield ~ temp, random = ~ 1 | batch,
+                            data = GasolineYield, link = "logit", nAGQ = 15)
+  summary(gy)
+}
+#> 
+#> Call:
+#> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
+#>     random = ~1 | batch, link = "logit", nAGQ = 15)
+#> 
+#> Pearson residuals:
+#>      Min       1Q   Median       3Q      Max 
+#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
+#> 
+#> Coefficients (mean model with logit link):
+#>               Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept) -5.5767677  0.2709674  -20.58   <2e-16 ***
+#> temp         0.0119791  0.0006187   19.36   <2e-16 ***
+#> 
+#> Coefficients (dispersion model with log link):
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***
+#> ---
+#> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+#> 
+#> Random effects:
+#> Random effects covariance (group: batch)
+#>             Variance Std.Dev.
+#> (Intercept)   0.3406   0.5836
+#> 
+#> Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 
+#> Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 
+#> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 ```

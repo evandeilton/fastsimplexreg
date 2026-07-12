@@ -151,41 +151,47 @@ random slope in <code>t</code>;</li>
 </div>
 </div>
 <div class="section level2">
-<h2 id="a-worked-example-simulated-intraocular-gas-decay">3. A worked example: simulated intraocular gas decay<a class="anchor" aria-label="anchor" href="#a-worked-example-simulated-intraocular-gas-decay"></a>
+<h2 id="a-worked-example-gasoline-yield-by-crude-oil-batch">3. A worked example: gasoline yield by crude-oil batch<a class="anchor" aria-label="anchor" href="#a-worked-example-gasoline-yield-by-crude-oil-batch"></a>
 </h2>
-<p>We simulate longitudinal data loosely inspired by intraocular gas
-decay after retinal surgery: the response <code>Gas</code> is the
-fraction of gas remaining in the eye, measured <strong>repeatedly over
-time</strong> for each of 31 patients (variable <code>ID</code>), with
-<code>LogT</code>/<code>LogT2</code> the (log) time since surgery and
-<code>Time</code> the raw time. Successive measurements on the same eye
-are correlated — a textbook nested structure.</p>
+<p>We use the <code>GasolineYield</code> data from the
+<strong>betareg</strong> package: the response <code>yield</code> is the
+proportion of crude oil converted to gasoline, measured across
+experimental settings of temperature <code>temp</code> for 10 crude-oil
+<code>batch</code>es (2-4 measurements each). Yields from the same batch
+share the crude oil’s unmeasured properties — a natural nested
+structure. We model the mean yield through <code>temp</code> and add a
+<strong>random intercept per batch</strong>.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">31</span>; <span class="va">nj</span> <span class="op">&lt;-</span> <span class="fl">6</span>; <span class="va">n</span> <span class="op">&lt;-</span> <span class="va">J</span> <span class="op">*</span> <span class="va">nj</span></span>
-<span><span class="va">ID</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">J</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">nj</span><span class="op">)</span>; <span class="va">Time</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">nj</span><span class="op">)</span> <span class="op">*</span> <span class="fl">10</span>, <span class="va">J</span><span class="op">)</span></span>
-<span><span class="va">LogT</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="va">Time</span><span class="op">)</span>; <span class="va">LogT2</span> <span class="op">&lt;-</span> <span class="va">LogT</span><span class="op">^</span><span class="fl">2</span></span>
-<span><span class="va">b</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">J</span>, <span class="fl">0</span>, <span class="fl">0.8</span><span class="op">)</span><span class="op">[</span><span class="va">ID</span><span class="op">]</span></span>
-<span><span class="va">mu</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simplex_linkinv.html">simplex_linkinv</a></span><span class="op">(</span><span class="fl">2.5</span> <span class="op">-</span> <span class="fl">1.2</span> <span class="op">*</span> <span class="va">LogT</span> <span class="op">+</span> <span class="fl">0.1</span> <span class="op">*</span> <span class="va">LogT2</span> <span class="op">+</span> <span class="va">b</span>, <span class="st">"logit"</span><span class="op">)</span></span>
-<span><span class="va">retinal</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>Gas <span class="op">=</span> <span class="fu"><a href="../reference/rsimplex.html">rsimplex</a></span><span class="op">(</span><span class="va">n</span>, <span class="va">mu</span>, <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="op">-</span><span class="fl">0.5</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>                      Time <span class="op">=</span> <span class="va">Time</span>, LogT <span class="op">=</span> <span class="va">LogT</span>, LogT2 <span class="op">=</span> <span class="va">LogT2</span>, ID <span class="op">=</span> <span class="va">ID</span><span class="op">)</span></span>
-<span><span class="va">retinal</span><span class="op">$</span><span class="va">ID</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">retinal</span><span class="op">$</span><span class="va">ID</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">retinal</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'data.frame':    186 obs. of  5 variables:</span></span>
-<span><span class="co">#&gt;  $ Gas  : num  0.516 0.288 0.336 0.23 0.286 ...</span></span>
-<span><span class="co">#&gt;  $ Time : num  10 20 30 40 50 60 10 20 30 40 ...</span></span>
-<span><span class="co">#&gt;  $ LogT : num  2.3 3 3.4 3.69 3.91 ...</span></span>
-<span><span class="co">#&gt;  $ LogT2: num  5.3 8.97 11.57 13.61 15.3 ...</span></span>
-<span><span class="co">#&gt;  $ ID   : Factor w/ 31 levels "1","2","3","4",..: 1 1 1 1 1 1 2 2 2 2 ...</span></span></code></pre></div>
-<p>The gas fraction decays with time; we model the mean decay through
-<code>LogT</code> and <code>LogT2</code>, let the dispersion depend on
-<code>Time</code>, and add a <strong>random intercept per eye</strong>
-to capture between-subject heterogeneity:</p>
+<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="va">has_betareg</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"GasolineYield"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span>
+<span><span class="op">}</span> <span class="kw">else</span> <span class="op">{</span></span>
+<span>  <span class="co"># Synthetic stand-in so the vignette renders without 'betareg'.</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="va">J</span> <span class="op">&lt;-</span> <span class="fl">10</span>; <span class="va">nj</span> <span class="op">&lt;-</span> <span class="fl">3</span>; <span class="va">n</span> <span class="op">&lt;-</span> <span class="va">J</span> <span class="op">*</span> <span class="va">nj</span></span>
+<span>  <span class="va">batch</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">J</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">nj</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="va">temp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">205</span>, <span class="fl">275</span>, <span class="fl">345</span><span class="op">)</span>, <span class="va">J</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span>, <span class="fl">0</span>, <span class="fl">5</span><span class="op">)</span></span>
+<span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">J</span>, <span class="fl">0</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">[</span><span class="va">batch</span><span class="op">]</span></span>
+<span>  <span class="va">mu</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/simplex_linkinv.html">simplex_linkinv</a></span><span class="op">(</span><span class="op">-</span><span class="fl">2.5</span> <span class="op">+</span> <span class="fl">0.006</span> <span class="op">*</span> <span class="va">temp</span> <span class="op">+</span> <span class="va">b</span>, <span class="st">"logit"</span><span class="op">)</span></span>
+<span>  <span class="va">GasolineYield</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>yield <span class="op">=</span> <span class="fu"><a href="../reference/rsimplex.html">rsimplex</a></span><span class="op">(</span><span class="va">n</span>, <span class="va">mu</span>, <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">exp</a></span><span class="op">(</span><span class="op">-</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span>, temp <span class="op">=</span> <span class="va">temp</span>,</span>
+<span>                              batch <span class="op">=</span> <span class="va">batch</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">GasolineYield</span><span class="op">)</span></span>
+<span><span class="co">#&gt; 'data.frame':    32 obs. of  6 variables:</span></span>
+<span><span class="co">#&gt;  $ yield   : num  0.122 0.223 0.347 0.457 0.08 0.131 0.266 0.074 0.182 0.304 ...</span></span>
+<span><span class="co">#&gt;  $ gravity : num  50.8 50.8 50.8 50.8 40.8 40.8 40.8 40 40 40 ...</span></span>
+<span><span class="co">#&gt;  $ pressure: num  8.6 8.6 8.6 8.6 3.5 3.5 3.5 6.1 6.1 6.1 ...</span></span>
+<span><span class="co">#&gt;  $ temp10  : num  190 190 190 190 210 210 210 217 217 217 ...</span></span>
+<span><span class="co">#&gt;  $ temp    : num  205 275 345 407 218 273 347 212 272 340 ...</span></span>
+<span><span class="co">#&gt;  $ batch   : Factor w/ 10 levels "1","2","3","4",..: 1 1 1 1 2 2 2 3 3 3 ...</span></span>
+<span><span class="co">#&gt;   ..- attr(*, "contrasts")= num [1:10, 1:9] 1 0 0 0 0 0 0 0 0 0 ...</span></span>
+<span><span class="co">#&gt;   .. ..- attr(*, "dimnames")=List of 2</span></span>
+<span><span class="co">#&gt;   .. .. ..$ : chr [1:10] "1" "2" "3" "4" ...</span></span>
+<span><span class="co">#&gt;   .. .. ..$ : chr [1:9] "1" "2" "3" "4" ...</span></span></code></pre></div>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fastsimplexregmixed.html">fastsimplexregmixed</a></span><span class="op">(</span></span>
-<span>  <span class="va">Gas</span> <span class="op">~</span> <span class="va">LogT</span> <span class="op">+</span> <span class="va">LogT2</span> <span class="op">|</span> <span class="va">Time</span>,</span>
-<span>  random <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">|</span> <span class="va">ID</span>,</span>
-<span>  data <span class="op">=</span> <span class="va">retinal</span>,</span>
+<span>  <span class="va">yield</span> <span class="op">~</span> <span class="va">temp</span>,</span>
+<span>  random <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">|</span> <span class="va">batch</span>,</span>
+<span>  data <span class="op">=</span> <span class="va">GasolineYield</span>,</span>
 <span>  link <span class="op">=</span> <span class="st">"logit"</span>,</span>
 <span>  nAGQ <span class="op">=</span> <span class="fl">15</span>,</span>
 <span>  n_threads <span class="op">=</span> <span class="fl">1</span></span>
@@ -193,81 +199,79 @@ to capture between-subject heterogeneity:</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Call:</span></span>
-<span><span class="co">#&gt; fastsimplexregmixed(formula = Gas ~ LogT + LogT2 | Time, data = retinal, </span></span>
-<span><span class="co">#&gt;     random = ~1 | ID, link = "logit", nAGQ = 15, n_threads = 1)</span></span>
+<span><span class="co">#&gt; fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, </span></span>
+<span><span class="co">#&gt;     random = ~1 | batch, link = "logit", nAGQ = 15, n_threads = 1)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Pearson residuals:</span></span>
 <span><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
-<span><span class="co">#&gt; -1.95864 -0.63377 -0.03089  0.51770  2.69270 </span></span>
+<span><span class="co">#&gt; -2.00837 -0.50439  0.09397  0.48606  1.32804 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (mean model with logit link):</span></span>
-<span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
-<span><span class="co">#&gt; (Intercept)   3.6650     0.7319   5.008 5.51e-07 ***</span></span>
-<span><span class="co">#&gt; LogT         -1.9227     0.4672  -4.115 3.87e-05 ***</span></span>
-<span><span class="co">#&gt; LogT2         0.2158     0.0734   2.940  0.00328 ** </span></span>
+<span><span class="co">#&gt;               Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span><span class="co">#&gt; (Intercept) -5.5767677  0.2709674  -20.58   &lt;2e-16 ***</span></span>
+<span><span class="co">#&gt; temp         0.0119791  0.0006187   19.36   &lt;2e-16 ***</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (dispersion model with log link):</span></span>
-<span><span class="co">#&gt;              Estimate Std. Error z value Pr(&gt;|z|)   </span></span>
-<span><span class="co">#&gt; (Intercept) -0.897638   0.288661  -3.110  0.00187 **</span></span>
-<span><span class="co">#&gt; Time         0.007232   0.007514   0.963  0.33579   </span></span>
+<span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
+<span><span class="co">#&gt; (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***</span></span>
 <span><span class="co">#&gt; ---</span></span>
 <span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Random effects:</span></span>
-<span><span class="co">#&gt; Random effects covariance (group: ID)</span></span>
+<span><span class="co">#&gt; Random effects covariance (group: batch)</span></span>
 <span><span class="co">#&gt;             Variance Std.Dev.</span></span>
-<span><span class="co">#&gt; (Intercept)   0.5242    0.724</span></span>
+<span><span class="co">#&gt; (Intercept)   0.3406   0.5836</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Log-likelihood: 183.6 | AIC: -355.1 | BIC: -335.8 </span></span>
-<span><span class="co">#&gt; Observations: 186 | Groups: 31 | nAGQ: 15 | Iterations: 21 </span></span>
+<span><span class="co">#&gt; Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 </span></span>
+<span><span class="co">#&gt; Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 </span></span>
 <span><span class="co">#&gt; Convergence: 0 - Converged: relative objective tolerance satisfied.</span></span></code></pre></div>
-<p>The estimated between-subject variance and the group-level random
+<p>The estimated between-batch variance and the group-level random
 effects:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/nlme/man/VarCorr.html" class="external-link">VarCorr</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Random effects covariance (group: ID)</span></span>
+<span><span class="co">#&gt; Random effects covariance (group: batch)</span></span>
 <span><span class="co">#&gt;             Variance Std.Dev.</span></span>
-<span><span class="co">#&gt; (Intercept)   0.5242    0.724</span></span>
+<span><span class="co">#&gt; (Intercept)   0.3406   0.5836</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/nlme/man/random.effects.html" class="external-link">ranef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;   (Intercept)</span></span>
-<span><span class="co">#&gt; 1 -0.44088405</span></span>
-<span><span class="co">#&gt; 2  0.07652446</span></span>
-<span><span class="co">#&gt; 3 -0.72924923</span></span>
-<span><span class="co">#&gt; 4  1.02256040</span></span>
-<span><span class="co">#&gt; 5  0.04428093</span></span>
-<span><span class="co">#&gt; 6 -0.70221986</span></span></code></pre></div>
-<p>A non-negligible random-intercept variance confirms that eyes differ
-systematically in their baseline gas retention beyond what the time
-covariates explain. The number of groups and the marginal fit
-statistics:</p>
+<span><span class="co">#&gt; 1   0.9356345</span></span>
+<span><span class="co">#&gt; 2   0.4541725</span></span>
+<span><span class="co">#&gt; 3   0.6156294</span></span>
+<span><span class="co">#&gt; 4   0.1598587</span></span>
+<span><span class="co">#&gt; 5   0.1528583</span></span>
+<span><span class="co">#&gt; 6   0.1309977</span></span></code></pre></div>
+<p>A non-negligible random-intercept variance confirms that batches
+differ systematically in baseline yield beyond what temperature explains
+— exactly the heterogeneity a fixed-effects fit on the pooled data would
+ignore. The number of groups and the marginal fit statistics:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>groups <span class="op">=</span> <span class="fu"><a href="../reference/ngrps.html">ngrps</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>, nobs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/nobs.html" class="external-link">nobs</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; groups   nobs </span></span>
-<span><span class="co">#&gt;     31    186</span></span>
+<span><span class="co">#&gt;     10     32</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>logLik <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span>, AIC <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/AIC.html" class="external-link">AIC</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span>, BIC <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/AIC.html" class="external-link">BIC</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    logLik       AIC       BIC </span></span>
-<span><span class="co">#&gt;  183.5747 -355.1495 -335.7950</span></span></code></pre></div>
+<span><span class="co">#&gt;  53.17239 -98.34478 -92.48184</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="conditional-vs-population-predictions">Conditional vs population predictions<a class="anchor" aria-label="anchor" href="#conditional-vs-population-predictions"></a>
 </h3>
 <p>By default <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code> is <strong>conditional</strong> on
-the estimated random effects (a subject-specific curve);
+the estimated random effects (a batch-specific curve);
 <code>re.form = NA</code> gives the <strong>population-level</strong>
 (marginal-mode) prediction with
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">b = 0</annotation></semantics></math>:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">newd</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>LogT <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">20</span>, <span class="fl">60</span><span class="op">)</span><span class="op">)</span>, LogT2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">20</span>, <span class="fl">60</span><span class="op">)</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span>,</span>
-<span>                   Time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">20</span>, <span class="fl">60</span><span class="op">)</span>, ID <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">retinal</span><span class="op">$</span><span class="va">ID</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>,</span>
-<span>                                                    levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">retinal</span><span class="op">$</span><span class="va">ID</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">b1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">GasolineYield</span><span class="op">$</span><span class="va">batch</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
+<span><span class="va">newd</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>temp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">250</span>, <span class="fl">350</span>, <span class="fl">450</span><span class="op">)</span>,</span>
+<span>                   batch <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="va">b1</span>, levels <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html" class="external-link">levels</a></span><span class="op">(</span><span class="va">GasolineYield</span><span class="op">$</span><span class="va">batch</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  Time        <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">20</span>, <span class="fl">60</span><span class="op">)</span>,</span>
+<span>  temp        <span class="op">=</span> <span class="va">newd</span><span class="op">$</span><span class="va">temp</span>,</span>
 <span>  conditional <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">newd</span>, type <span class="op">=</span> <span class="st">"response"</span><span class="op">)</span>,</span>
 <span>  population  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">newd</span>, type <span class="op">=</span> <span class="st">"response"</span>, re.form <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
-<span><span class="co">#&gt;   Time conditional population</span></span>
-<span><span class="co">#&gt; 1    5   0.6656749  0.7557598</span></span>
-<span><span class="co">#&gt; 2   20   0.3546044  0.4605877</span></span>
-<span><span class="co">#&gt; 3   60   0.2630857  0.3568396</span></span></code></pre></div>
+<span><span class="co">#&gt;   temp conditional population</span></span>
+<span><span class="co">#&gt; 1  250   0.1616028 0.07030688</span></span>
+<span><span class="co">#&gt; 2  350   0.3897324 0.20035584</span></span>
+<span><span class="co">#&gt; 3  450   0.6790645 0.45359425</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="diagnostics">Diagnostics<a class="anchor" aria-label="anchor" href="#diagnostics"></a>

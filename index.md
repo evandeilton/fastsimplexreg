@@ -6,8 +6,7 @@ the mean and the dispersion, and both fixed- and mixed-effects fitting.
 The numerical core (log-likelihood, analytic score, native BFGS,
 adaptive Gauss-Hermite quadrature, density, random generation,
 prediction) is written in C++ with `RcppArmadillo`, `BLAS`/`LAPACK` and
-optional `OpenMP`. Documentation website:
-<https://evandeilton.github.io/fastsimplexreg/>.
+optional `OpenMP`.
 
 `fastsimplexreg` provides high-performance maximum-likelihood estimation
 of **simplex regression** models for continuous proportions in the open
@@ -95,48 +94,44 @@ The `neglog` definition follows Zhang et al. (2016).
 
 ## A worked example
 
+We use the `ReadingSkills` data from the **betareg** package: the
+response `accuracy` is a reading-accuracy score in $`(0, 1)`$ for
+children with and without `dyslexia`, together with a standardised `iq`.
+We let the mean depend on both and the dispersion depend on dyslexia
+status.
+
 ``` r
 
 library(fastsimplexreg)
+data("ReadingSkills", package = "betareg")
 
-set.seed(20260710)
-n <- 2000
-dat <- data.frame(
-  x1 = rnorm(n),
-  x2 = rbinom(n, size = 1, prob = 0.35),
-  z1 = rnorm(n)
-)
-
-mu_true  <- simplex_linkinv(-0.30 + 0.90 * dat$x1 - 0.55 * dat$x2, link = "logit")
-phi_true <- exp(-1.10 + 0.65 * dat$z1)
-dat$y <- rsimplex(n, mu = mu_true, phi = phi_true)
-
-fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = dat, link = "logit", n_threads = 1L)
+fit <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                      data = ReadingSkills, link = "logit")
 summary(fit)
 #> 
 #> Call:
-#> fastsimplexreg(formula = y ~ x1 + x2 | z1, data = dat, link = "logit", 
-#>     n_threads = 1L)
+#> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
+#>     data = ReadingSkills, link = "logit")
 #> 
 #> Pearson residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -3.45204 -0.68367 -0.04273  0.64817  3.69627 
+#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
 #> 
 #> Coefficients (mean model with logit link):
-#>              Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept) -0.295723   0.006053  -48.85   <2e-16 ***
-#> x1           0.906999   0.003760  241.24   <2e-16 ***
-#> x2          -0.539969   0.009846  -54.84   <2e-16 ***
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)  1.37697    0.15352   8.969  < 2e-16 ***
+#> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***
+#> iq          -0.04369    0.07130  -0.613     0.54    
 #> 
 #> Coefficients (dispersion model with log link):
 #>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept) -1.13841    0.03162  -36.00   <2e-16 ***
-#> z1           0.67458    0.03161   21.34   <2e-16 ***
+#> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***
+#> dyslexia     -2.6917     0.2162 -12.450  < 2e-16 ***
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> 
-#> Log-likelihood:  3298 | AIC: -6585 | BIC: -6557 
-#> Deviance:  2000 | Observations: 2000 | Iterations: 19 
+#> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
+#> Deviance:    44 | Observations: 44 | Iterations: 15 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied.
 ```
 
@@ -146,25 +141,76 @@ predictions are available through the usual extractor methods:
 ``` r
 
 coef(fit)
-#> (Intercept)          x1          x2 (Intercept)          z1 
-#>  -0.2957225   0.9069989  -0.5399693  -1.1384071   0.6745761
+#> (Intercept)    dyslexia          iq (Intercept)    dyslexia 
+#>  1.37696520 -0.97656510 -0.04369204  1.42419092 -2.69174257
 confint(fit)
-#>                  2.5 %     97.5 %
-#> (Intercept) -0.3075866 -0.2838585
-#> x1           0.8996299  0.9143678
-#> x2          -0.5592677 -0.5206709
-#> (Intercept) -1.2003874 -1.0764269
-#> z1           0.6126137  0.7365385
+#>                  2.5 %      97.5 %
+#> (Intercept)  1.0760642  1.67786626
+#> dyslexia    -1.2800609 -0.67306929
+#> iq          -0.1834433  0.09605926
+#> (Intercept)  1.0023482  1.84603360
+#> dyslexia    -3.1155107 -2.26797445
 logLik(fit)
-#> 'log Lik.' 3297.736 (df=5)
+#> 'log Lik.' 68.00509 (df=5)
 head(predict(fit, type = "both"))
-#>          mu       phi
-#> 1 0.2530652 0.5034738
-#> 2 0.3016079 0.3234770
-#> 3 0.4111718 0.4302684
-#> 4 0.2548136 0.2273266
-#> 5 0.2216869 0.1832636
-#> 6 0.2087973 0.1607353
+#>          mu      phi
+#> 1 0.9103076 61.30942
+#> 2 0.9111495 61.30942
+#> 3 0.9115695 61.30942
+#> 4 0.9091703 61.30942
+#> 5 0.9155269 61.30942
+#> 6 0.9159281 61.30942
+```
+
+## Mixed-effects models
+
+For nested or clustered proportion data,
+[`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md)
+adds a cluster-specific random effect, estimated by adaptive
+Gauss-Hermite quadrature. The `GasolineYield` data (also from
+**betareg**) records the proportion `yield` of crude oil converted to
+gasoline across several experimental conditions, in 10 crude-oil
+`batch`es. We fit a random intercept per batch:
+
+``` r
+
+data("GasolineYield", package = "betareg")
+
+mfit <- fastsimplexregmixed(yield ~ temp, random = ~ 1 | batch,
+                            data = GasolineYield, link = "logit", nAGQ = 15)
+summary(mfit)
+#> 
+#> Call:
+#> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
+#>     random = ~1 | batch, link = "logit", nAGQ = 15)
+#> 
+#> Pearson residuals:
+#>      Min       1Q   Median       3Q      Max 
+#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
+#> 
+#> Coefficients (mean model with logit link):
+#>               Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept) -5.5767677  0.2709674  -20.58   <2e-16 ***
+#> temp         0.0119791  0.0006187   19.36   <2e-16 ***
+#> 
+#> Coefficients (dispersion model with log link):
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***
+#> ---
+#> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+#> 
+#> Random effects:
+#> Random effects covariance (group: batch)
+#>             Variance Std.Dev.
+#> (Intercept)   0.3406   0.5836
+#> 
+#> Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 
+#> Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 
+#> Convergence: 0 - Converged: relative objective tolerance satisfied.
+VarCorr(mfit)
+#> Random effects covariance (group: batch)
+#>             Variance Std.Dev.
+#> (Intercept)   0.3406   0.5836
 ```
 
 ## Prediction
@@ -204,4 +250,4 @@ Regression Analysis of Proportional Data Using the Simplex Distribution.
 
 ## License
 
-GPL-3.
+MIT © José Evandeilton Lopes.

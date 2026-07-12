@@ -95,88 +95,94 @@ fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
 Here `y ~ x1 + x2` is the mean model and `z1 + z2` the dispersion model.
 Omitting the second part, `y ~ x1 + x2`, gives constant dispersion.
 
-## 3. A worked example: simulated recovery data
+## 3. A worked example: reading skills
 
-We simulate data loosely inspired by the recovery of CD34+ cells after
-stem cell transplantation: the response `rcd` is a bounded recovery
-rate, with covariates `ageadj` (adjusted age), `chemo` (chemotherapy
-indicator) and `age`.
+We use the `ReadingSkills` data from the **betareg** package: the
+response `accuracy` is a reading-accuracy score in $`(0, 1)`$ for 44
+children, `dyslexia` indicates a diagnosis of dyslexia, and `iq` is a
+standardised nonverbal IQ score.
 
 ``` r
 
-set.seed(1)
-n <- 239
-sdac <- data.frame(age = round(rnorm(n, 45, 12)),
-                   ageadj = pmax(0, round(rnorm(n, 8, 6))),
-                   chemo = rbinom(n, 1, 0.5))
-mu <- simplex_linkinv(1.1 + 0.013 * sdac$ageadj + 0.25 * sdac$chemo, "logit")
-sdac$rcd <- rsimplex(n, mu, exp(2.6 - 0.015 * sdac$age))
-head(sdac)
-#>   age ageadj chemo       rcd
-#> 1  37      8     1 0.5653849
-#> 2  47     12     0 0.9432660
-#> 3  35     14     0 0.8502075
-#> 4  64      9     0 0.4972992
-#> 5  49      3     0 0.7329104
-#> 6  35     15     0 0.7458922
+if (has_betareg) {
+  data("ReadingSkills", package = "betareg")
+} else {
+  # Synthetic stand-in so the vignette renders without 'betareg'.
+  set.seed(1)
+  n <- 44
+  ReadingSkills <- data.frame(dyslexia = factor(rep(c("no", "yes"), each = n / 2)),
+                              iq = rnorm(n))
+  mu <- simplex_linkinv(1.0 - 0.9 * (ReadingSkills$dyslexia == "yes") +
+                          0.4 * ReadingSkills$iq, "logit")
+  ReadingSkills$accuracy <- rsimplex(n, mu, exp(0.5))
+}
+head(ReadingSkills)
+#>   accuracy dyslexia     iq accuracy1
+#> 1  0.88386       no  0.827   0.88386
+#> 2  0.76524       no  0.590   0.76524
+#> 3  0.91508       no  0.471   0.91508
+#> 4  0.98376       no  1.144   0.98376
+#> 5  0.88386       no -0.676   0.88386
+#> 6  0.70905       no -0.795   0.70905
 ```
 
-We model the mean recovery rate through `ageadj` and `chemo`, and let
-the dispersion depend on `age`:
+We model the mean accuracy through `dyslexia` and `iq`, and let the
+**dispersion** depend on dyslexia status — a genuine variable-dispersion
+model:
 
 ``` r
 
-fit <- fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = "logit")
+fit <- fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                      data = ReadingSkills, link = "logit")
 summary(fit)
 #> 
 #> Call:
-#> fastsimplexreg(formula = rcd ~ ageadj + chemo | age, data = sdac, 
-#>     link = "logit")
+#> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
+#>     data = ReadingSkills, link = "logit")
 #> 
 #> Pearson residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.65868 -0.42963  0.19730  0.60193  1.15765 
+#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept) 0.950559   0.109785   8.658  < 2e-16 ***
-#> ageadj      0.016059   0.009882   1.625 0.104161    
-#> chemo       0.382829   0.105654   3.623 0.000291 ***
+#> (Intercept)  1.37697    0.15352   8.969  < 2e-16 ***
+#> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***
+#> iq          -0.04369    0.07130  -0.613     0.54    
 #> 
 #> Coefficients (dispersion model with log link):
-#>              Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept)  1.942640   0.376691   5.157 2.51e-07 ***
-#> age         -0.003534   0.008081  -0.437    0.662    
+#>             Estimate Std. Error z value Pr(>|z|)    
+#> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***
+#> dyslexia     -2.6917     0.2162 -12.450  < 2e-16 ***
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> 
-#> Log-likelihood: 167.6 | AIC: -325.1 | BIC: -307.7 
-#> Deviance:   239 | Observations: 239 | Iterations: 11 
+#> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
+#> Deviance:    44 | Observations: 44 | Iterations: 15 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied.
 ```
 
-Positive mean coefficients indicate higher recovery with adjusted age
-and with chemotherapy; the negative `age` coefficient in the dispersion
-model means the recovery rate is **less variable** in older patients.
-The fitted mean and dispersion are available directly:
+Accuracy is lower for dyslexic children and increases with IQ; the
+dispersion also differs by group. The fitted mean and dispersion are
+available directly:
 
 ``` r
 
 head(cbind(mu = fitted(fit), phi = fitted(fit, "dispersion")))
 #>             mu      phi
-#> [1,] 0.8118171 6.121848
-#> [2,] 0.7582792 5.909251
-#> [3,] 0.7641173 6.165276
-#> [4,] 0.7493392 5.564642
-#> [5,] 0.7308100 5.867626
-#> [6,] 0.7669995 6.165276
+#> [1,] 0.9103076 61.30942
+#> [2,] 0.9111495 61.30942
+#> [3,] 0.9115695 61.30942
+#> [4,] 0.9091703 61.30942
+#> [5,] 0.9155269 61.30942
+#> [6,] 0.9159281 61.30942
 confint(fit)
-#>                    2.5 %     97.5 %
-#> (Intercept)  0.735385226 1.16573272
-#> ageadj      -0.003310232 0.03542846
-#> chemo        0.175751463 0.58990640
-#> (Intercept)  1.204338590 2.68094164
-#> age         -0.019372010 0.01230303
+#>                  2.5 %      97.5 %
+#> (Intercept)  1.0760642  1.67786626
+#> dyslexia    -1.2800609 -0.67306929
+#> iq          -0.1834433  0.09605926
+#> (Intercept)  1.0023482  1.84603360
+#> dyslexia    -3.1155107 -2.26797445
 ```
 
 ### Diagnostics
@@ -200,10 +206,11 @@ Because all four mean links are supported, they can be compared by AIC:
 
 links <- c("logit", "probit", "cloglog", "neglog")
 aic <- sapply(links, function(lk)
-  AIC(fastsimplexreg(rcd ~ ageadj + chemo | age, data = sdac, link = lk)))
+  AIC(fastsimplexreg(accuracy ~ dyslexia + iq | dyslexia,
+                     data = ReadingSkills, link = lk)))
 round(sort(aic), 2)
 #>  neglog   logit  probit cloglog 
-#> -325.21 -325.12 -325.03 -324.87
+#> -126.06 -126.01 -125.95 -125.84
 ```
 
 ## 4. Density and simulation

@@ -259,6 +259,42 @@ Graphical Statistics</em>, <strong>4</strong>(1), 12-35.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>             Variance Std.Dev.</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)   0.5437   0.7374</span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Real data: gasoline yield with a random intercept per crude-oil batch.</span></span></span>
+<span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"betareg"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"GasolineYield"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="va">gy</span> <span class="op">&lt;-</span> <span class="fu">fastsimplexregmixed</span><span class="op">(</span><span class="va">yield</span> <span class="op">~</span> <span class="va">temp</span>, random <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">|</span> <span class="va">batch</span>,</span></span>
+<span class="r-in"><span>                            data <span class="op">=</span> <span class="va">GasolineYield</span>, link <span class="op">=</span> <span class="st">"logit"</span>, nAGQ <span class="op">=</span> <span class="fl">15</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="va">gy</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Call:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>     random = ~1 | batch, link = "logit", nAGQ = 15)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Pearson residuals:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      Min       1Q   Median       3Q      Max </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -2.00837 -0.50439  0.09397  0.48606  1.32804 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (mean model with logit link):</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>               Estimate Std. Error z value Pr(&gt;|z|)    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept) -5.5767677  0.2709674  -20.58   &lt;2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> temp         0.0119791  0.0006187   19.36   &lt;2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (dispersion model with log link):</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             Estimate Std. Error z value Pr(&gt;|z|)    </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)  -1.1049     0.3047  -3.626 0.000288 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> ---</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Random effects:</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Random effects covariance (group: batch)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>             Variance Std.Dev.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)   0.3406   0.5836</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Log-likelihood: 53.17 | AIC: -98.34 | BIC: -92.48 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Observations: 32 | Groups: 10 | nAGQ: 15 | Iterations: 18 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Convergence: 0 - Converged: relative objective tolerance satisfied. </span>
+<span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
