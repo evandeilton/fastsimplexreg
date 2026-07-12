@@ -143,8 +143,12 @@ fast link-specific values are used.</p></dd>
 
 
 <dt id="arg-n-threads">n_threads<a class="anchor" aria-label="anchor" href="#arg-n-threads"></a></dt>
-<dd><p>Number of OpenMP threads (over clusters). Zero uses all
-available threads.</p></dd>
+<dd><p>Number of OpenMP threads (the cluster loop is parallelised).
+Zero uses all available threads. Parallelism helps most when the per-cluster
+work is substantial (two or more random effects, or larger clusters); for
+many tiny clusters a small <code>n_threads</code> (or <code>1</code>) can be faster, because a
+multi-threaded BLAS may otherwise oversubscribe the cores. Results can differ
+by a negligible amount (around <code>1e-13</code>) between thread counts.</p></dd>
 
 
 <dt id="arg-inference">inference<a class="anchor" aria-label="anchor" href="#arg-inference"></a></dt>
