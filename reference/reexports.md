@@ -5,5 +5,5 @@ to see their documentation.
 
 - nlme:
 
-  [`ranef`](https://rdrr.io/pkg/nlme/man/random.effects.html),
-  [`VarCorr`](https://rdrr.io/pkg/nlme/man/VarCorr.html)
+  [`VarCorr`](https://rdrr.io/pkg/nlme/man/VarCorr.html),
+  [`ranef`](https://rdrr.io/pkg/nlme/man/random.effects.html)
