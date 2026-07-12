@@ -175,6 +175,13 @@ predict(fit, newdata = new_dat, type = "both")
 * **Optional inference**: pass `inference = FALSE` to skip the Hessian for
   exploratory fits on massive data.
 
+In head-to-head benchmarks, `fastsimplexreg` returns **numerically identical
+maximum-likelihood estimates** to the CRAN package `simplexreg` (fitted-mean
+correlation = 1) while running roughly **5-13x faster** for sample sizes up to
+1e5, and is ~2-4x faster than `betareg` while fitting a richer model. See the
+[benchmark article](https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html)
+(the full reproducible study ships in `inst/benchmark/`).
+
 ## References
 
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on

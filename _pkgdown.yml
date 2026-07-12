@@ -44,6 +44,7 @@ articles:
     contents:
       - fastsimplexreg
       - fastsimplexregmixed
+      - benchmark
 
 reference:
   - title: "Model fitting"
