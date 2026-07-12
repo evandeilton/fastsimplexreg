@@ -457,6 +457,7 @@ Rcpp::List simplex_mixed_eval_cpp(
     const double inner_tol = 1e-8) {
 
   mat T; vec logW, t2;
+  simplex_fast::check_starts(starts, y.n_elem);
   simplex_fast::build_tensor(nAGQ, q, T, logW, t2);
   mat Bhat(starts.n_elem - 1, q, arma::fill::zeros);
   const auto res = simplex_fast::mixed_core(theta, y, X, Z, W, starts, q, mean_link,
@@ -482,6 +483,7 @@ Rcpp::List simplex_mixed_bfgs_cpp(
     const bool trace = false) {
 
   mat T; vec logW, t2;
+  simplex_fast::check_starts(starts, y.n_elem);
   simplex_fast::build_tensor(nAGQ, q, T, logW, t2);
   mat Bhat(starts.n_elem - 1, q, arma::fill::zeros);
 
@@ -505,6 +507,7 @@ arma::mat simplex_mixed_hessian_fd_cpp(
     const int inner_maxit = 50, const double inner_tol = 1e-8) {
 
   mat T; vec logW, t2;
+  simplex_fast::check_starts(starts, y.n_elem);
   simplex_fast::build_tensor(nAGQ, q, T, logW, t2);
   const uword d = theta.n_elem;
   mat Bhat(starts.n_elem - 1, q, arma::fill::zeros);
@@ -553,6 +556,7 @@ Rcpp::List simplex_mixed_ranef_cpp(
     const int mean_link = 1, const int n_threads = 1,
     const int inner_maxit = 50, const double inner_tol = 1e-8) {
 
+  simplex_fast::check_starts(starts, y.n_elem);
   // One AGHQ node reproduces the mode-finding path; then read the modes back.
   mat T; vec logW, t2;
   simplex_fast::build_tensor(1, q, T, logW, t2);
