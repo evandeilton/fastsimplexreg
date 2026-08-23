@@ -135,9 +135,61 @@ test_that("predict on new data handles known and unknown groups", {
     data.frame(g = factor("1", levels = levels(dat$g)), x1 = 0.5, z1 = 0.1),
     data.frame(g = factor(NA, levels = levels(dat$g)), x1 = 0.5, z1 = 0.1)
   )
-  p <- predict(fit, newdata = nd, type = "response")
+  # An unseen (here: missing) group level falls back to a zero random effect,
+  # and that substitution is now announced instead of being silent.
+  expect_warning(p <- predict(fit, newdata = nd, type = "response"),
+                 "not seen in the fit")
   expect_length(p, 2L)
   expect_true(all(p > 0 & p < 1))
+})
+
+test_that("conditional prediction refuses newdata without the grouping column", {
+  dat <- sim_mixed(J = 40L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+  nd_ok <- data.frame(g = factor("1", levels = levels(dat$g)), x1 = 0.5, z1 = 0.1)
+  nd_no_g <- data.frame(x1 = 0.5, z1 = 0.1)
+
+  # Silently returning a population-level value here would be a wrong answer
+  # under the label of a conditional one.
+  expect_error(predict(fit, newdata = nd_no_g), "missing from 'newdata'")
+  # The population level is still reachable explicitly, and then g is not needed.
+  expect_length(predict(fit, newdata = nd_no_g, re.form = NA), 1L)
+  expect_false(isTRUE(all.equal(predict(fit, newdata = nd_ok),
+                                predict(fit, newdata = nd_ok, re.form = NA))))
+})
+
+test_that("population prediction needs a stored design, and says so", {
+  dat <- sim_mixed(J = 60L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE,
+                             model = FALSE, x = FALSE)
+  # Without the model frame the design would otherwise be rebuilt from whatever
+  # objects happen to be visible in the caller.
+  expect_error(predict(fit, re.form = NA), "model = TRUE")
+})
+
+test_that("predict keeps the length of newdata when rows carry NA", {
+  dat <- sim_mixed(J = 40L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+  nd <- data.frame(g = factor(c("1", "2", "3"), levels = levels(dat$g)),
+                   x1 = c(0.5, NA, 0.3), z1 = c(0.1, 0.2, NA))
+  p <- predict(fit, newdata = nd, type = "response")
+  expect_length(p, 3L)
+  expect_equal(which(is.na(p)), c(2L, 3L))
+})
+
+test_that("VarCorr refuses a meaningless sigma instead of ignoring it", {
+  dat <- sim_mixed(J = 60L, nj = 8L)
+  # Convergence is not what this test is about; this small configuration is a
+  # known hard case for the outer optimiser (unchanged from 0.2.2).
+  fit <- suppressWarnings(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                        nAGQ = 5L, n_threads = 1L, inference = FALSE))
+  expect_silent(v1 <- VarCorr(fit))
+  expect_warning(v2 <- VarCorr(fit, sigma = 10), "no meaning")
+  expect_equal(as.numeric(v1), as.numeric(v2))
 })
 
 test_that("input validation errors are raised", {

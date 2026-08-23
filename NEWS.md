@@ -1,3 +1,97 @@
+# fastsimplexreg 0.2.3
+
+Correctness release following a full surgical audit of `R/`, `src/`, `tests/`
+and `vignettes/`. All estimates, log-likelihoods, deviances, fitted values,
+residuals, densities and random draws are numerically unchanged from 0.2.2;
+what changed is what the package does when something is *wrong*.
+
+## Breaking changes
+
+* **The distribution functions now recycle instead of erroring.** `dsimplex()`
+  and `rsimplex()` used to require `mu`/`phi` of length 1 or `length(x)`; they
+  now recycle all arguments to their common maximum length, which is the base-R
+  convention (`dnorm(1:3, mean = 1:2)`).
+* **`NA` and invalid parameters no longer collapse to `0`.** `dsimplex()`
+  returned `0` (`-Inf` on the log scale) for `NA` input and for an out-of-domain
+  `mu`/`phi`, turning "missing" into "impossible". `NA` now propagates as `NA`,
+  `NaN` as `NaN`, and an out-of-domain parameter gives `NaN` with the canonical
+  "NaNs produced" warning. `rsimplex()` gives `NaN` with "NAs produced" instead
+  of aborting the call.
+
+## Inference (critical)
+
+* **Standard errors are never reported as a confident zero again.** With
+  collinear or otherwise unidentified covariates the Hessian could be singular
+  or indefinite, `solve()` would still succeed, and `sqrt(pmax(diag(vcov), 0))`
+  turned the resulting negative variances into `SE = 0` -- so `summary()`
+  printed `z = Inf` and `p = 0` for a parameter the data cannot identify, with
+  no warning. Inversion now goes through an eigen-decomposition of the
+  equilibrated (correlation-scale) information matrix: only the strictly
+  positive spectrum is inverted (a Moore-Penrose pseudo-inverse), directions of
+  negative curvature are refused rather than turned into variances, every
+  parameter loading on a discarded direction gets `SE = NA`, and the affected
+  parameters are named in a warning. A merely ill-conditioned but full-rank fit
+  keeps its (large, honest) standard errors and gets a separate warning.
+* New components on the fitted object: `vcov_rank`, `vcov_pseudo`,
+  `vcov_condition`, `vcov_eigenvalues` and `n_saturated`.
+* **Saturation of the mean link is reported.** The likelihood path floors the
+  mean at `1e-12`, which zeroes those observations' contribution to the score.
+  That now raises a warning naming how many observations are affected.
+
+## New
+
+* `psimplex()` and `qsimplex()` complete the `d`/`p`/`q`/`r` family, with
+  `lower.tail` and `log.p`. The CDF uses adaptive Gauss-Legendre quadrature with
+  panels seeded around the mean (so a sharply peaked density is always
+  resolved) and agrees with `stats::integrate()` to ~1e-15; `qsimplex()` inverts
+  it by safeguarded Newton-bisection.
+
+## Prediction
+
+* `predict()` now preserves the length of `newdata`: rows dropped for
+  missingness come back as `NA` instead of silently yielding a shorter,
+  unaligned vector. All model parts are built from the same set of complete
+  rows, so they can no longer end up with different row counts.
+* `predict()` on a mixed fit **errors** when `newdata` lacks the grouping
+  column. It previously returned population-level predictions under the label
+  of conditional ones, silently. Rows whose group level was not seen in the fit
+  still fall back to a zero random effect, but that substitution is now
+  announced.
+* Population-level prediction on a mixed fit stored with `model = FALSE` errors
+  instead of resolving covariates in the caller's environment, where it could
+  return predictions of the wrong length built from unrelated objects.
+* A variable required by the model but absent from `newdata` is an error.
+
+## Numerical / C++
+
+* The reporting path (`simplex_linkinv()`, `predict()`, `fitted()`) no longer
+  applies the likelihood path's `1e-12` floor. It is clamped only at the
+  representable boundary, so fitted means keep their full dynamic range
+  (`simplex_linkinv(-40, "logit")` is `4.2e-18`, not `1e-12`) while remaining
+  strictly inside the open support `(0, 1)` that the density and the residual
+  formulas require.
+* `simplex_mixed_ranef_cpp()` no longer reads uninitialised memory: the Fisher
+  fallback for the posterior covariance consumed a buffer that the observed
+  loop could leave partially filled, and the return value of the link map was
+  discarded.
+* The mixed model's inner mode solver no longer commits a step its line search
+  rejected, and no longer compares against the objective at an inadmissible
+  point. A warm-started mode inherited from an outer trial point that was later
+  rejected is now discarded when the cold start beats it, removing a path
+  dependence in the objective.
+* `VarCorr()`'s `sigma` argument is inert for a simplex mixed model; supplying
+  anything other than `1` now warns instead of being silently ignored.
+
+## Testing and documentation
+
+* New `test-inference.R` and `test-distribution-conventions.R`.
+* The analytic score is now compared directly against `numDeriv` for all four
+  mean links (previously validated only indirectly, and only for `logit`).
+* The benchmark vignette's accuracy table is generated from the shipped results
+  instead of being hard-coded, so it cannot drift from the figures.
+* `simulate()` now carries the row names of the model frame (the previous code
+  read `names(object$y)`, which is always `NULL`).
+
 # fastsimplexreg 0.2.2
 
 * New `benchmark` vignette comparing `fastsimplexreg` with the CRAN packages

@@ -62,8 +62,10 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #' @param type For `residuals`, one of `"response"`, `"pearson"` or
 #'   `"deviance"`.
 #' @param postVar For `ranef`, logical; attach posterior covariances.
-#' @param sigma For `VarCorr`, an optional scale multiplier (kept for
-#'   compatibility with the generic; defaults to 1).
+#' @param sigma For `VarCorr`, present only to match the signature of
+#'   [nlme::VarCorr()]. A simplex mixed model has no residual scale parameter,
+#'   so the argument rescales nothing; supplying anything other than `1` raises
+#'   a warning and is ignored.
 #' @param digits For the `VarCorr` print method, the number of significant
 #'   digits to display.
 #' @param ... Additional arguments, currently ignored.
@@ -123,7 +125,7 @@ fitted.simplex_fast_mixed <- function(object, model = c("mean", "dispersion"), .
 residuals.simplex_fast_mixed <- function(object, type = c("response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
   mu <- object$fitted.values
-  y <- mu + object$residuals
+  y <- .simplex_response(object)
   phi <- object$dispersion.values
   switch(
     type,
@@ -151,6 +153,15 @@ ranef.simplex_fast_mixed <- function(object, postVar = FALSE, ...) {
 #' @importFrom nlme VarCorr
 #' @export
 VarCorr.simplex_fast_mixed <- function(x, sigma = 1, ...) {
+  # `sigma` exists only to match the signature of nlme::VarCorr(). A simplex
+  # mixed model has no residual scale parameter to factor out of Sigma, so there
+  # is nothing for it to rescale. Rather than accepting and discarding a value
+  # the user believes is doing something, anything other than 1 is refused.
+  if (!isTRUE(all.equal(unname(sigma), 1))) {
+    warning("VarCorr(): 'sigma' has no meaning for a simplex mixed model -- ",
+            "the covariance Sigma is reported on its own scale and the supplied ",
+            "value is ignored.", call. = FALSE)
+  }
   Sigma <- x$Sigma
   sd <- sqrt(diag(Sigma))
   corr <- suppressWarnings(stats::cov2cor(Sigma))
@@ -196,16 +207,32 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
   type <- match.arg(type)
   population <- (length(re.form) == 1L && is.na(re.form)) ||
     (inherits(re.form, "formula") && identical(all.vars(re.form), character(0)))
+  d <- object$design
 
   if (is.null(newdata)) {
     if (population) {
-      d <- object$design
-      X <- stats::model.matrix(stats::delete.response(d$terms_mean),
-                               data = object$model, contrasts.arg = d$contrasts_mean,
-                               xlev = d$xlevels_mean)
-      W <- stats::model.matrix(stats::delete.response(d$terms_dispersion),
-                               data = object$model, contrasts.arg = d$contrasts_dispersion,
-                               xlev = d$xlevels_dispersion)
+      # Population-level in-sample prediction needs the original design back.
+      # Use the stored matrices when available, otherwise rebuild them from the
+      # stored model frame. With neither, model.matrix() would fall through to
+      # the formula's environment and silently build the design from whatever
+      # objects happen to be visible in the caller -- returning predictions of
+      # the wrong length from the wrong data.
+      if (!is.null(object$x)) {
+        X <- object$x$mean
+        W <- object$x$dispersion
+      } else if (!is.null(object$model)) {
+        X <- stats::model.matrix(stats::delete.response(d$terms_mean),
+                                 data = object$model,
+                                 contrasts.arg = d$contrasts_mean,
+                                 xlev = d$xlevels_mean)
+        W <- stats::model.matrix(stats::delete.response(d$terms_dispersion),
+                                 data = object$model,
+                                 contrasts.arg = d$contrasts_dispersion,
+                                 xlev = d$xlevels_dispersion)
+      } else {
+        stop("Population-level predictions need the design. Refit with ",
+             "model = TRUE or x = TRUE, or supply 'newdata'.", call. = FALSE)
+      }
       beta <- object$coefficients$mean
       gamma <- object$coefficients$dispersion
       eta_mu <- as.numeric(X %*% beta)
@@ -219,28 +246,50 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
       eta_phi <- object$linear.predictors$dispersion
     }
   } else {
-    d <- object$design
-    X <- stats::model.matrix(stats::delete.response(d$terms_mean), data = newdata,
-                             contrasts.arg = d$contrasts_mean, xlev = d$xlevels_mean)
-    W <- stats::model.matrix(stats::delete.response(d$terms_dispersion), data = newdata,
-                             contrasts.arg = d$contrasts_dispersion, xlev = d$xlevels_dispersion)
-    Z <- stats::model.matrix(stats::delete.response(d$terms_random), data = newdata,
-                             contrasts.arg = d$contrasts_random, xlev = d$xlevels_random)
+    terms_list <- list(mean = d$terms_mean,
+                       dispersion = d$terms_dispersion,
+                       random = d$terms_random)
+    contrasts_list <- list(d$contrasts_mean, d$contrasts_dispersion,
+                           d$contrasts_random)
+    xlev_list <- list(d$xlevels_mean, d$xlevels_dispersion, d$xlevels_random)
+    # A conditional prediction needs the grouping factor: without it every row
+    # would silently fall back to a zero random effect, i.e. a population-level
+    # prediction returned under the label of a conditional one.
+    extra <- if (population) character(0) else d$group_name
+
+    des <- .simplex_predict_design(newdata, terms_list, contrasts_list,
+                                   xlev_list, extra_vars = extra)
+    X <- des$matrices$mean
+    W <- des$matrices$dispersion
+    Z <- des$matrices$random
+
     beta <- object$coefficients$mean
     gamma <- object$coefficients$dispersion
     eta_mu <- as.numeric(X %*% beta)
     eta_phi <- as.numeric(W %*% gamma)
+
     if (!population) {
       # Add random effects for groups present in the fit; zero for unseen groups.
-      grp <- as.character(newdata[[d$group_name]])
+      grp <- as.character(newdata[[d$group_name]])[des$keep]
       known <- match(grp, rownames(object$ranef))
       b <- matrix(0, nrow = nrow(X), ncol = ncol(object$ranef))
       seen <- !is.na(known)
       if (any(seen)) b[seen, ] <- object$ranef[known[seen], , drop = FALSE]
+      if (any(!seen)) {
+        warning("predict(): ", sum(!seen), " row(s) of 'newdata' belong to ",
+                "group level(s) not seen in the fit; their random effect is ",
+                "taken to be zero.", call. = FALSE)
+      }
       eta_mu <- eta_mu + rowSums(Z * b)
     }
+
     mu <- simplex_linkinv(eta_mu, object$link$mean)
     phi <- exp(eta_phi)
+    # Keep the result aligned with, and the same length as, newdata.
+    mu <- .simplex_expand(mu, des$keep)
+    phi <- .simplex_expand(phi, des$keep)
+    eta_mu <- .simplex_expand(eta_mu, des$keep)
+    eta_phi <- .simplex_expand(eta_phi, des$keep)
   }
 
   switch(

@@ -12,6 +12,6 @@ These objects are imported from other packages. Follow the links
 below to see their documentation.
 
 \describe{
-  \item{nlme}{\code{\link[nlme:random.effects]{ranef}}, \code{\link[nlme]{VarCorr}}}
+  \item{nlme}{\code{\link[nlme:ranef]{ranef()}}, \code{\link[nlme:VarCorr]{VarCorr()}}}
 }}
 

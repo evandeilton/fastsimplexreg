@@ -129,10 +129,10 @@
 .omega_labels <- function(re_names) {
   q <- length(re_names)
   labs <- character(0)
-  for (c in seq_len(q)) {
-    labs <- c(labs, paste0("logsd.", re_names[c]))
-    for (r in seq_len(q)[-seq_len(c)]) {
-      labs <- c(labs, paste0("chol.", re_names[r], ".", re_names[c]))
+  for (j in seq_len(q)) {
+    labs <- c(labs, paste0("logsd.", re_names[j]))
+    for (r in seq_len(q)[-seq_len(j)]) {
+      labs <- c(labs, paste0("chol.", re_names[r], ".", re_names[j]))
     }
   }
   labs
@@ -369,8 +369,12 @@ fastsimplexregmixed <- function(
   }
 
   vc <- NULL
-  se <- rep(NA_real_, k)
+  se <- stats::setNames(rep(NA_real_, k), par_names)
   hessian <- NULL
+  vcov_rank <- NA_integer_
+  vcov_pseudo <- NA
+  vcov_eigenvalues <- NULL
+  vcov_condition <- NA_real_
   # Standard errors only at a converged fit (see fastsimplexreg()).
   if (isTRUE(inference) && converged) {
     hessian <- simplex_mixed_hessian_fd_cpp(
@@ -379,14 +383,19 @@ fastsimplexregmixed <- function(
       rel_step = as.numeric(hessian_rel_step), n_threads = as.integer(n_threads),
       inner_maxit = as.integer(inner_maxit), inner_tol = as.numeric(inner_tol)
     )
-    vc <- tryCatch(
-      solve(hessian),
-      error = function(e) qr.solve(hessian, diag(nrow(hessian)), tol = 1e-10)
-    )
-    vc <- 0.5 * (vc + t(vc))
-    dimnames(vc) <- list(par_names, par_names)
-    se <- sqrt(pmax(diag(vc), 0))
+    dimnames(hessian) <- list(par_names, par_names)
+
+    # Same fail-safe path as the fixed-effects fit (see R/inference.R).
+    inf <- .simplex_vcov(hessian, par_names, what = "fastsimplexregmixed()")
+    vc <- inf$vcov
+    se <- inf$se
+    vcov_rank <- inf$rank
+    vcov_pseudo <- inf$pseudo
+    vcov_eigenvalues <- inf$eigenvalues
+    vcov_condition <- inf$condition
   }
+
+  .warn_saturated(opt$n_saturated, n, what = "fastsimplexregmixed()")
 
   out <- list(
     call = match.call(),
@@ -405,6 +414,11 @@ fastsimplexregmixed <- function(
     ranef.postvar = re$postvar,
     standard_errors = stats::setNames(se, par_names),
     vcov = vc,
+    vcov_rank = vcov_rank,
+    vcov_pseudo = vcov_pseudo,
+    vcov_eigenvalues = vcov_eigenvalues,
+    vcov_condition = vcov_condition,
+    n_saturated = as.integer(opt$n_saturated),
     hessian = hessian,
     fitted.values = mu,
     dispersion.values = phi,

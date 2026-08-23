@@ -26,13 +26,45 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// psimplex_cpp
+Rcpp::NumericVector psimplex_cpp(const Rcpp::NumericVector& q, const Rcpp::NumericVector& mu, const Rcpp::NumericVector& phi, const bool lower_tail, const bool log_p, const int n_threads);
+RcppExport SEXP _fastsimplexreg_psimplex_cpp(SEXP qSEXP, SEXP muSEXP, SEXP phiSEXP, SEXP lower_tailSEXP, SEXP log_pSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type q(qSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type phi(phiSEXP);
+    Rcpp::traits::input_parameter< const bool >::type lower_tail(lower_tailSEXP);
+    Rcpp::traits::input_parameter< const bool >::type log_p(log_pSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(psimplex_cpp(q, mu, phi, lower_tail, log_p, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
+// qsimplex_cpp
+Rcpp::NumericVector qsimplex_cpp(const Rcpp::NumericVector& p, const Rcpp::NumericVector& mu, const Rcpp::NumericVector& phi, const bool lower_tail, const bool log_p, const int n_threads);
+RcppExport SEXP _fastsimplexreg_qsimplex_cpp(SEXP pSEXP, SEXP muSEXP, SEXP phiSEXP, SEXP lower_tailSEXP, SEXP log_pSEXP, SEXP n_threadsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type p(pSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type mu(muSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type phi(phiSEXP);
+    Rcpp::traits::input_parameter< const bool >::type lower_tail(lower_tailSEXP);
+    Rcpp::traits::input_parameter< const bool >::type log_p(log_pSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
+    rcpp_result_gen = Rcpp::wrap(qsimplex_cpp(p, mu, phi, lower_tail, log_p, n_threads));
+    return rcpp_result_gen;
+END_RCPP
+}
 // rsimplex_cpp
-Rcpp::NumericVector rsimplex_cpp(const int n, const Rcpp::NumericVector& mu, const Rcpp::NumericVector& phi);
+Rcpp::NumericVector rsimplex_cpp(const R_xlen_t n, const Rcpp::NumericVector& mu, const Rcpp::NumericVector& phi);
 RcppExport SEXP _fastsimplexreg_rsimplex_cpp(SEXP nSEXP, SEXP muSEXP, SEXP phiSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const int >::type n(nSEXP);
+    Rcpp::traits::input_parameter< const R_xlen_t >::type n(nSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type mu(muSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector& >::type phi(phiSEXP);
     rcpp_result_gen = Rcpp::wrap(rsimplex_cpp(n, mu, phi));
@@ -255,6 +287,8 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_fastsimplexreg_dsimplex_cpp", (DL_FUNC) &_fastsimplexreg_dsimplex_cpp, 5},
+    {"_fastsimplexreg_psimplex_cpp", (DL_FUNC) &_fastsimplexreg_psimplex_cpp, 6},
+    {"_fastsimplexreg_qsimplex_cpp", (DL_FUNC) &_fastsimplexreg_qsimplex_cpp, 6},
     {"_fastsimplexreg_rsimplex_cpp", (DL_FUNC) &_fastsimplexreg_rsimplex_cpp, 3},
     {"_fastsimplexreg_simplex_eval_cpp", (DL_FUNC) &_fastsimplexreg_simplex_eval_cpp, 6},
     {"_fastsimplexreg_simplex_bfgs_cpp", (DL_FUNC) &_fastsimplexreg_simplex_bfgs_cpp, 10},

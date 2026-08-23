@@ -155,15 +155,35 @@ aic <- sapply(links, function(lk)
 round(sort(aic), 2)
 ```
 
-## 4. Density and simulation
+## 4. The distribution family
 
-The distribution utilities are vectorised and share the C++ backend:
+`dsimplex()`, `psimplex()`, `qsimplex()` and `rsimplex()` form a complete
+`d`/`p`/`q`/`r` family and follow the base-R conventions throughout: arguments
+are recycled to their common length, `NA` propagates as `NA`, a parameter
+outside its domain gives `NaN` with a warning (never a silent zero), and
+`log`, `log.p` and `lower.tail` behave as in `dnorm()`/`pnorm()`/`qnorm()`.
 
 ```{r dist-utils}
 dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
+
+# The CDF has no closed form; it is obtained by adaptive quadrature.
+psimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
+
+# qsimplex inverts psimplex.
+qs <- qsimplex(c(0.1, 0.5, 0.9), mu = 0.35, phi = 0.8)
+rbind(q = qs, p_back = psimplex(qs, mu = 0.35, phi = 0.8))
+
 set.seed(42)
 y <- rsimplex(1e4, mu = 0.35, phi = 0.8)
 c(mean = mean(y), target_mu = 0.35)   # sample mean approximates mu
+```
+
+The theoretical quantiles agree with the empirical ones:
+
+```{r dist-check}
+probs <- c(0.05, 0.25, 0.5, 0.75, 0.95)
+rbind(theoretical = qsimplex(probs, mu = 0.35, phi = 0.8),
+      empirical   = unname(quantile(y, probs)))
 ```
 
 ## 5. Performance notes

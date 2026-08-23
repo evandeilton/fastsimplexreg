@@ -142,7 +142,7 @@ fitted.simplex_fast <- function(object, model = c("mean", "dispersion"), ...) {
 residuals.simplex_fast <- function(object, type = c("response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
   mu <- object$fitted.values
-  y <- mu + object$residuals  # reconstruct the response as mu + (y - mu)
+  y <- .simplex_response(object)
   phi <- object$dispersion.values
   switch(
     type,
@@ -165,7 +165,7 @@ residuals.simplex_fast <- function(object, type = c("response", "pearson", "devi
 #' @export
 deviance.simplex_fast <- function(object, ...) {
   mu <- object$fitted.values
-  y <- mu + object$residuals
+  y <- .simplex_response(object)
   phi <- object$dispersion.values
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
   sum(d / phi)
@@ -344,41 +344,43 @@ predict.simplex_fast <- function(
     eta_mu <- object$linear.predictors$mean
     eta_phi <- object$linear.predictors$dispersion
   } else {
-    X <- stats::model.matrix(
-      stats::delete.response(object$design$terms_mean),
-      data = newdata,
-      contrasts.arg = object$design$contrasts_mean,
-      xlev = object$design$xlevels_mean
-    )
-
-    if (isTRUE(object$design$has_dispersion_formula)) {
-      Z <- stats::model.matrix(
-        stats::delete.response(object$design$terms_dispersion),
-        data = newdata,
-        contrasts.arg = object$design$contrasts_dispersion,
-        xlev = object$design$xlevels_dispersion
-      )
+    has_disp <- isTRUE(object$design$has_dispersion_formula)
+    # Built in one call: `contrasts_list[[2]] <- NULL` would DELETE the element
+    # rather than store a NULL, leaving the lists out of step with terms_list.
+    if (has_disp) {
+      terms_list <- list(mean = object$design$terms_mean,
+                         dispersion = object$design$terms_dispersion)
+      contrasts_list <- list(object$design$contrasts_mean,
+                             object$design$contrasts_dispersion)
+      xlev_list <- list(object$design$xlevels_mean,
+                        object$design$xlevels_dispersion)
     } else {
-      Z <- matrix(
-        1.0,
-        nrow = nrow(X),
-        ncol = 1L,
-        dimnames = list(rownames(X), "(Intercept)")
-      )
+      terms_list <- list(mean = object$design$terms_mean)
+      contrasts_list <- list(object$design$contrasts_mean)
+      xlev_list <- list(object$design$xlevels_mean)
     }
 
-    storage.mode(X) <- "double"
-    storage.mode(Z) <- "double"
+    des <- .simplex_predict_design(newdata, terms_list, contrasts_list, xlev_list)
+    X <- des$matrices$mean
+    Z <- if (has_disp) {
+      des$matrices$dispersion
+    } else {
+      matrix(1.0, nrow = nrow(X), ncol = 1L,
+             dimnames = list(rownames(X), "(Intercept)"))
+    }
+
     pred <- simplex_predict_cpp(
       object$par,
       X,
       Z,
       mean_link = unname(.simplex_links[[object$link$mean]])
     )
-    mu <- as.numeric(pred$mu)
-    phi <- as.numeric(pred$phi)
-    eta_mu <- as.numeric(pred$eta_mu)
-    eta_phi <- as.numeric(pred$eta_phi)
+    # Rows dropped for missingness come back as NA, so the result always has
+    # length nrow(newdata) and stays aligned with it.
+    mu <- .simplex_expand(as.numeric(pred$mu), des$keep)
+    phi <- .simplex_expand(as.numeric(pred$phi), des$keep)
+    eta_mu <- .simplex_expand(as.numeric(pred$eta_mu), des$keep)
+    eta_phi <- .simplex_expand(as.numeric(pred$eta_phi), des$keep)
   }
 
   switch(
@@ -598,6 +600,11 @@ simulate.simplex_fast <- function(object, nsim = 1, seed = NULL, ...) {
   names(val) <- paste0("sim_", seq_len(nsim))
   if (!is.null(object$y)) {
     row.names(val) <- names(object$y)
+  }
+  # Row names come from the stored model frame: object$y is stripped of names by
+  # as.numeric() during fitting, so names(object$y) was always NULL.
+  if (!is.null(object$model) && nrow(object$model) == n) {
+    row.names(val) <- rownames(object$model)
   }
   attr(val, "seed") <- RNGstate
   val

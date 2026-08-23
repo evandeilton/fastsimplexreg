@@ -68,7 +68,13 @@ are \code{coefficients} (a list with \code{mean} and \code{dispersion} estimates
 (fitted means), \code{dispersion.values} (fitted dispersions),
 \code{linear.predictors}, \code{residuals} (response residuals), \code{logLik}, \code{AIC},
 \code{BIC}, \code{nobs}, \code{df.residual}, \code{convergence}, \code{message}, \code{iterations} and
-the stored \code{terms}/\code{design} metadata used for prediction.
+the stored \code{terms}/\code{design} metadata used for prediction. Inference
+diagnostics are also stored: \code{vcov_rank} (rank of the observed information
+matrix), \code{vcov_pseudo} (\code{TRUE} when a Moore-Penrose pseudo-inverse was
+required because the matrix was rank deficient or indefinite),
+\code{vcov_eigenvalues}, and \code{n_saturated} (observations whose fitted mean hit
+the numerical boundary of the likelihood path). Standard errors of
+parameters that the data do not identify are \code{NA}, never \code{0}.
 }
 \description{
 Fits, by maximum likelihood, a simplex regression model with separate

@@ -34,8 +34,9 @@
 #' @useDynLib fastsimplexreg, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
 #' @importFrom stats pnorm qnorm qlogis model.frame model.matrix terms
-#'   delete.response na.omit setNames printCoefmat .getXlevels ppoints quantile
+#' @importFrom stats delete.response na.omit setNames printCoefmat
+#' @importFrom stats .getXlevels ppoints quantile complete.cases
 #' @importFrom stats coef confint fitted logLik nobs predict residuals vcov
-#'   deviance formula simulate update
+#' @importFrom stats deviance formula simulate update
 #' @importFrom rlang .data
 "_PACKAGE"

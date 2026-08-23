@@ -147,3 +147,29 @@ test_that("plot returns ggplot objects for single and multiple panels", {
 
   expect_error(plot(fit, which = 5L), "subset of 1:4")
 })
+
+
+test_that("predict keeps the length of newdata when rows carry NA", {
+  fit <- make_fit()$fit
+  nd <- data.frame(x1 = c(0.1, NA, 0.3), x2 = c(0, 1, 1), z1 = c(0, 0.2, NA))
+  p <- predict(fit, newdata = nd, type = "response")
+  # A shorter, unaligned vector was the old behaviour; predict.lm keeps length.
+  expect_length(p, 3L)
+  expect_equal(which(is.na(p)), c(2L, 3L))
+
+  both <- predict(fit, newdata = nd, type = "both")
+  expect_equal(nrow(both), 3L)
+
+  # A variable the model needs but newdata lacks is an error, not a guess.
+  expect_error(predict(fit, newdata = data.frame(x1 = 0.1)), "missing from 'newdata'")
+})
+
+test_that("simulate carries the row names of the model frame", {
+  set.seed(5L)
+  d <- data.frame(x1 = rnorm(50))
+  rownames(d) <- paste0("obs", seq_len(50))
+  d$y <- rsimplex(50, simplex_linkinv(0.3 + 0.5 * d$x1, "logit"), 1)
+  fit <- fastsimplexreg(y ~ x1, data = d, n_threads = 1L, model = TRUE)
+  s <- simulate(fit, nsim = 2L, seed = 1L)
+  expect_identical(rownames(s), rownames(d))
+})

@@ -23,6 +23,8 @@ has_viz <- .has_data &&
 if (has_viz) {
   results_path <- system.file("extdata", package = "fastsimplexreg")
   source(system.file("benchmark", "viz_figures.R", package = "fastsimplexreg"))
+  results <- readRDS(file.path(results_path, "benchmark_results.rds"))
+  coefs <- readRDS(file.path(results_path, "benchmark_coefs.rds"))
 }
 ```
 
@@ -69,11 +71,29 @@ with one) on simulated data, `fastsimplexreg` and `simplexreg` return the same M
 The largest coefficient disagreement is around `1e-6` and *tightens* as $n$ grows —
 pure optimiser noise.
 
-| $n$  | max &#124;coef diff&#124; | fastsimplexreg | simplexreg | speed-up |
-|-----:|:------------:|:--------------:|:----------:|:--------:|
-| 500  | 7.8e-07 | 0.0030 s | 0.0335 s | 11.2&times; |
-| 2000 | 7.6e-08 | 0.0080 s | 0.1015 s | 12.7&times; |
-| 8000 | 1.1e-09 | 0.0600 s | 0.5480 s | 9.1&times;  |
+```{r tab-accuracy, echo = FALSE, results = "asis"}
+# Built from the shipped results rather than hard-coded, so the table can never
+# drift away from the figures below when the benchmark is re-run.
+if (has_viz) {
+  acc <- results[results$scenario == "accuracy", ]
+  tm <- stats::aggregate(time_sec ~ package + n, data = acc, FUN = stats::median)
+  wide <- stats::reshape(tm, idvar = "n", timevar = "package", direction = "wide")
+  fs <- wide[["time_sec.fastsimplexreg"]]
+  sr <- wide[["time_sec.simplexreg"]]
+  cd <- vapply(wide$n, function(nn) {
+    z <- coefs[coefs$scenario == "accuracy" & coefs$n == nn, ]
+    a <- z$estimate[z$package == "fastsimplexreg"]
+    b <- z$estimate[z$package == "simplexreg"]
+    if (length(a) && length(a) == length(b)) max(abs(a - b)) else NA_real_
+  }, numeric(1))
+  cat("| $n$ | max &#124;coef diff&#124; | fastsimplexreg | simplexreg | speed-up |\n")
+  cat("|----:|:------------:|:--------------:|:----------:|:--------:|\n")
+  for (i in order(wide$n)) {
+    cat(sprintf("| %d | %.1e | %.4f s | %.4f s | %.1f&times; |\n",
+                wide$n[i], cd[i], fs[i], sr[i], sr[i] / fs[i]))
+  }
+}
+```
 
 ```{r fig-accuracy, echo = FALSE, eval = has_viz, fig.width = 9, fig.height = 4.6}
 fig_accuracy()
