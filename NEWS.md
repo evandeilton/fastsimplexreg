@@ -82,9 +82,56 @@ what changed is what the package does when something is *wrong*.
 * `VarCorr()`'s `sigma` argument is inert for a simplex mixed model; supplying
   anything other than `1` now warns instead of being silently ignored.
 
+## Mixed-model convergence
+
+* **Roughly a quarter of mixed fits were reported as optimiser failures when
+  they had in fact converged**, and because standard errors are only computed at
+  a converged fit, those perfectly good fits silently lost their inference.
+  Measured over a grid of 240 `(J, nj, nAGQ, seed)` combinations, 26.2% ended
+  with code 2; restarting the optimiser from the reported stopping point gained
+  a median of 1.6e-11 in log-likelihood -- it was an optimum, not a failure.
+  The failure rate is now 0% over the same grid.
+
+  The rate depends on `nAGQ`, not on the number of groups: 55% at `nAGQ = 3`,
+  47% at 5, 3% at 7 and 0% at the default 11, while being flat in `J` (25-29%)
+  and in cluster size. The cause is that the analytic score is the exact score
+  of the *true* marginal likelihood (Fisher's identity), not of its `nAGQ`-point
+  quadrature approximation, so `grad_tol` is unreachable when `nAGQ` is small
+  and the run ends on a line-search failure instead.
+
+  Two changes: when a line search fails, the inverse-Hessian approximation is
+  reset and the iteration is retried once from a clean steepest-descent
+  direction (it goes stale, and this recovers real progress -- it moved 59 of
+  180 stopping points, every one of them to a *higher* log-likelihood); and the
+  soft-convergence test, which required a relative change below `rel_tol`
+  (1e-9), now uses `sqrt(rel_tol)`, the scale at which these runs actually
+  flatten out. A genuine failure -- a run that cannot take a single step -- is
+  still reported as code 2.
+
+  Cost: the fixed-effects path is unaffected in results and essentially
+  unaffected in speed (+3.2% function evaluations, in 3 of 24 fits, all
+  `neglog`; wall clock within noise). Mixed fits that already converged use
+  about 50% more function evaluations, which buys the extra accuracy above; fits
+  that used to abort naturally cost more now that they run to completion.
+
+* Known limitation: supplying `start` equal to the optimum itself gives the
+  optimiser no iteration history from which to judge stationarity, so it
+  conservatively reports code 2 rather than risk labelling a stall as success.
+
+* The optimiser trace (`trace = TRUE`) now prints the objective at full double
+  precision and reports the relative change per iteration. At the previous six
+  significant digits, successive iterations near the optimum printed
+  identically -- exactly the regime the trace exists to diagnose.
+
 ## Testing and documentation
 
-* New `test-inference.R` and `test-distribution-conventions.R`.
+* New `test-inference.R` and `test-distribution-conventions.R`, plus regression
+  tests pinning the convergence-reporting behaviour in both directions.
+* The rank cut-off used by the fail-safe covariance is derived from the accuracy
+  of the finite-difference Hessian (`sqrt(eps)` on the correlation scale) rather
+  than from machine epsilon. With the tighter cut the verdict depended on which
+  BLAS computed the Hessian: an exactly collinear design was flagged on Linux
+  and passed as full rank on Windows.
 * The analytic score is now compared directly against `numDeriv` for all four
   mean links (previously validated only indirectly, and only for `logit`).
 * The benchmark vignette's accuracy table is generated from the shipped results

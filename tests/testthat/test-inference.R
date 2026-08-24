@@ -5,7 +5,12 @@ test_that("a rank-deficient Hessian yields NA standard errors, not zeros", {
   set.seed(3L)
   n <- 300L
   dat <- data.frame(x1 = rnorm(n))
-  dat$x2 <- dat$x1 + rnorm(n, sd = 1e-7)          # numerically collinear
+  # Exactly duplicated, so the degeneracy is exact in every arithmetic and the
+  # verdict cannot depend on which BLAS computed the Hessian. (A near-collinear
+  # design with sd = 1e-7 puts the degenerate eigenvalue around 1e-13, which is
+  # still five orders below the cut-off, but an exact duplicate leaves nothing
+  # to chance.)
+  dat$x2 <- dat$x1
   dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
 
   # Whether the degenerate direction lands just below zero ("not positive
@@ -29,6 +34,24 @@ test_that("a rank-deficient Hessian yields NA standard errors, not zeros", {
   expect_true(all(is.na(confint(fit)["x1", ])))
 })
 
+test_that("weak identification gives large standard errors, not NA", {
+  # The fail-safe must distinguish "the data cannot identify this at all" (NA)
+  # from "the data identify it poorly" (a large, honest number). Only the first
+  # justifies withholding the standard error.
+  set.seed(3L)
+  n <- 300L
+  dat <- data.frame(x1 = rnorm(n))
+  dat$x2 <- dat$x1 + rnorm(n, sd = 1e-3)
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
+
+  fit <- suppressWarnings(fastsimplexreg(y ~ x1 + x2, data = dat, n_threads = 1L))
+  expect_identical(fit$vcov_rank, length(fit$par))
+  expect_false(fit$vcov_pseudo)
+  expect_true(all(is.finite(fit$standard_errors)))
+  # Large, but a real number.
+  expect_gt(fit$standard_errors[["x1"]], 1)
+})
+
 test_that("a well-conditioned fit is untouched by the fail-safe path", {
   set.seed(9L)
   n <- 800L
@@ -40,6 +63,13 @@ test_that("a well-conditioned fit is untouched by the fail-safe path", {
   expect_false(fit$vcov_pseudo)
   expect_identical(fit$vcov_rank, length(fit$par))
   expect_true(all(is.finite(fit$standard_errors) & fit$standard_errors > 0))
+  # Every mean link stays comfortably clear of the rank cut-off, including
+  # neglog, whose raw Hessian spans 13 orders of magnitude by scale alone.
+  for (lk in c("logit", "probit", "cloglog", "neglog")) {
+    f <- fastsimplexreg(y ~ x1 | z1, data = dat, link = lk, n_threads = 1L)
+    expect_identical(f$vcov_rank, length(f$par), info = lk)
+    expect_false(f$vcov_pseudo, info = lk)
+  }
   # Identical to the plain inverse whenever the plain inverse is legitimate.
   expect_equal(unname(vcov(fit)), unname(solve(fit$hessian)), tolerance = 1e-9)
   expect_identical(fit$n_saturated, 0L)

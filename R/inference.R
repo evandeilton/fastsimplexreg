@@ -55,8 +55,24 @@
   eg <- eigen(Hs, symmetric = TRUE)
   lambda <- eg$values
   V <- eg$vectors
-  # Standard numerical-rank cut-off for a symmetric matrix.
-  tol <- d * .Machine$double.eps * max(abs(lambda), 1)
+
+  # Numerical-rank cut-off. The relevant scale is NOT machine epsilon: this
+  # matrix is a central-difference approximation of the analytic gradient with
+  # relative step h (1e-5 by default), so its entries carry a relative error of
+  # order max(h^2, eps/h) ~ 1e-10 -- roughly five orders of magnitude above eps.
+  # An eigenvalue below that floor is indistinguishable from zero GIVEN HOW THE
+  # MATRIX WAS COMPUTED, and 1/lambda is then pure finite-difference noise
+  # dressed up as a variance. sqrt(eps) ~ 1.5e-8 sits comfortably above the
+  # noise floor and comfortably below the smallest genuine eigenvalue observed
+  # in practice (5e-6 on the correlation scale for the worst-scaled link),
+  # which is the separation this test needs.
+  #
+  # Using eps directly is not merely conservative, it is wrong: it makes the
+  # verdict depend on which BLAS computed the Hessian. A design with exactly
+  # collinear covariates was correctly flagged on one platform and passed as
+  # full rank on another, because the degenerate eigenvalue landed at 1e-13
+  # either side of a 1e-15 cut.
+  tol <- sqrt(.Machine$double.eps) * max(abs(lambda), 1)
 
   keep <- lambda > tol
   negative <- lambda < -tol
