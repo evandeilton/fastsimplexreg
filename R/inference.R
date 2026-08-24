@@ -1,0 +1,155 @@
+# inference.R
+# Fail-safe construction of the covariance matrix and standard errors from an
+# observed information (negative Hessian) matrix.
+#
+# Rationale. Inverting the Hessian with solve() and then flooring the diagonal
+# with pmax(., 0) is unsafe in exactly the situation that matters: with
+# collinear or otherwise non-identified covariates, solve() SUCCEEDS, returns
+# large negative variances, and the floor turns them into a standard error of
+# exactly 0 -- i.e. z = Inf and p = 0 for a parameter the data cannot identify.
+# A missing standard error must never be reported as a confident one, so this
+# helper works from the eigen-decomposition of the symmetrised Hessian and:
+#
+#   * inverts only the strictly positive part of the spectrum (a Moore-Penrose
+#     pseudo-inverse restricted to the directions that carry real curvature);
+#   * refuses to turn a direction of negative curvature into a variance -- there
+#     the fit is not a maximum and 1/lambda is not a variance at all;
+#   * returns NA_real_ (never 0) for every parameter that loads on a discarded
+#     direction, or whose variance is not strictly positive;
+#   * warns, naming the affected parameters.
+
+# Internal: eigen-based fail-safe inverse of an observed information matrix.
+# Returns a list with `vcov`, `se`, `rank`, `eigenvalues`, `condition` and
+# `pseudo` (TRUE when the plain inverse was not usable and the pseudo-inverse
+# was taken).
+#
+# The rank test is performed on the EQUILIBRATED matrix D^-1 H D^-1 with
+# D = diag(sqrt(diag(H))), i.e. on the correlation scale. Without that step the
+# test measures scaling rather than rank: with the neglog link the observed
+# information of a perfectly ordinary fit spans eigenvalues from 6e2 to 2e15
+# (condition 3e12) purely because the parameters live on very different scales,
+# while on the correlation scale its condition number is 6e5 -- comfortably full
+# rank. Testing the raw matrix declares such a fit unidentified, which is a false
+# alarm as damaging as the silent zero it replaced.
+.simplex_vcov <- function(hessian, par_names, what = "fastsimplexreg()") {
+  d <- nrow(hessian)
+  H <- 0.5 * (hessian + t(hessian))
+
+  if (anyNA(H) || !all(is.finite(H))) {
+    warning(what, ": the observed information matrix contains non-finite ",
+            "entries; no standard errors can be computed.", call. = FALSE)
+    vc <- matrix(NA_real_, d, d, dimnames = list(par_names, par_names))
+    return(list(vcov = vc, se = stats::setNames(rep(NA_real_, d), par_names),
+                rank = NA_integer_, eigenvalues = rep(NA_real_, d),
+                condition = NA_real_, pseudo = TRUE))
+  }
+
+  # Equilibrate when the diagonal allows it; fall back to the raw matrix when it
+  # does not (a non-positive diagonal entry is itself a sign of indefiniteness,
+  # which the eigenvalue test below then catches).
+  dg <- diag(H)
+  scaled <- all(is.finite(dg)) && all(dg > 0)
+  sc <- if (scaled) sqrt(dg) else rep(1, d)
+  Hs <- H / outer(sc, sc)
+
+  eg <- eigen(Hs, symmetric = TRUE)
+  lambda <- eg$values
+  V <- eg$vectors
+
+  # Numerical-rank cut-off. The relevant scale is NOT machine epsilon: this
+  # matrix is a central-difference approximation of the analytic gradient with
+  # relative step h (1e-5 by default), so its entries carry a relative error of
+  # order max(h^2, eps/h) ~ 1e-10 -- roughly five orders of magnitude above eps.
+  # An eigenvalue below that floor is indistinguishable from zero GIVEN HOW THE
+  # MATRIX WAS COMPUTED, and 1/lambda is then pure finite-difference noise
+  # dressed up as a variance. sqrt(eps) ~ 1.5e-8 sits comfortably above the
+  # noise floor and comfortably below the smallest genuine eigenvalue observed
+  # in practice (5e-6 on the correlation scale for the worst-scaled link),
+  # which is the separation this test needs.
+  #
+  # Using eps directly is not merely conservative, it is wrong: it makes the
+  # verdict depend on which BLAS computed the Hessian. A design with exactly
+  # collinear covariates was correctly flagged on one platform and passed as
+  # full rank on another, because the degenerate eigenvalue landed at 1e-13
+  # either side of a 1e-15 cut.
+  tol <- sqrt(.Machine$double.eps) * max(abs(lambda), 1)
+
+  keep <- lambda > tol
+  negative <- lambda < -tol
+  rank <- sum(keep)
+  condition <- if (rank == d) max(lambda) / min(lambda) else Inf
+
+  inv_lambda <- numeric(d)
+  inv_lambda[keep] <- 1 / lambda[keep]
+  vc <- V %*% (inv_lambda * t(V))
+  vc <- vc / outer(sc, sc)            # undo the equilibration
+  vc <- 0.5 * (vc + t(vc))
+  dimnames(vc) <- list(par_names, par_names)
+
+  # A parameter is unidentified if it has appreciable loading on a discarded
+  # eigen-direction; its variance from the pseudo-inverse is a minimum-norm
+  # artefact, not an estimate, so it is reported as NA rather than as a number.
+  affected <- rep(FALSE, d)
+  if (any(!keep)) {
+    loading <- sqrt(rowSums(V[, !keep, drop = FALSE]^2))
+    affected <- loading > 1e-6
+  }
+
+  variance <- diag(vc)
+  se <- rep(NA_real_, d)
+  ok <- is.finite(variance) & variance > 0 & !affected
+  se[ok] <- sqrt(variance[ok])
+  names(se) <- par_names
+
+  if (any(negative)) {
+    warning(what, ": the observed information matrix is not positive definite (",
+            sum(negative), " negative eigenvalue(s) on the correlation scale, ",
+            "smallest = ", format(min(lambda), digits = 3),
+            "). The optimiser did not reach a maximum, so the covariance matrix ",
+            "is not a valid variance estimate; standard errors for ",
+            paste(unique(par_names[affected]), collapse = ", "),
+            " are reported as NA.", call. = FALSE)
+  } else if (rank < d) {
+    warning(what, ": the observed information matrix is rank deficient (rank ",
+            rank, " of ", d, "). Parameter(s) ",
+            paste(unique(par_names[affected]), collapse = ", "),
+            " are not identified by the data -- check for collinear covariates. ",
+            "A Moore-Penrose pseudo-inverse was used and their standard errors ",
+            "are NA.", call. = FALSE)
+  } else if (is.finite(condition) && condition > 1 / sqrt(.Machine$double.eps)) {
+    # Full rank, so every standard error is a real number -- but a very large
+    # one, and the user should know why rather than be left to wonder.
+    warning(what, ": the observed information matrix is ill-conditioned ",
+            "(condition number ", format(condition, digits = 3),
+            " on the correlation scale). The standard errors are valid but ",
+            "large; the data identify some parameters only weakly.",
+            call. = FALSE)
+  }
+
+  list(vcov = vc, se = se, rank = rank, eigenvalues = lambda,
+       condition = condition, pseudo = rank < d)
+}
+
+
+# Internal: report saturation of the mean link instead of applying it silently.
+# `n` counts the observations whose fitted mean hit the numerical floor of the
+# likelihood path, where the score contribution is exactly zero by construction.
+.warn_saturated <- function(n, nobs, what = "fastsimplexreg()") {
+  n <- as.integer(n)
+  if (is.na(n) || n <= 0L) return(invisible(FALSE))
+  warning(what, ": the mean saturated at the numerical boundary for ", n,
+          " of ", nobs, " observation(s) at the final parameter value. Those ",
+          "observations contribute exactly zero to the mean score, so the ",
+          "corresponding coefficients are only weakly identified -- check for ",
+          "separation or extreme covariate values.", call. = FALSE)
+  invisible(TRUE)
+}
+
+
+# Internal: the response used by a fit. Prefer the stored copy (y = TRUE, the
+# default); fall back to reconstructing it from the fitted means and the stored
+# response residuals when the fit was made with y = FALSE.
+.simplex_response <- function(object) {
+  if (!is.null(object$y)) return(as.numeric(object$y))
+  object$fitted.values + object$residuals
+}

@@ -22,12 +22,20 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iomanip>
 
 namespace simplex_fast {
 
 // log(2*pi); constant term of the Gaussian-like normalizing factor.
 constexpr double LOG_2PI = 1.837877066409345483560659472811;
-// Numerical floor used to keep probabilities strictly inside (0, 1).
+// Numerical floor used to keep probabilities strictly inside (0, 1) ON THE
+// LIKELIHOOD PATH ONLY. It is load-bearing: the score carries a factor
+// 1 / (mu (1-mu))^3, so letting mu approach the representable limit (~1e-308)
+// makes the analytic gradient overflow and the Armijo line search collapse.
+// The reporting path (simplex_linkinv, predict) does NOT clamp -- see
+// mean_from_eta_exact() -- so no precision is lost where the user can observe
+// it, and saturation on the likelihood path is counted and reported instead of
+// being applied silently.
 constexpr double DEFAULT_EPS = 1e-12;
 // 1 / sqrt(2*pi), the standard normal density peak (used by the probit link).
 constexpr double INV_SQRT_2PI = 0.398942280401432677939946059934;
@@ -59,14 +67,18 @@ inline double clamp_prob(const double x, const double eps = DEFAULT_EPS) noexcep
 // objective and removes the 1 / (mu (1-mu))^3 blow-up of the score that would
 // otherwise make the analytic gradient disagree with the objective by many
 // orders of magnitude, breaking the line search near the boundary.
-inline void clamp_prob_deriv(double& mu, double& dmu) noexcept {
-  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; }
-  else if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; }
+// Returns true when clamping actually occurred, so that callers can COUNT the
+// saturated observations and report them, instead of losing the information.
+inline bool clamp_prob_deriv(double& mu, double& dmu) noexcept {
+  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; return true; }
+  if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; return true; }
+  return false;
 }
 
-inline void clamp_prob_deriv2(double& mu, double& dmu, double& d2mu) noexcept {
-  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; }
-  else if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; }
+inline bool clamp_prob_deriv2(double& mu, double& dmu, double& d2mu) noexcept {
+  if (mu <= DEFAULT_EPS) { mu = DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; return true; }
+  if (mu >= 1.0 - DEFAULT_EPS) { mu = 1.0 - DEFAULT_EPS; dmu = 0.0; d2mu = 0.0; return true; }
+  return false;
 }
 
 // Numerically stable logistic (inverse-logit) function. The two branches
@@ -92,18 +104,23 @@ inline double safe_exp(const double x) noexcept {
 // Map a linear predictor eta to the mean mu via the chosen link and also
 // return the derivative dmu/deta, needed by the chain rule in the score.
 // Returns false when the transformation produces a non-finite value.
+// When `saturated` is non-null it is set to true if the clamp fired, so the
+// caller can report how many observations hit the numerical boundary.
 inline bool mean_from_eta(
     const double eta,
     const int mean_link,
     double& mu,
-    double& dmu_deta) noexcept {
+    double& dmu_deta,
+    bool* saturated = nullptr) noexcept {
 
+  bool hit = false;
   switch (mean_link) {
     case LOGIT:
       // g(mu) = log(mu/(1-mu)); mu = 1/(1+exp(-eta)); dmu/deta = mu(1-mu).
       mu = logistic_stable(eta);
       dmu_deta = mu * (1.0 - mu);
-      clamp_prob_deriv(mu, dmu_deta);
+      hit = clamp_prob_deriv(mu, dmu_deta);
+      if (saturated) *saturated = hit;
       return true;
 
     case PROBIT:
@@ -111,7 +128,8 @@ inline bool mean_from_eta(
       // dmu/deta = phi(eta) = exp(-eta^2/2)/sqrt(2*pi).
       mu = 0.5 * std::erfc(-eta * INV_SQRT_2);
       dmu_deta = INV_SQRT_2PI * std::exp(-0.5 * eta * eta);
-      clamp_prob_deriv(mu, dmu_deta);
+      hit = clamp_prob_deriv(mu, dmu_deta);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu_deta);
 
     case CLOGLOG: {
@@ -121,7 +139,8 @@ inline bool mean_from_eta(
       const double survival = std::exp(-exp_eta);
       mu = -std::expm1(-exp_eta);
       dmu_deta = exp_eta * survival;
-      clamp_prob_deriv(mu, dmu_deta);
+      hit = clamp_prob_deriv(mu, dmu_deta);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu_deta);
     }
 
@@ -132,13 +151,70 @@ inline bool mean_from_eta(
       const double exp_minus_eta = safe_exp(-eta);
       mu = std::exp(-exp_minus_eta);
       dmu_deta = mu * exp_minus_eta;
-      clamp_prob_deriv(mu, dmu_deta);
+      hit = clamp_prob_deriv(mu, dmu_deta);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu_deta);
     }
 
     default:
       return false;
   }
+}
+
+// Largest double strictly below 1 (1 - 2^-53) and smallest positive normal.
+// These are the tightest bounds that keep mu inside the OPEN support (0, 1)
+// that the simplex density and every residual formula require: mu(1-mu) must
+// never be zero. The asymmetry is a property of IEEE-754, not a choice -- near
+// 1 the representable resolution is 1.1e-16, near 0 it is ~2.2e-308.
+const double MU_UPPER = std::nextafter(1.0, 0.0);
+const double MU_LOWER = std::numeric_limits<double>::min();
+
+// Inverse mean link for the REPORTING path (simplex_linkinv(), predict(),
+// fitted()), clamped only at the REPRESENTABLE boundary above.
+//
+// This is the fail-safe half of the clamp strategy. The likelihood path needs
+// the DEFAULT_EPS = 1e-12 floor (its score carries 1/(mu(1-mu))^3 and would
+// otherwise overflow), but applying that same floor to reported means threw
+// away roughly 290 orders of magnitude: simplex_linkinv(-40, "logit") used to
+// return 1e-12 instead of 4.2e-18. Clamping at MU_LOWER/MU_UPPER instead keeps
+// every value the double format can represent and gives up only the two
+// degenerate endpoints 0 and 1 -- which lie outside the model's support anyway
+// and would make Pearson and deviance residuals divide by zero.
+//
+// Away from the boundary the result agrees with base R to within rounding:
+// logit matches stats::plogis() to under one ULP, probit matches stats::pnorm()
+// to ~1e-14 relative (erfc versus R's Cody algorithm).
+// Returns false when the transformation produces a non-finite value.
+inline bool mean_from_eta_exact(
+    const double eta,
+    const int mean_link,
+    double& mu) noexcept {
+
+  switch (mean_link) {
+    case LOGIT:   mu = logistic_stable(eta); break;
+    case PROBIT:  mu = 0.5 * std::erfc(-eta * INV_SQRT_2); break;
+    case CLOGLOG: mu = -std::expm1(-safe_exp(eta)); break;
+    case NEGLOG:  mu = std::exp(-safe_exp(-eta)); break;
+    default:      return false;
+  }
+  if (!std::isfinite(mu)) return false;
+  mu = std::min(MU_UPPER, std::max(MU_LOWER, mu));
+  return true;
+}
+
+// Simplex log-density at a single point, assuming mu and phi have already been
+// validated. Returns -Inf for y outside the open support (0, 1). Shared by the
+// density, the CDF integrand and the quantile solver so that the three can
+// never drift apart.
+inline double simplex_logpdf(const double y, const double mu, const double phi) noexcept {
+  if (!(y > 0.0 && y < 1.0)) return -std::numeric_limits<double>::infinity();
+  const double one_y = 1.0 - y;
+  const double u = mu * (1.0 - mu);
+  const double diff = y - mu;
+  const double dev = (diff * diff) / (y * one_y * u * u);
+  return -0.5 * (LOG_2PI + std::log(phi))
+         - 1.5 * (std::log(y) + std::log(one_y))
+         - 0.5 * dev / phi;
 }
 
 // Second-derivative-capable link map. In addition to mu and dmu/deta it returns
@@ -157,21 +233,25 @@ inline bool mean_deriv2_from_eta(
     const int mean_link,
     double& mu,
     double& dmu,
-    double& d2mu) noexcept {
+    double& d2mu,
+    bool* saturated = nullptr) noexcept {
 
+  bool hit = false;
   switch (mean_link) {
     case LOGIT: {
       mu = logistic_stable(eta);
       dmu = mu * (1.0 - mu);
       d2mu = dmu * (1.0 - 2.0 * mu);
-      clamp_prob_deriv2(mu, dmu, d2mu);
+      hit = clamp_prob_deriv2(mu, dmu, d2mu);
+      if (saturated) *saturated = hit;
       return true;
     }
     case PROBIT: {
       mu = 0.5 * std::erfc(-eta * INV_SQRT_2);
       dmu = INV_SQRT_2PI * std::exp(-0.5 * eta * eta);
       d2mu = -eta * dmu;
-      clamp_prob_deriv2(mu, dmu, d2mu);
+      hit = clamp_prob_deriv2(mu, dmu, d2mu);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     case CLOGLOG: {
@@ -180,7 +260,8 @@ inline bool mean_deriv2_from_eta(
       mu = -std::expm1(-exp_eta);
       dmu = exp_eta * survival;
       d2mu = dmu * (1.0 - exp_eta);
-      clamp_prob_deriv2(mu, dmu, d2mu);
+      hit = clamp_prob_deriv2(mu, dmu, d2mu);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     case NEGLOG: {
@@ -188,7 +269,8 @@ inline bool mean_deriv2_from_eta(
       mu = std::exp(-exp_minus_eta);
       dmu = mu * exp_minus_eta;
       d2mu = dmu * (exp_minus_eta - 1.0);
-      clamp_prob_deriv2(mu, dmu, d2mu);
+      hit = clamp_prob_deriv2(mu, dmu, d2mu);
+      if (saturated) *saturated = hit;
       return std::isfinite(mu) && std::isfinite(dmu) && std::isfinite(d2mu);
     }
     default:
@@ -284,6 +366,10 @@ struct EvalResult {
   double nll;
   arma::vec grad;
   bool valid;
+  // Number of observations whose mean hit the DEFAULT_EPS floor at this theta.
+  // Reported upward so a saturated fit is announced rather than silently
+  // flattened; it never changes the arithmetic.
+  int n_saturated = 0;
 };
 
 // Native BFGS minimizer with an Armijo backtracking line search, shared by both
@@ -330,40 +416,72 @@ inline Rcpp::List bfgs_minimize(
       break;
     }
 
-    vec direction = -H * current.grad;
-    double slope = arma::dot(current.grad, direction);
-    if (!std::isfinite(slope) || slope >= -1e-14) {
-      H.eye();
-      direction = -current.grad;
-      slope = -arma::dot(current.grad, current.grad);
-    }
-
     constexpr double c1 = 1e-4;
     constexpr double shrink = 0.5;
     constexpr int max_ls = 40;
     double step = 1.0;
+    vec direction;
+    double slope = 0.0;
     EvalResult candidate;
     bool accepted = false;
+    bool reset_done = false;
 
-    for (int ls = 0; ls < max_ls; ++ls) {
-      candidate = eval(theta + step * direction);
-      ++fn_evals;
-      ++grad_evals;
-      if (candidate.valid && std::isfinite(candidate.nll) &&
-          candidate.nll <= current.nll + c1 * step * slope) {
-        accepted = true;
-        break;
+    // Up to two attempts per iteration. The first uses the quasi-Newton
+    // direction; when its line search fails, the inverse-Hessian approximation
+    // is the prime suspect -- it is built from earlier, coarser steps and goes
+    // stale -- so reset it and retry once from a clean steepest-descent
+    // direction before giving up on the iteration. The retry costs function
+    // evaluations only on the iterations that would otherwise have failed.
+    for (int attempt = 0; attempt < 2 && !accepted; ++attempt) {
+      if (attempt == 1) {
+        if (reset_done) break;   // already steepest descent; nothing to reset
+        H.eye();
+        reset_done = true;
       }
-      step *= shrink;
+      direction = -H * current.grad;
+      slope = arma::dot(current.grad, direction);
+      if (!std::isfinite(slope) || slope >= -1e-14) {
+        H.eye();
+        reset_done = true;
+        direction = -current.grad;
+        slope = -arma::dot(current.grad, current.grad);
+      }
+
+      step = 1.0;
+      for (int ls = 0; ls < max_ls; ++ls) {
+        candidate = eval(theta + step * direction);
+        ++fn_evals;
+        ++grad_evals;
+        if (candidate.valid && std::isfinite(candidate.nll) &&
+            candidate.nll <= current.nll + c1 * step * slope) {
+          accepted = true;
+          break;
+        }
+        step *= shrink;
+      }
     }
 
     if (!accepted) {
-      // Soft convergence: if the objective was already numerically stationary
-      // on the previous accepted step, the line search cannot improve because we
-      // have reached the objective's floor (e.g. the adaptive-quadrature noise
-      // floor of the marginal likelihood, where the gradient tolerance is
-      // unreachable). Report this as convergence rather than a hard failure.
-      if (iter > 0 && last_rel_change <= rel_tol) {
+      // Neither the quasi-Newton direction nor steepest descent can decrease
+      // the objective from here.
+      //
+      // For the AGHQ marginal likelihood this is the NORMAL way to finish at a
+      // modest nAGQ. The analytic score is the exact score of the true marginal
+      // likelihood (Fisher's identity), not of its nAGQ-point quadrature
+      // approximation, so it does not vanish at the optimum OF THE
+      // APPROXIMATION and grad_tol is simply unreachable. Measured over 180
+      // mixed fits, every such stop had already flattened the objective to a
+      // relative change below sqrt(rel_tol), and restarting the optimiser from
+      // that point gained ~1e-11 in log-likelihood: it is an optimum, not a
+      // failure. Calling it a failure withheld the standard errors of a
+      // perfectly good fit in roughly half of the nAGQ = 5 runs.
+      //
+      // A genuine failure looks different -- it stalls while the objective is
+      // still moving, or before any step has been accepted at all -- and keeps
+      // code 2. In the same 180 fits no floor stop occurred within the first
+      // iteration, and no converged run ever exceeded a relative change of
+      // 1e-9, so the two regimes are well separated.
+      if (iter > 0 && last_rel_change <= std::sqrt(rel_tol)) {
         convergence = 0;
         message = "Converged: objective stationary (line search reached its floor).";
       } else {
@@ -396,9 +514,15 @@ inline Rcpp::List bfgs_minimize(
     current = std::move(candidate);
 
     if (trace) {
+      // Full double precision: at six significant digits (the iostream
+      // default) successive iterations near the optimum print identically,
+      // which is exactly the regime the trace exists to diagnose.
       Rcpp::Rcout << "iter=" << iter_done
+                  << std::setprecision(15)
                   << " nll=" << current.nll
+                  << std::setprecision(6)
                   << " grad_inf=" << arma::abs(current.grad).max()
+                  << " rel_change=" << rel_change
                   << " step=" << step << '\n';
     }
 
@@ -418,7 +542,8 @@ inline Rcpp::List bfgs_minimize(
     Rcpp::Named("message") = message,
     Rcpp::Named("iterations") = iter_done,
     Rcpp::Named("function_evaluations") = fn_evals,
-    Rcpp::Named("gradient_evaluations") = grad_evals
+    Rcpp::Named("gradient_evaluations") = grad_evals,
+    Rcpp::Named("n_saturated") = current.n_saturated
   );
 }
 
@@ -447,6 +572,81 @@ inline void gauss_hermite(const int nAGQ, arma::vec& nodes, arma::vec& weights) 
   arma::eig_sym(eval, evec, J);
   nodes = eval;                                   // ascending order
   weights = SQRT_PI * arma::square(evec.row(0)).t();
+}
+
+// Gauss-Legendre nodes and weights on [-1, 1] via the same Golub-Welsch route
+// used for Gauss-Hermite above: the nodes are the eigenvalues of the symmetric
+// tridiagonal Jacobi matrix (zero diagonal, off-diagonal m / sqrt(4 m^2 - 1)),
+// and the weights are 2 times the squared first component of each normalized
+// eigenvector. Exact for polynomials of degree <= 2n - 1; the weights sum to 2.
+// Computing the rule keeps this file free of tabulated constants, matching the
+// convention already established by gauss_hermite().
+inline void gauss_legendre(const int n, arma::vec& nodes, arma::vec& weights) {
+  const int M = std::max(1, n);
+  if (M == 1) {
+    nodes = arma::vec(1, arma::fill::zeros);
+    weights = arma::vec(1);
+    weights[0] = 2.0;
+    return;
+  }
+  arma::mat J(M, M, arma::fill::zeros);
+  for (int m = 1; m < M; ++m) {
+    const double b = m / std::sqrt(4.0 * m * m - 1.0);
+    J(m - 1, m) = b;
+    J(m, m - 1) = b;
+  }
+  arma::vec eval;
+  arma::mat evec;
+  arma::eig_sym(eval, evec, J);
+  nodes = eval;
+  weights = 2.0 * arma::square(evec.row(0)).t();
+}
+
+// Fixed-order Gauss-Legendre estimate of int_a^b f.
+template <class F>
+inline double gl_estimate(F&& f, const double a, const double b,
+                          const arma::vec& nodes, const arma::vec& weights) {
+  const double half = 0.5 * (b - a);
+  const double mid = 0.5 * (a + b);
+  double acc = 0.0;
+  for (arma::uword k = 0; k < nodes.n_elem; ++k) {
+    acc += weights[k] * f(mid + half * nodes[k]);
+  }
+  return half * acc;
+}
+
+// Adaptive Gauss-Legendre quadrature by interval bisection. The error on a
+// panel is estimated by comparing the whole-panel rule with the sum of the rule
+// on its two halves; a panel is subdivided until that difference falls under
+// max(abstol_panel, reltol * |I_panel|) or the depth limit is reached. This is
+// the classic adaptive-quadrature safeguard and is enough for the simplex
+// density, which is smooth and rapidly decaying on (0, 1).
+template <class F>
+inline double adaptive_gl(F&& f, const double a, const double b,
+                          const arma::vec& nodes, const arma::vec& weights,
+                          const double whole, const double abstol,
+                          const double reltol, const int depth) {
+  const double mid = 0.5 * (a + b);
+  const double left = gl_estimate(f, a, mid, nodes, weights);
+  const double right = gl_estimate(f, mid, b, nodes, weights);
+  const double split = left + right;
+  const double err = std::abs(split - whole);
+  if (depth <= 0 || err <= std::max(abstol, reltol * std::abs(split))) {
+    return split;
+  }
+  return adaptive_gl(f, a, mid, nodes, weights, left, 0.5 * abstol, reltol, depth - 1) +
+         adaptive_gl(f, mid, b, nodes, weights, right, 0.5 * abstol, reltol, depth - 1);
+}
+
+template <class F>
+inline double integrate_adaptive(F&& f, const double a, const double b,
+                                 const arma::vec& nodes, const arma::vec& weights,
+                                 const double abstol = 1e-14,
+                                 const double reltol = 1e-12,
+                                 const int max_depth = 40) {
+  if (!(b > a)) return 0.0;
+  const double whole = gl_estimate(f, a, b, nodes, weights);
+  return adaptive_gl(f, a, b, nodes, weights, whole, abstol, reltol, max_depth);
 }
 
 } // namespace simplex_fast

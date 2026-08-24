@@ -89,6 +89,7 @@ EvalResult evaluate_impl(
 
   // Per-thread accumulators to avoid data races; reduced after the region.
   std::vector<double> nll_local(static_cast<std::size_t>(threads), 0.0);
+  std::vector<int> sat_local(static_cast<std::size_t>(threads), 0);
   std::vector<vec> grad_local;
   if (need_grad) {
     grad_local.reserve(static_cast<std::size_t>(threads));
@@ -108,6 +109,7 @@ EvalResult evaluate_impl(
     tid = omp_get_thread_num();
 #endif
     double local_nll = 0.0;
+    int local_sat = 0;
     vec* local_grad = need_grad ? &grad_local[static_cast<std::size_t>(tid)] : nullptr;
 
 #ifdef _OPENMP
@@ -122,10 +124,12 @@ EvalResult evaluate_impl(
 
       double mu = 0.0;
       double dmu_deta = 0.0;
-      if (!mean_from_eta(eta_mu[i], mean_link, mu, dmu_deta)) {
+      bool sat = false;
+      if (!mean_from_eta(eta_mu[i], mean_link, mu, dmu_deta, &sat)) {
         invalid = 1;
         continue;
       }
+      if (sat) ++local_sat;
 
       // Dispersion link is log, so phi = exp(eta_phi) is strictly positive.
       const double phi = safe_exp(eta_phi[i]);
@@ -178,6 +182,7 @@ EvalResult evaluate_impl(
     }
 
     nll_local[static_cast<std::size_t>(tid)] = local_nll;
+    sat_local[static_cast<std::size_t>(tid)] = local_sat;
   }
 
   if (invalid != 0) {
@@ -187,12 +192,15 @@ EvalResult evaluate_impl(
   double nll = 0.0;
   for (const double value : nll_local) nll += value;
 
+  int n_saturated = 0;
+  for (const int value : sat_local) n_saturated += value;
+
   vec grad(d, arma::fill::zeros);
   if (need_grad) {
     for (const auto& g : grad_local) grad += g;
   }
 
-  return {nll, std::move(grad), true};
+  return {nll, std::move(grad), true, n_saturated};
 }
 
 // Draw a single inverse-Gaussian variate by the Michael-Schucany-Haas
@@ -212,15 +220,120 @@ inline double inv_gaussian_one(const double mean, const double tau) {
   return x;
 }
 
+// Integrate the simplex density over [a, b] using an adaptive Gauss-Legendre
+// rule seeded with knots placed at multiples of the first-order standard
+// deviation around the mean. Seeding matters: for small phi the density is a
+// narrow spike, and a naive adaptive rule started on the whole interval can
+// bisect into two panels that both miss the spike, converge on a near-zero
+// estimate and stop. The knots guarantee the peak is always resolved.
+inline double simplex_integrate(const double a, const double b,
+                                const double mu, const double phi,
+                                const arma::vec& gln, const arma::vec& glw) {
+  if (!(b > a)) return 0.0;
+  const double u = mu * (1.0 - mu);
+  double sd = std::sqrt(phi * u * u * u);          // Var(Y) ~ phi * V(mu)
+  if (!(sd > 0.0) || !std::isfinite(sd)) sd = 0.1;
+
+  static const double mult[] = {-12.0, -8.0, -6.0, -4.0, -3.0, -2.0, -1.5, -1.0,
+                                -0.5, -0.25, 0.0, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0,
+                                4.0, 6.0, 8.0, 12.0};
+  std::vector<double> knots;
+  knots.reserve(24);
+  knots.push_back(a);
+  for (const double m : mult) {
+    const double k = mu + m * sd;
+    if (k > a && k < b) knots.push_back(k);
+  }
+  knots.push_back(b);
+  std::sort(knots.begin(), knots.end());
+  knots.erase(std::unique(knots.begin(), knots.end()), knots.end());
+
+  const auto integrand = [&](const double t) { 
+    return std::exp(simplex_logpdf(t, mu, phi));
+  };
+
+  double total = 0.0;
+  for (std::size_t k = 0; k + 1 < knots.size(); ++k) {
+    total += integrate_adaptive(integrand, knots[k], knots[k + 1], gln, glw,
+                                1e-15, 1e-12, 40);
+  }
+  return total;
+}
+
+// Simplex CDF at a single point. The smaller tail is always the one integrated,
+// so both tails keep full relative accuracy instead of being formed as
+// 1 - (something close to 1).
+inline void simplex_cdf_one(const double q, const double mu, const double phi,
+                            const arma::vec& gln, const arma::vec& glw,
+                            double& lower, double& upper) {
+  if (q <= 0.0) { lower = 0.0; upper = 1.0; return; }
+  if (q >= 1.0) { lower = 1.0; upper = 0.0; return; }
+  if (q <= mu) {
+    lower = simplex_integrate(0.0, q, mu, phi, gln, glw);
+    lower = std::min(1.0, std::max(0.0, lower));
+    upper = 1.0 - lower;
+  } else {
+    upper = simplex_integrate(q, 1.0, mu, phi, gln, glw);
+    upper = std::min(1.0, std::max(0.0, upper));
+    lower = 1.0 - upper;
+  }
+}
+
+// Simplex quantile at a single lower-tail probability, by safeguarded
+// Newton-bisection (Press et al., "rtsafe"): a Newton step is taken only when
+// it stays inside the current bracket and halves the step, otherwise the method
+// bisects. Bisection alone would converge; the Newton steps cut the number of
+// (expensive) CDF evaluations to roughly a dozen.
+inline double simplex_quantile_one(const double p, const double mu, const double phi,
+                                   const arma::vec& gln, const arma::vec& glw) {
+  if (!(p > 0.0)) return 0.0;
+  if (!(p < 1.0)) return 1.0;
+
+  double lo = 0.0, hi = 1.0;
+  double y = mu;
+  double dy_old = 1.0, dy = 1.0;
+
+  for (int it = 0; it < 200; ++it) {
+    double lower, upper;
+    simplex_cdf_one(y, mu, phi, gln, glw, lower, upper);
+    const double err = lower - p;
+    const double dens = std::exp(simplex_logpdf(y, mu, phi));
+
+    if (err > 0.0) hi = y; else lo = y;
+    if (err == 0.0) return y;
+
+    const bool newton_ok =
+        (dens > 0.0) && std::isfinite(dens) &&
+        (((y - hi) * dens - err) * ((y - lo) * dens - err) <= 0.0) &&
+        (std::abs(2.0 * err) <= std::abs(dy_old * dens));
+
+    dy_old = dy;
+    if (newton_ok) {
+      dy = err / dens;
+      y -= dy;
+    } else {
+      dy = 0.5 * (hi - lo);
+      y = lo + dy;
+    }
+    if (std::abs(dy) < 1e-15 || hi - lo < 1e-15) break;
+  }
+  return y;
+}
+
 } // namespace simplex_fast
 
 
 // Fast simplex density in C++.
-// Evaluates the simplex density (or log-density) at each y[i] given mu and phi,
-// which are recycled when supplied with length one. Values outside the support
-// (y or mu outside (0,1), phi <= 0, or non-finite) map to 0 (or -Inf on the log
-// scale). The per-observation loop is optionally parallelized with OpenMP; it
-// touches no R API state and is therefore thread-safe.
+// Follows the base-R d*() contract exactly:
+//   * NA / NaN in any argument propagates (NA wins over NaN, via the standard
+//     `x + mu + phi` idiom used throughout R's own d*() sources);
+//   * an out-of-domain mu or phi yields NaN and is counted, so the R wrapper can
+//     raise the canonical "NaNs produced" warning;
+//   * x outside the open support (0, 1) yields 0 (or -Inf on the log scale),
+//     which is a genuine density value, not a missing one;
+//   * x, mu and phi are recycled to their common maximum length.
+// The per-observation loop is optionally parallelized with OpenMP; it touches no
+// R API state and is therefore thread-safe.
 // [[Rcpp::export]]
 Rcpp::NumericVector dsimplex_cpp(
     const Rcpp::NumericVector& y,
@@ -229,44 +342,171 @@ Rcpp::NumericVector dsimplex_cpp(
     const bool log = false,
     const int n_threads = 1) {
 
-  const R_xlen_t n = y.size();
-  if (!((mu.size() == 1 || mu.size() == n) && (phi.size() == 1 || phi.size() == n))) {
-    Rcpp::stop("'mu' and 'phi' must have length 1 or length(y).");
-  }
+  const R_xlen_t ny = y.size(), nm = mu.size(), np = phi.size();
+  if (ny == 0 || nm == 0 || np == 0) return Rcpp::NumericVector(0);
+  const R_xlen_t n = std::max(ny, std::max(nm, np));
 
   Rcpp::NumericVector out(n);
   int threads = 1;
 #ifdef _OPENMP
   threads = (n_threads > 0) ? n_threads : omp_get_max_threads();
+  threads = std::max(1, threads);
 #else
   (void)n_threads;
 #endif
 
+  int n_bad = 0;
 #ifdef _OPENMP
-  #pragma omp parallel for num_threads(threads) schedule(static)
+  #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
   for (R_xlen_t i = 0; i < n; ++i) {
-    const double yi = y[i];
-    const double mui = mu[(mu.size() == 1) ? 0 : i];
-    const double phii = phi[(phi.size() == 1) ? 0 : i];
+    const double yi = y[i % ny];
+    const double mui = mu[i % nm];
+    const double phii = phi[i % np];
 
-    if (!(yi > 0.0 && yi < 1.0 && mui > 0.0 && mui < 1.0 && phii > 0.0) ||
-        !std::isfinite(yi) || !std::isfinite(mui) || !std::isfinite(phii)) {
-      out[i] = log ? R_NegInf : 0.0;
+    if (ISNAN(yi) || ISNAN(mui) || ISNAN(phii)) {
+      out[i] = yi + mui + phii;        // propagates NA, else NaN
       continue;
     }
-
-    const double one_y = 1.0 - yi;
-    const double qmu = mui * (1.0 - mui);
-    const double diff = yi - mui;
-    // Unit deviance dev = (y-mu)^2 / [y(1-y)(mu(1-mu))^2].
-    const double dev = (diff * diff) / (yi * one_y * qmu * qmu);
-    const double ld = -0.5 * (simplex_fast::LOG_2PI + std::log(phii))
-                    -1.5 * (std::log(yi) + std::log(one_y))
-                    -0.5 * dev / phii;
+    if (!(mui > 0.0 && mui < 1.0) || !(phii > 0.0) ||
+        !R_FINITE(mui) || !R_FINITE(phii)) {
+      out[i] = R_NaN;                  // invalid parameter, R convention
+      ++n_bad;
+      continue;
+    }
+    if (!(yi > 0.0 && yi < 1.0)) {
+      out[i] = log ? R_NegInf : 0.0;   // outside the support: density is zero
+      continue;
+    }
+    const double ld = simplex_fast::simplex_logpdf(yi, mui, phii);
     out[i] = log ? ld : std::exp(ld);
   }
 
+  out.attr("n_invalid_par") = n_bad;
+  return out;
+}
+
+
+// Simplex distribution function in C++.
+// There is no closed form, so the density is integrated numerically with an
+// adaptive Gauss-Legendre rule whose panels are seeded around the mean (see
+// simplex_integrate). Argument conventions follow base R's p*(): `lower_tail`
+// and `log_p` are honoured, NA/NaN propagate, and invalid parameters give NaN.
+// [[Rcpp::export]]
+Rcpp::NumericVector psimplex_cpp(
+    const Rcpp::NumericVector& q,
+    const Rcpp::NumericVector& mu,
+    const Rcpp::NumericVector& phi,
+    const bool lower_tail = true,
+    const bool log_p = false,
+    const int n_threads = 1) {
+
+  const R_xlen_t nq = q.size(), nm = mu.size(), np = phi.size();
+  if (nq == 0 || nm == 0 || np == 0) return Rcpp::NumericVector(0);
+  const R_xlen_t n = std::max(nq, std::max(nm, np));
+
+  arma::vec gln, glw;
+  simplex_fast::gauss_legendre(15, gln, glw);
+
+  Rcpp::NumericVector out(n);
+  int threads = 1;
+#ifdef _OPENMP
+  threads = (n_threads > 0) ? n_threads : omp_get_max_threads();
+  threads = std::max(1, threads);
+#else
+  (void)n_threads;
+#endif
+
+  int n_bad = 0;
+#ifdef _OPENMP
+  #pragma omp parallel for num_threads(threads) schedule(dynamic, 1) reduction(+:n_bad)
+#endif
+  for (R_xlen_t i = 0; i < n; ++i) {
+    const double qi = q[i % nq];
+    const double mui = mu[i % nm];
+    const double phii = phi[i % np];
+
+    if (ISNAN(qi) || ISNAN(mui) || ISNAN(phii)) {
+      out[i] = qi + mui + phii;
+      continue;
+    }
+    if (!(mui > 0.0 && mui < 1.0) || !(phii > 0.0) ||
+        !R_FINITE(mui) || !R_FINITE(phii)) {
+      out[i] = R_NaN;
+      ++n_bad;
+      continue;
+    }
+    double lower = 0.0, upper = 1.0;
+    simplex_fast::simplex_cdf_one(qi, mui, phii, gln, glw, lower, upper);
+    const double val = lower_tail ? lower : upper;
+    out[i] = log_p ? std::log(val) : val;
+  }
+
+  out.attr("n_invalid_par") = n_bad;
+  return out;
+}
+
+
+// Simplex quantile function in C++.
+// Inverts psimplex_cpp() by safeguarded Newton-bisection. Argument conventions
+// follow base R's q*(): `lower_tail` and `log_p` are honoured, NA/NaN
+// propagate, and a probability outside [0, 1] (or an invalid parameter) gives
+// NaN.
+// [[Rcpp::export]]
+Rcpp::NumericVector qsimplex_cpp(
+    const Rcpp::NumericVector& p,
+    const Rcpp::NumericVector& mu,
+    const Rcpp::NumericVector& phi,
+    const bool lower_tail = true,
+    const bool log_p = false,
+    const int n_threads = 1) {
+
+  const R_xlen_t npr = p.size(), nm = mu.size(), np = phi.size();
+  if (npr == 0 || nm == 0 || np == 0) return Rcpp::NumericVector(0);
+  const R_xlen_t n = std::max(npr, std::max(nm, np));
+
+  arma::vec gln, glw;
+  simplex_fast::gauss_legendre(15, gln, glw);
+
+  Rcpp::NumericVector out(n);
+  int threads = 1;
+#ifdef _OPENMP
+  threads = (n_threads > 0) ? n_threads : omp_get_max_threads();
+  threads = std::max(1, threads);
+#else
+  (void)n_threads;
+#endif
+
+  int n_bad = 0;
+#ifdef _OPENMP
+  #pragma omp parallel for num_threads(threads) schedule(dynamic, 1) reduction(+:n_bad)
+#endif
+  for (R_xlen_t i = 0; i < n; ++i) {
+    double pi_ = p[i % npr];
+    const double mui = mu[i % nm];
+    const double phii = phi[i % np];
+
+    if (ISNAN(pi_) || ISNAN(mui) || ISNAN(phii)) {
+      out[i] = pi_ + mui + phii;
+      continue;
+    }
+    if (!(mui > 0.0 && mui < 1.0) || !(phii > 0.0) ||
+        !R_FINITE(mui) || !R_FINITE(phii)) {
+      out[i] = R_NaN;
+      ++n_bad;
+      continue;
+    }
+    if (log_p) {
+      if (pi_ > 0.0) { out[i] = R_NaN; ++n_bad; continue; }
+      pi_ = std::exp(pi_);
+    }
+    if (!lower_tail) pi_ = 0.5 - pi_ + 0.5;   // 1 - p, guarding cancellation
+    if (pi_ < 0.0 || pi_ > 1.0) { out[i] = R_NaN; ++n_bad; continue; }
+
+    out[i] = simplex_fast::simplex_quantile_one(pi_, mui, phii, gln, glw);
+  }
+
+  out.attr("n_invalid_par") = n_bad;
   return out;
 }
 
@@ -277,26 +517,35 @@ Rcpp::NumericVector dsimplex_cpp(
 // inverse-Gaussian draw plus, with probability mu, a chi-squared(1) term; the
 // result is mapped back to (0,1) via x/(1+x). Because it calls R's RNG, the
 // loop is kept strictly serial (never parallelize R API calls).
+// Follows the base-R r*() contract: mu and phi are recycled to length n, and an
+// invalid or missing parameter yields NaN for that draw (counted, so the R
+// wrapper can raise the canonical "NAs produced" warning) rather than aborting
+// the whole call.
 // [[Rcpp::export]]
 Rcpp::NumericVector rsimplex_cpp(
-    const int n,
+    const R_xlen_t n,
     const Rcpp::NumericVector& mu,
     const Rcpp::NumericVector& phi) {
 
   if (n < 0) Rcpp::stop("'n' must be non-negative.");
-  if (!((mu.size() == 1 || mu.size() == n) && (phi.size() == 1 || phi.size() == n))) {
-    Rcpp::stop("'mu' and 'phi' must have length 1 or n.");
+  const R_xlen_t nm = mu.size(), np = phi.size();
+  if (n > 0 && (nm == 0 || np == 0)) {
+    Rcpp::stop("'mu' and 'phi' must have positive length.");
   }
 
   Rcpp::RNGScope scope;
   Rcpp::NumericVector out(n);
+  int n_bad = 0;
 
-  for (int i = 0; i < n; ++i) {
-    const double mui = mu[(mu.size() == 1) ? 0 : i];
-    const double phii = phi[(phi.size() == 1) ? 0 : i];
-    if (!(mui > 0.0 && mui < 1.0 && phii > 0.0) ||
-        !std::isfinite(mui) || !std::isfinite(phii)) {
-      Rcpp::stop("All 'mu' values must lie in (0, 1) and all 'phi' values must be positive.");
+  for (R_xlen_t i = 0; i < n; ++i) {
+    const double mui = mu[i % nm];
+    const double phii = phi[i % np];
+    if (ISNAN(mui) || ISNAN(phii) ||
+        !(mui > 0.0 && mui < 1.0) || !(phii > 0.0) ||
+        !R_FINITE(mui) || !R_FINITE(phii)) {
+      out[i] = R_NaN;
+      ++n_bad;
+      continue;
     }
 
     const double epsilon = mui / (1.0 - mui);
@@ -308,6 +557,7 @@ Rcpp::NumericVector rsimplex_cpp(
     out[i] = x / (1.0 + x);
   }
 
+  out.attr("n_invalid_par") = n_bad;
   return out;
 }
 
@@ -329,7 +579,8 @@ Rcpp::List simplex_eval_cpp(
   return List::create(
     Named("value") = res.nll,
     Named("gradient") = res.grad,
-    Named("valid") = res.valid
+    Named("valid") = res.valid,
+    Named("n_saturated") = res.n_saturated
   );
 }
 
@@ -441,8 +692,9 @@ Rcpp::List simplex_predict_cpp(
   vec phi(eta_phi.n_elem);
 
   for (uword i = 0; i < eta_mu.n_elem; ++i) {
-    double dmu_deta = 0.0;
-    if (!simplex_fast::mean_from_eta(eta_mu[i], mean_link, mu[i], dmu_deta)) {
+    // Unclamped: fitted means keep their full dynamic range and agree with base
+    // R (plogis/pnorm/...). The epsilon floor belongs to the likelihood path.
+    if (!simplex_fast::mean_from_eta_exact(eta_mu[i], mean_link, mu[i])) {
       Rcpp::stop("The linear predictor is outside the valid domain of the selected mean link.");
     }
     phi[i] = simplex_fast::safe_exp(eta_phi[i]);
@@ -469,8 +721,10 @@ Rcpp::NumericVector simplex_linkinv_cpp(
   Rcpp::NumericVector out(n);
   for (R_xlen_t i = 0; i < n; ++i) {
     double mu = 0.0;
-    double dmu_deta = 0.0;
-    if (!simplex_fast::mean_from_eta(eta[i], mean_link, mu, dmu_deta)) {
+    if (Rcpp::NumericVector::is_na(eta[i])) { out[i] = eta[i]; continue; }
+    // Unclamped, so simplex_linkinv() reproduces stats::plogis()/pnorm()/...
+    // exactly instead of flooring at 1e-12.
+    if (!simplex_fast::mean_from_eta_exact(eta[i], mean_link, mu)) {
       Rcpp::stop("Linear predictor outside the valid domain of the selected link.");
     }
     out[i] = mu;

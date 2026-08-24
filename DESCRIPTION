@@ -1,7 +1,7 @@
 Package: fastsimplexreg
 Type: Package
 Title: Fast Simplex Regression with Variable Dispersion
-Version: 0.2.2
+Version: 0.2.3
 Authors@R:
     person(given = "José Evandeilton",
            family = "Lopes",
@@ -15,9 +15,10 @@ Description: High-performance maximum-likelihood estimation of simplex
     (y ~ x1 + x2 | z1 + z2), with 'logit', 'probit', 'cloglog' and 'neglog'
     links for the mean and a log link for the dispersion. The numerical hot path
     -- log-likelihood, analytic score, a native 'BFGS' optimiser, density,
-    random generation, prediction and link inverses -- is implemented in C++
-    using 'RcppArmadillo', 'BLAS'/'LAPACK' and optional 'OpenMP' parallelism,
-    so that models scale to large data sets. Density, random generation and a
+    distribution and quantile functions, random generation, prediction and link
+    inverses -- is implemented in C++ using 'RcppArmadillo', 'BLAS'/'LAPACK' and
+    optional 'OpenMP' parallelism, so that models scale to large data sets. A
+    complete density, distribution, quantile and random-generation family and a
     full set of extractor and prediction methods are provided.
 License: MIT + file LICENSE
 Encoding: UTF-8
@@ -50,4 +51,4 @@ BugReports: https://github.com/evandeilton/fastsimplexreg/issues
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.3
+Config/roxygen2/version: 8.0.0

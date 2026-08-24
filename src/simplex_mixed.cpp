@@ -212,6 +212,7 @@ EvalResult mixed_core(
 #endif
 
   std::vector<double> nll_local(static_cast<std::size_t>(threads), 0.0);
+  std::vector<int> sat_local(static_cast<std::size_t>(threads), 0);
   std::vector<vec> grad_local;
   if (need_grad) {
     grad_local.reserve(static_cast<std::size_t>(threads));
@@ -228,6 +229,7 @@ EvalResult mixed_core(
     tid = omp_get_thread_num();
 #endif
     double local_nll = 0.0;
+    int local_sat = 0;
     vec* lg = need_grad ? &grad_local[static_cast<std::size_t>(tid)] : nullptr;
 
 #ifdef _OPENMP
@@ -276,6 +278,23 @@ EvalResult mixed_core(
         return s;
       };
 
+      // Warm-start guard. Bhat persists across objective evaluations, so the
+      // mode stored here may have been produced at a theta that the OUTER line
+      // search subsequently rejected, and can sit far from the mode at the
+      // current theta. Keep it only when it actually beats the always-admissible
+      // cold start b = 0. Without this the objective inherits a path dependence
+      // on the rejected trial points, and a single wild trial can leave every
+      // later evaluation starting from a useless mode -- enough to stall the
+      // outer line search completely.
+      {
+        bool ok_warm = false;
+        const double h_warm = hval(b, ok_warm);
+        vec b_cold(static_cast<uword>(q), arma::fill::zeros);
+        bool ok_cold = false;
+        const double h_cold = hval(b_cold, ok_cold);
+        if (!ok_warm || (ok_cold && h_cold > h_warm)) b = b_cold;
+      }
+
       bool ok_cluster = true;
       for (int it = 0; it < inner_maxit; ++it) {
         const vec eta = eta_mu_fixed + Zj * b;
@@ -291,7 +310,7 @@ EvalResult mixed_core(
           const double diff = yj[i] - mu;
           const double Pterm = diff * (mu * mu - 2.0 * mu * yj[i] + yj[i]);
           s_mu[i] = (Pterm / (yj[i] * one_y)) / (phi[i] * u3) * dmu;   // dl/deta_mu
-          Iinfo[i] = (dmu * dmu) / (phi[i] * u3);                      // Fisher info
+          Iinfo[i] = simplex_fisher_eta_mu(mu, dmu, phi[i]);           // Fisher info
         }
         if (!ok) { ok_cluster = false; break; }
 
@@ -303,19 +322,28 @@ EvalResult mixed_core(
         vec delta;
         if (!arma::solve(delta, Qf, g, arma::solve_opts::likely_sympd)) { ok_cluster = false; break; }
 
-        // step-halving line search on h_j
+        // Step-halving line search on h_j. Two safeguards matter here:
+        // (1) the objective at the CURRENT b must itself be valid, otherwise
+        //     h0 would silently be the sentinel 0.0 and the acceptance test
+        //     would compare against a meaningless level;
+        // (2) b is updated only when a step was actually accepted -- committing
+        //     the last rejected trial would move the mode to a point the line
+        //     search just refused.
         double alpha = 1.0;
         bool okb = false;
-        double h0 = hval(b, okb);
+        const double h0 = hval(b, okb);
+        if (!okb) { ok_cluster = false; break; }
+
         vec bnew;
-        int hs = 0;
-        for (; hs < 30; ++hs) {
-          bnew = b + alpha * delta;
+        bool accepted = false;
+        for (int hs = 0; hs < 30; ++hs) {
+          const vec btry = b + alpha * delta;
           bool okn = false;
-          const double h1 = hval(bnew, okn);
-          if (okn && h1 >= h0 - 1e-12) break;
+          const double h1 = hval(btry, okn);
+          if (okn && h1 >= h0 - 1e-12) { bnew = btry; accepted = true; break; }
           alpha *= 0.5;
         }
+        if (!accepted) break;   // already at the mode within this direction
         b = bnew;
       }
       if (!ok_cluster) { invalid = 1; continue; }
@@ -330,11 +358,13 @@ EvalResult mixed_core(
         bool ok = true;
         for (uword i = 0; i < nj; ++i) {
           double mu, dmu, d2mu;
-          if (!mean_deriv2_from_eta(eta[i], mean_link, mu, dmu, d2mu)) { ok = false; break; }
+          bool sat = false;
+          if (!mean_deriv2_from_eta(eta[i], mean_link, mu, dmu, d2mu, &sat)) { ok = false; break; }
+          if (sat) ++local_sat;
           const ObsKernel kk = simplex_obs_kernel(yj[i], mu, dmu, d2mu, phi[i]);
           if (!kk.ok) { ok = false; break; }
           w2[i] = kk.d2l_deta_mu2;
-          Iinfo[i] = (dmu * dmu) / (phi[i] * (mu * (1.0 - mu)) * (mu * (1.0 - mu)) * (mu * (1.0 - mu)));
+          Iinfo[i] = simplex_fisher_eta_mu(mu, dmu, phi[i]);
         }
         if (!ok) { invalid = 1; continue; }
         // symmatu() forces exact symmetry: Q is symmetric in exact arithmetic
@@ -431,16 +461,19 @@ EvalResult mixed_core(
     }
 
     nll_local[static_cast<std::size_t>(tid)] = local_nll;
+    sat_local[static_cast<std::size_t>(tid)] = local_sat;
   }
 
   if (invalid != 0) return fail();
 
   double nll = 0.0;
   for (const double v : nll_local) nll += v;
+  int n_saturated = 0;
+  for (const int v : sat_local) n_saturated += v;
   vec grad(dim, arma::fill::zeros);
   if (need_grad) for (const auto& g : grad_local) grad += g;
 
-  return EvalResult{nll, std::move(grad), true};
+  return EvalResult{nll, std::move(grad), true, n_saturated};
 }
 
 } // namespace simplex_fast
@@ -465,7 +498,8 @@ Rcpp::List simplex_mixed_eval_cpp(
                                             inner_tol, true, Bhat);
   return List::create(Named("value") = res.nll,
                       Named("gradient") = res.grad,
-                      Named("valid") = res.valid);
+                      Named("valid") = res.valid,
+                      Named("n_saturated") = res.n_saturated);
 }
 
 
@@ -586,24 +620,46 @@ Rcpp::List simplex_mixed_ranef_cpp(
     const vec eta_phi = Wj * gamma;
     const vec bmode = Bhat.row(j).t();
     const vec eta = Xj * beta + Zj * bmode;
-    vec w2(nj), Iinfo(nj);
+    // Both buffers are zero-filled: arma::vec(n) leaves its memory
+    // uninitialised, and the Fisher fallback below consumes Iinfo even on the
+    // path where the observed loop breaks early.
+    vec w2(nj, arma::fill::zeros), Iinfo(nj, arma::fill::zeros);
+    // The Fisher information depends only on (mu, dmu, phi) and is always
+    // well defined, so it is built in its own pass and is never left partial.
+    bool oklink = true;
+    for (uword i = 0; i < nj; ++i) {
+      const double phii = simplex_fast::safe_exp(eta_phi[i]);
+      double mu, dmu, d2mu;
+      if (!simplex_fast::mean_deriv2_from_eta(eta[i], mean_link, mu, dmu, d2mu)) {
+        oklink = false;
+        break;
+      }
+      Iinfo[i] = simplex_fast::simplex_fisher_eta_mu(mu, dmu, phii);
+    }
+    if (!oklink) {
+      Rcpp::stop("The linear predictor is outside the valid domain of the selected mean link.");
+    }
     bool okobs = true;
     for (uword i = 0; i < nj; ++i) {
       const double phii = simplex_fast::safe_exp(eta_phi[i]);
       double mu, dmu, d2mu;
-      simplex_fast::mean_deriv2_from_eta(eta[i], mean_link, mu, dmu, d2mu);
+      if (!simplex_fast::mean_deriv2_from_eta(eta[i], mean_link, mu, dmu, d2mu)) {
+        okobs = false; break;
+      }
       const simplex_fast::ObsKernel kk = simplex_fast::simplex_obs_kernel(yj[i], mu, dmu, d2mu, phii);
       if (!kk.ok) { okobs = false; break; }
       w2[i] = kk.d2l_deta_mu2;
-      const double u = mu * (1.0 - mu);
-      Iinfo[i] = (dmu * dmu) / (phii * u * u * u);
     }
     mat Q = okobs ? arma::symmatu(Sigma_inv - Zj.t() * (Zj.each_col() % w2)) : Sigma_inv;
     mat Rchk;
     if (!okobs || !arma::chol(Rchk, Q)) {
-      Q = Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo);
+      Q = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));
     }
-    postvar.slice(j) = arma::inv_sympd(Q);
+    mat Qinv;
+    if (!arma::inv_sympd(Qinv, Q)) {
+      Rcpp::stop("Posterior covariance of the random effects is not positive definite.");
+    }
+    postvar.slice(j) = Qinv;
   }
 
   return List::create(Named("b") = Bhat, Named("postvar") = postvar);
@@ -638,8 +694,9 @@ Rcpp::List simplex_mixed_predict_cpp(
 
   vec mu(N), phi(N);
   for (uword i = 0; i < N; ++i) {
-    double m_, dmu;
-    if (!simplex_fast::mean_from_eta(eta_mu[i], mean_link, m_, dmu)) {
+    double m_;
+    // Unclamped (reporting path), matching simplex_predict_cpp().
+    if (!simplex_fast::mean_from_eta_exact(eta_mu[i], mean_link, m_)) {
       Rcpp::stop("Linear predictor outside the valid domain of the selected mean link.");
     }
     mu[i] = m_;

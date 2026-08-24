@@ -95,3 +95,33 @@ test_that("two independent FD gradients agree at a perturbed theta", {
   # And the gradient is genuinely non-zero away from the optimum.
   expect_gt(max(abs(g1)), 1e-3)
 })
+
+
+# Direct check of the ANALYTIC score against numerical differentiation, for all
+# four mean links. The tests above validate the optimiser end to end but never
+# compare the analytic gradient with a numerical one; a wrong analytic score
+# typically still converges, just to the wrong point, so it deserves its own
+# direct test.
+test_that("the analytic score matches numerical differentiation for every link", {
+  skip_if_not_installed("numDeriv")
+  ns <- asNamespace("fastsimplexreg")
+  set.seed(7L)
+  n <- 400L
+  X <- cbind(1, rnorm(n), rbinom(n, 1L, 0.4))
+  Z <- cbind(1, rnorm(n))
+  links <- c(logit = 1L, probit = 2L, cloglog = 3L, neglog = 4L)
+
+  for (lk in names(links)) {
+    set.seed(11L)
+    mu <- simplex_linkinv(as.numeric(X %*% c(-0.3, 0.8, -0.5)), lk)
+    phi <- exp(as.numeric(Z %*% c(-0.5, 0.4)))
+    y <- rsimplex(n, mu, phi)
+    theta <- c(-0.2, 0.6, -0.3, -0.4, 0.3)   # deliberately away from the optimum
+
+    f <- function(t) ns$simplex_eval_cpp(t, y, X, Z, links[[lk]], 1L)$value
+    analytic <- as.numeric(ns$simplex_eval_cpp(theta, y, X, Z, links[[lk]], 1L)$gradient)
+    numeric_g <- numDeriv::grad(f, theta)
+    # Compare on a relative scale: the neglog gradient is O(1e10) at this theta.
+    expect_lt(max(abs(analytic - numeric_g)) / max(abs(numeric_g)), 1e-7)
+  }
+})

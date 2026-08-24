@@ -135,9 +135,61 @@ test_that("predict on new data handles known and unknown groups", {
     data.frame(g = factor("1", levels = levels(dat$g)), x1 = 0.5, z1 = 0.1),
     data.frame(g = factor(NA, levels = levels(dat$g)), x1 = 0.5, z1 = 0.1)
   )
-  p <- predict(fit, newdata = nd, type = "response")
+  # An unseen (here: missing) group level falls back to a zero random effect,
+  # and that substitution is now announced instead of being silent.
+  expect_warning(p <- predict(fit, newdata = nd, type = "response"),
+                 "not seen in the fit")
   expect_length(p, 2L)
   expect_true(all(p > 0 & p < 1))
+})
+
+test_that("conditional prediction refuses newdata without the grouping column", {
+  dat <- sim_mixed(J = 40L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+  nd_ok <- data.frame(g = factor("1", levels = levels(dat$g)), x1 = 0.5, z1 = 0.1)
+  nd_no_g <- data.frame(x1 = 0.5, z1 = 0.1)
+
+  # Silently returning a population-level value here would be a wrong answer
+  # under the label of a conditional one.
+  expect_error(predict(fit, newdata = nd_no_g), "missing from 'newdata'")
+  # The population level is still reachable explicitly, and then g is not needed.
+  expect_length(predict(fit, newdata = nd_no_g, re.form = NA), 1L)
+  expect_false(isTRUE(all.equal(predict(fit, newdata = nd_ok),
+                                predict(fit, newdata = nd_ok, re.form = NA))))
+})
+
+test_that("population prediction needs a stored design, and says so", {
+  dat <- sim_mixed(J = 60L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE,
+                             model = FALSE, x = FALSE)
+  # Without the model frame the design would otherwise be rebuilt from whatever
+  # objects happen to be visible in the caller.
+  expect_error(predict(fit, re.form = NA), "model = TRUE")
+})
+
+test_that("predict keeps the length of newdata when rows carry NA", {
+  dat <- sim_mixed(J = 40L, nj = 8L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+  nd <- data.frame(g = factor(c("1", "2", "3"), levels = levels(dat$g)),
+                   x1 = c(0.5, NA, 0.3), z1 = c(0.1, 0.2, NA))
+  p <- predict(fit, newdata = nd, type = "response")
+  expect_length(p, 3L)
+  expect_equal(which(is.na(p)), c(2L, 3L))
+})
+
+test_that("VarCorr refuses a meaningless sigma instead of ignoring it", {
+  dat <- sim_mixed(J = 60L, nj = 8L)
+  # Convergence is not what this test is about; this small configuration is a
+  # known hard case for the outer optimiser (unchanged from 0.2.2).
+  fit <- suppressWarnings(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                        nAGQ = 5L, n_threads = 1L, inference = FALSE))
+  expect_silent(v1 <- VarCorr(fit))
+  expect_warning(v2 <- VarCorr(fit, sigma = 10), "no meaning")
+  expect_equal(as.numeric(v1), as.numeric(v2))
 })
 
 test_that("input validation errors are raised", {
@@ -179,21 +231,25 @@ test_that("malformed cluster offsets error cleanly instead of crashing", {
 })
 
 test_that("non-convergence is signalled and standard errors are withheld", {
-  # cloglog on this data does not reach the gradient tolerance; the fit must warn
-  # and return NA standard errors rather than a confident coefficient table.
-  set.seed(7); J <- 120; nj <- 8; n <- J * nj
-  g <- factor(rep(seq_len(J), each = nj)); x1 <- rnorm(n); z1 <- rnorm(n)
-  b <- rnorm(J, 0, 0.6)[g]
-  dat <- data.frame(g = g, x1 = x1, z1 = z1,
-                    y = rsimplex(n, simplex_linkinv(0.4 - 0.7 * x1 + b, "logit"), exp(-0.3 + 0.4 * z1)))
+  # This used to rely on cloglog happening to miss the gradient tolerance on
+  # this data -- an accident that the 0.2.3 stopping rule removed. Drive the
+  # failure deliberately instead: one iteration from a start far outside the
+  # sensible region cannot take a single step, which is the case the stopping
+  # rule must still refuse to call convergence.
+  dat <- sim_mixed(J = 40L, nj = 6L, seed = 7L)
+  # Such a start also saturates the mean link, which warns on its own; that is
+  # correct but incidental here.
   expect_warning(
-    fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
-                               link = "cloglog", nAGQ = 7, n_threads = 1),
+    fit <- withCallingHandlers(
+      fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                          nAGQ = 5L, n_threads = 1L, maxit = 1L,
+                          start = c(-80, 0, 0, 0, 0)),
+      warning = function(w) if (grepl("saturated", conditionMessage(w)))
+        invokeRestart("muffleWarning")),
     "did not converge")
-  if (fit$convergence != 0L) {
-    expect_true(all(is.na(fit$standard_errors)))
-    expect_output(print(summary(fit)), "DID NOT CONVERGE")
-  }
+  expect_identical(fit$convergence, 2L)
+  expect_true(all(is.na(fit$standard_errors)))
+  expect_output(print(summary(fit)), "DID NOT CONVERGE")
 })
 
 test_that("the nAGQ^q node budget is enforced", {
@@ -227,4 +283,49 @@ test_that("unbalanced clusters (including singletons) are handled", {
     fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7, n_threads = 1))
   expect_length(fitted(fit), n)
   expect_equal(ngrps(fit), nlevels(g))
+})
+
+
+# Convergence reporting at a modest nAGQ. Before 0.2.3 the optimiser terminated
+# with code 2 ("line search failed") on ~26% of mixed fits over a grid of
+# 240 (J, nj, nAGQ, seed) combinations -- and, because standard errors are only
+# computed at a converged fit, those perfectly good fits silently lost their
+# inference. Restarting from the reported stopping point gained ~1e-11 in
+# log-likelihood: it was an optimum, not a failure.
+#
+# The cause is that the analytic score is the exact score of the TRUE marginal
+# likelihood (Fisher's identity), not of its nAGQ-point quadrature
+# approximation, so `grad_tol` is unreachable when nAGQ is small.
+test_that("a modest nAGQ converges instead of reporting a spurious failure", {
+  dat <- sim_mixed(J = 30L, nj = 4L, seed = 7L)
+  fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                             nAGQ = 5L, n_threads = 1L)
+  expect_identical(fit$convergence, 0L)
+  expect_match(fit$message, "floor|tolerance satisfied")
+  # The point of converging is that inference is no longer withheld.
+  expect_true(all(is.finite(fit$standard_errors)))
+  expect_false(is.null(fit$vcov))
+
+  # And it is a real optimum, not a stall: nudged away and refitted, the
+  # optimiser comes back to the same log-likelihood.
+  nudged <- suppressWarnings(
+    fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
+                        nAGQ = 5L, n_threads = 1L, inference = FALSE,
+                        start = unname(fit$par) + 0.05))
+  expect_equal(nudged$logLik, fit$logLik, tolerance = 1e-4)
+})
+
+test_that("a genuine optimiser failure is still reported as one", {
+  # Softening the stopping rule must not turn every stall into a success: a run
+  # that cannot take a single step keeps code 2.
+  set.seed(2L)
+  n <- 200L
+  dat <- data.frame(x1 = rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
+  fit <- suppressWarnings(
+    fastsimplexreg(y ~ x1, data = dat, start = c(-80, 0, 0), maxit = 1L,
+                   n_threads = 1L))
+  expect_identical(fit$convergence, 2L)
+  expect_match(fit$message, "Line search failed")
+  expect_true(all(is.na(fit$standard_errors)))
 })

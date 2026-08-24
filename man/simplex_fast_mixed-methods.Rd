@@ -44,8 +44,10 @@
 
 \item{postVar}{For \code{ranef}, logical; attach posterior covariances.}
 
-\item{sigma}{For \code{VarCorr}, an optional scale multiplier (kept for
-compatibility with the generic; defaults to 1).}
+\item{sigma}{For \code{VarCorr}, present only to match the signature of
+\code{\link[nlme:VarCorr]{nlme::VarCorr()}}. A simplex mixed model has no residual scale parameter,
+so the argument rescales nothing; supplying anything other than \code{1} raises
+a warning and is ignored.}
 
 \item{digits}{For the \code{VarCorr} print method, the number of significant
 digits to display.}

@@ -1,88 +1,157 @@
-#' @title Simplex Distribution Density
+# distribution.R
+# The simplex distribution family, following base R's d/p/q/r conventions.
+#
+# Conventions honoured throughout (see ?dnorm, ?dbeta for the reference
+# behaviour these mirror):
+#   * `x`/`q`/`p`, `mu` and `phi` are recycled to their common maximum length;
+#   * NA propagates as NA and NaN as NaN;
+#   * a parameter outside its domain (mu outside (0,1), phi <= 0, or non-finite)
+#     yields NaN with a single "NaNs produced" warning -- for rsimplex(), NaN
+#     with an "NAs produced" warning, exactly as rbeta() does;
+#   * `log`, `log.p` and `lower.tail` behave as in base R.
+
+# Internal: apply the base-R "NaNs/NAs produced" warning convention. The C++
+# kernels attach the number of out-of-domain parameter combinations as the
+# attribute "n_invalid_par"; this strips it and raises the canonical warning.
+.simplex_dist_finish <- function(values, msg = "NaNs produced") {
+  n_bad <- attr(values, "n_invalid_par")
+  attr(values, "n_invalid_par") <- NULL
+  if (!is.null(n_bad) && isTRUE(n_bad > 0L)) {
+    warning(msg, call. = FALSE)
+  }
+  values
+}
+
+
+#' @title The Simplex Distribution
 #'
 #' @description
-#' Evaluates the probability density function of the simplex distribution of
-#' Barndorff-Nielsen and Jorgensen (1991) for a mean `mu` and a dispersion
-#' `phi` (the parameter often written \eqn{\sigma^2}). The density is
+#' Density, distribution function, quantile function and random generation for
+#' the simplex distribution of Barndorff-Nielsen and Jorgensen (1991), with mean
+#' `mu` and dispersion `phi` (the parameter often written \eqn{\sigma^2}). The
+#' density is
 #' \deqn{f(x; \mu, \phi) = [2\pi\phi\,(x(1-x))^3]^{-1/2}
 #'   \exp\!\left\{-\frac{1}{2\phi}\,
 #'   \frac{(x-\mu)^2}{x(1-x)\,\mu^2(1-\mu)^2}\right\},
 #'   \qquad 0 < x < 1.}
-#' Values of `x` outside the open interval \eqn{(0, 1)} return `0` (or `-Inf`
-#' on the log scale). The arguments `mu` and `phi` are recycled against `x`.
-#' The computation is carried out in C++ and may use OpenMP threads.
 #'
-#' @param x Numeric vector of observations. Values must lie strictly inside
-#'   \eqn{(0, 1)} to receive positive density.
-#' @param mu Numeric vector of means in \eqn{(0, 1)}, of length one or
-#'   `length(x)`.
-#' @param phi Numeric vector of positive dispersion values, of length one or
-#'   `length(x)`.
-#' @param log Logical; if `TRUE`, log-densities are returned.
+#' @details
+#' These functions follow the conventions of base R's distribution family:
+#' `x`/`q`/`p`, `mu` and `phi` are recycled to their common length; `NA`
+#' propagates as `NA` and `NaN` as `NaN`; and a parameter outside its domain
+#' (`mu` outside \eqn{(0,1)}, `phi` not positive, or either non-finite) produces
+#' `NaN` with a warning, rather than an error or a silent zero. Values of `x`
+#' outside the open support \eqn{(0, 1)} have density `0` (`-Inf` on the log
+#' scale), which is a genuine density value and is therefore not a warning.
+#'
+#' The distribution function has no closed form and is obtained by adaptive
+#' Gauss-Legendre quadrature of the density, with quadrature panels seeded
+#' around the mean so that a sharply peaked density (small `phi`) is always
+#' resolved. `qsimplex()` inverts `psimplex()` by safeguarded Newton-bisection.
+#' Both are accurate to roughly `1e-12` relative and are correspondingly more
+#' expensive than `dsimplex()`; `psimplex()` and `qsimplex()` accept
+#' `n_threads` for that reason.
+#'
+#' `rsimplex()` uses the exact inverse-Gaussian-mixture representation: with
+#' \eqn{\epsilon = \mu/(1-\mu)} and \eqn{\tau = \phi (1-\mu)^2}, a variate
+#' \eqn{x} is built from an inverse-Gaussian draw plus, with probability
+#' \eqn{\mu}, a chi-squared(1) term, and mapped back to \eqn{(0,1)} through
+#' \eqn{x/(1+x)}.
+#'
+#' @param x,q Numeric vector of quantiles.
+#' @param p Numeric vector of probabilities.
+#' @param n Number of observations to generate. If `length(n) > 1`, the length
+#'   is taken to be the number required (the base-R convention).
+#' @param mu Numeric vector of means in \eqn{(0, 1)}.
+#' @param phi Numeric vector of positive dispersion values.
+#' @param log,log.p Logical; if `TRUE`, probabilities/densities are given as
+#'   \eqn{\log(p)}.
+#' @param lower.tail Logical; if `TRUE` (default), probabilities are
+#'   \eqn{P(X \le x)}, otherwise \eqn{P(X > x)}.
 #' @param n_threads Integer number of OpenMP threads. Use `0` to request all
 #'   threads available to the backend. Defaults to `1L` (serial).
 #'
-#' @return A numeric vector of densities (or log-densities when `log = TRUE`)
-#'   with the recycled length of `x`, `mu` and `phi`.
+#' @return `dsimplex()` gives the density, `psimplex()` the distribution
+#'   function, `qsimplex()` the quantile function, and `rsimplex()` generates
+#'   random deviates. The length of the result of `rsimplex()` is `n`; for the
+#'   other functions it is the maximum of the lengths of the numeric arguments.
 #'
 #' @references
 #' Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
 #' Some parametric models on the simplex.
 #' *Journal of Multivariate Analysis*, **39**(1), 106--116.
 #'
-#' @seealso [rsimplex()], [fastsimplexreg()]
+#' @seealso [fastsimplexreg()]
 #'
 #' @examples
 #' dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
 #' dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1, log = TRUE)
 #'
 #' # Integrates to one over the support.
-#' integrate(function(u) dsimplex(u, mu = 0.4, phi = 2), 0, 1)$value
+#' psimplex(1, mu = 0.4, phi = 2)
 #'
+#' # q is the inverse of p.
+#' psimplex(qsimplex(c(0.1, 0.5, 0.9), mu = 0.4, phi = 2), mu = 0.4, phi = 2)
+#'
+#' set.seed(123)
+#' y <- rsimplex(1000, mu = 0.35, phi = 0.8)
+#' summary(y)
+#'
+#' @name simplex-distribution
+#' @rdname simplex-distribution
 #' @export
 dsimplex <- function(x, mu, phi, log = FALSE, n_threads = 1L) {
-  dsimplex_cpp(
+  .simplex_dist_finish(dsimplex_cpp(
     y = as.numeric(x),
     mu = as.numeric(mu),
     phi = as.numeric(phi),
     log = isTRUE(log),
     n_threads = as.integer(n_threads)
-  )
+  ))
 }
 
 
-#' @title Simplex Distribution Random Generation
-#'
-#' @description
-#' Generates random deviates from the simplex distribution. The sampler is
-#' implemented in C++ using an exact transformation based on an
-#' inverse-Gaussian mixture representation. The arguments `mu` and `phi` are
-#' recycled to length `n`.
-#'
-#' @param n Integer number of observations to generate.
-#' @param mu Numeric vector of means in \eqn{(0, 1)}, of length one or `n`.
-#' @param phi Numeric vector of positive dispersion values, of length one or
-#'   `n`.
-#'
-#' @return A numeric vector of length `n` with values in \eqn{(0, 1)}.
-#'
-#' @references
-#' Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
-#' Some parametric models on the simplex.
-#' *Journal of Multivariate Analysis*, **39**(1), 106--116.
-#'
-#' @seealso [dsimplex()], [fastsimplexreg()]
-#'
-#' @examples
-#' set.seed(123)
-#' y <- rsimplex(1000, mu = 0.35, phi = 0.8)
-#' summary(y)
-#'
+#' @rdname simplex-distribution
+#' @export
+psimplex <- function(q, mu, phi, lower.tail = TRUE, log.p = FALSE,
+                     n_threads = 1L) {
+  .simplex_dist_finish(psimplex_cpp(
+    q = as.numeric(q),
+    mu = as.numeric(mu),
+    phi = as.numeric(phi),
+    lower_tail = isTRUE(lower.tail),
+    log_p = isTRUE(log.p),
+    n_threads = as.integer(n_threads)
+  ))
+}
+
+
+#' @rdname simplex-distribution
+#' @export
+qsimplex <- function(p, mu, phi, lower.tail = TRUE, log.p = FALSE,
+                     n_threads = 1L) {
+  .simplex_dist_finish(qsimplex_cpp(
+    p = as.numeric(p),
+    mu = as.numeric(mu),
+    phi = as.numeric(phi),
+    lower_tail = isTRUE(lower.tail),
+    log_p = isTRUE(log.p),
+    n_threads = as.integer(n_threads)
+  ))
+}
+
+
+#' @rdname simplex-distribution
 #' @export
 rsimplex <- function(n, mu, phi) {
-  rsimplex_cpp(
-    n = as.integer(n),
-    mu = as.numeric(mu),
-    phi = as.numeric(phi)
+  # Base-R convention: rnorm(c(1, 2, 3)) generates 3 deviates.
+  if (length(n) > 1L) n <- length(n)
+  n <- as.numeric(n)
+  if (length(n) != 1L || is.na(n) || n < 0) {
+    stop("'n' must be a single non-negative number.", call. = FALSE)
+  }
+  .simplex_dist_finish(
+    rsimplex_cpp(n = as.numeric(n), mu = as.numeric(mu), phi = as.numeric(phi)),
+    msg = "NAs produced"
   )
 }

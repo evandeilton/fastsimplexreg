@@ -5,6 +5,14 @@ dsimplex_cpp <- function(y, mu, phi, log = FALSE, n_threads = 1L) {
     .Call(`_fastsimplexreg_dsimplex_cpp`, y, mu, phi, log, n_threads)
 }
 
+psimplex_cpp <- function(q, mu, phi, lower_tail = TRUE, log_p = FALSE, n_threads = 1L) {
+    .Call(`_fastsimplexreg_psimplex_cpp`, q, mu, phi, lower_tail, log_p, n_threads)
+}
+
+qsimplex_cpp <- function(p, mu, phi, lower_tail = TRUE, log_p = FALSE, n_threads = 1L) {
+    .Call(`_fastsimplexreg_qsimplex_cpp`, p, mu, phi, lower_tail, log_p, n_threads)
+}
+
 rsimplex_cpp <- function(n, mu, phi) {
     .Call(`_fastsimplexreg_rsimplex_cpp`, n, mu, phi)
 }

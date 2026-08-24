@@ -1,3 +1,144 @@
+# fastsimplexreg 0.2.3
+
+Correctness release following a full surgical audit of `R/`, `src/`, `tests/`
+and `vignettes/`. All estimates, log-likelihoods, deviances, fitted values,
+residuals, densities and random draws are numerically unchanged from 0.2.2;
+what changed is what the package does when something is *wrong*.
+
+## Breaking changes
+
+* **The distribution functions now recycle instead of erroring.** `dsimplex()`
+  and `rsimplex()` used to require `mu`/`phi` of length 1 or `length(x)`; they
+  now recycle all arguments to their common maximum length, which is the base-R
+  convention (`dnorm(1:3, mean = 1:2)`).
+* **`NA` and invalid parameters no longer collapse to `0`.** `dsimplex()`
+  returned `0` (`-Inf` on the log scale) for `NA` input and for an out-of-domain
+  `mu`/`phi`, turning "missing" into "impossible". `NA` now propagates as `NA`,
+  `NaN` as `NaN`, and an out-of-domain parameter gives `NaN` with the canonical
+  "NaNs produced" warning. `rsimplex()` gives `NaN` with "NAs produced" instead
+  of aborting the call.
+
+## Inference (critical)
+
+* **Standard errors are never reported as a confident zero again.** With
+  collinear or otherwise unidentified covariates the Hessian could be singular
+  or indefinite, `solve()` would still succeed, and `sqrt(pmax(diag(vcov), 0))`
+  turned the resulting negative variances into `SE = 0` -- so `summary()`
+  printed `z = Inf` and `p = 0` for a parameter the data cannot identify, with
+  no warning. Inversion now goes through an eigen-decomposition of the
+  equilibrated (correlation-scale) information matrix: only the strictly
+  positive spectrum is inverted (a Moore-Penrose pseudo-inverse), directions of
+  negative curvature are refused rather than turned into variances, every
+  parameter loading on a discarded direction gets `SE = NA`, and the affected
+  parameters are named in a warning. A merely ill-conditioned but full-rank fit
+  keeps its (large, honest) standard errors and gets a separate warning.
+* New components on the fitted object: `vcov_rank`, `vcov_pseudo`,
+  `vcov_condition`, `vcov_eigenvalues` and `n_saturated`.
+* **Saturation of the mean link is reported.** The likelihood path floors the
+  mean at `1e-12`, which zeroes those observations' contribution to the score.
+  That now raises a warning naming how many observations are affected.
+
+## New
+
+* `psimplex()` and `qsimplex()` complete the `d`/`p`/`q`/`r` family, with
+  `lower.tail` and `log.p`. The CDF uses adaptive Gauss-Legendre quadrature with
+  panels seeded around the mean (so a sharply peaked density is always
+  resolved) and agrees with `stats::integrate()` to ~1e-15; `qsimplex()` inverts
+  it by safeguarded Newton-bisection.
+
+## Prediction
+
+* `predict()` now preserves the length of `newdata`: rows dropped for
+  missingness come back as `NA` instead of silently yielding a shorter,
+  unaligned vector. All model parts are built from the same set of complete
+  rows, so they can no longer end up with different row counts.
+* `predict()` on a mixed fit **errors** when `newdata` lacks the grouping
+  column. It previously returned population-level predictions under the label
+  of conditional ones, silently. Rows whose group level was not seen in the fit
+  still fall back to a zero random effect, but that substitution is now
+  announced.
+* Population-level prediction on a mixed fit stored with `model = FALSE` errors
+  instead of resolving covariates in the caller's environment, where it could
+  return predictions of the wrong length built from unrelated objects.
+* A variable required by the model but absent from `newdata` is an error.
+
+## Numerical / C++
+
+* The reporting path (`simplex_linkinv()`, `predict()`, `fitted()`) no longer
+  applies the likelihood path's `1e-12` floor. It is clamped only at the
+  representable boundary, so fitted means keep their full dynamic range
+  (`simplex_linkinv(-40, "logit")` is `4.2e-18`, not `1e-12`) while remaining
+  strictly inside the open support `(0, 1)` that the density and the residual
+  formulas require.
+* `simplex_mixed_ranef_cpp()` no longer reads uninitialised memory: the Fisher
+  fallback for the posterior covariance consumed a buffer that the observed
+  loop could leave partially filled, and the return value of the link map was
+  discarded.
+* The mixed model's inner mode solver no longer commits a step its line search
+  rejected, and no longer compares against the objective at an inadmissible
+  point. A warm-started mode inherited from an outer trial point that was later
+  rejected is now discarded when the cold start beats it, removing a path
+  dependence in the objective.
+* `VarCorr()`'s `sigma` argument is inert for a simplex mixed model; supplying
+  anything other than `1` now warns instead of being silently ignored.
+
+## Mixed-model convergence
+
+* **Roughly a quarter of mixed fits were reported as optimiser failures when
+  they had in fact converged**, and because standard errors are only computed at
+  a converged fit, those perfectly good fits silently lost their inference.
+  Measured over a grid of 240 `(J, nj, nAGQ, seed)` combinations, 26.2% ended
+  with code 2; restarting the optimiser from the reported stopping point gained
+  a median of 1.6e-11 in log-likelihood -- it was an optimum, not a failure.
+  The failure rate is now 0% over the same grid.
+
+  The rate depends on `nAGQ`, not on the number of groups: 55% at `nAGQ = 3`,
+  47% at 5, 3% at 7 and 0% at the default 11, while being flat in `J` (25-29%)
+  and in cluster size. The cause is that the analytic score is the exact score
+  of the *true* marginal likelihood (Fisher's identity), not of its `nAGQ`-point
+  quadrature approximation, so `grad_tol` is unreachable when `nAGQ` is small
+  and the run ends on a line-search failure instead.
+
+  Two changes: when a line search fails, the inverse-Hessian approximation is
+  reset and the iteration is retried once from a clean steepest-descent
+  direction (it goes stale, and this recovers real progress -- it moved 59 of
+  180 stopping points, every one of them to a *higher* log-likelihood); and the
+  soft-convergence test, which required a relative change below `rel_tol`
+  (1e-9), now uses `sqrt(rel_tol)`, the scale at which these runs actually
+  flatten out. A genuine failure -- a run that cannot take a single step -- is
+  still reported as code 2.
+
+  Cost: the fixed-effects path is unaffected in results and essentially
+  unaffected in speed (+3.2% function evaluations, in 3 of 24 fits, all
+  `neglog`; wall clock within noise). Mixed fits that already converged use
+  about 50% more function evaluations, which buys the extra accuracy above; fits
+  that used to abort naturally cost more now that they run to completion.
+
+* Known limitation: supplying `start` equal to the optimum itself gives the
+  optimiser no iteration history from which to judge stationarity, so it
+  conservatively reports code 2 rather than risk labelling a stall as success.
+
+* The optimiser trace (`trace = TRUE`) now prints the objective at full double
+  precision and reports the relative change per iteration. At the previous six
+  significant digits, successive iterations near the optimum printed
+  identically -- exactly the regime the trace exists to diagnose.
+
+## Testing and documentation
+
+* New `test-inference.R` and `test-distribution-conventions.R`, plus regression
+  tests pinning the convergence-reporting behaviour in both directions.
+* The rank cut-off used by the fail-safe covariance is derived from the accuracy
+  of the finite-difference Hessian (`sqrt(eps)` on the correlation scale) rather
+  than from machine epsilon. With the tighter cut the verdict depended on which
+  BLAS computed the Hessian: an exactly collinear design was flagged on Linux
+  and passed as full rank on Windows.
+* The analytic score is now compared directly against `numDeriv` for all four
+  mean links (previously validated only indirectly, and only for `logit`).
+* The benchmark vignette's accuracy table is generated from the shipped results
+  instead of being hard-coded, so it cannot drift from the figures.
+* `simulate()` now carries the row names of the model frame (the previous code
+  read `names(object$y)`, which is always `NULL`).
+
 # fastsimplexreg 0.2.2
 
 * New `benchmark` vignette comparing `fastsimplexreg` with the CRAN packages

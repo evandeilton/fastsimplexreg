@@ -36,5 +36,10 @@ the Simplex Distribution.
 \author{
 \strong{Maintainer}: José Evandeilton Lopes \email{evandeilton@gmail.com}
 
+Authors:
+\itemize{
+  \item José Evandeilton Lopes \email{evandeilton@gmail.com}
+}
+
 }
 \keyword{internal}

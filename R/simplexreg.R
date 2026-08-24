@@ -84,6 +84,65 @@
 }
 
 
+# Internal helper: build the prediction design matrices for `newdata` from the
+# stored terms/contrasts/xlevels of a fit.
+#
+# Two things this guarantees that a bare model.matrix() call does not:
+#   1. ALL parts (mean, dispersion, and for the mixed fit the random design)
+#      are built from the SAME set of complete rows, so they can never end up
+#      with different row counts when the missing values sit in different
+#      columns;
+#   2. the rows dropped for missingness are recorded, so the caller can re-expand
+#      the predictions back to nrow(newdata) with NA in the dropped positions --
+#      the convention of stats::predict.lm(), instead of silently returning a
+#      shorter, unaligned vector.
+# `extra_vars` names columns that must be PRESENT but are not part of the
+# completeness test (the grouping factor of a mixed fit: a missing level means
+# "no known cluster", which the unseen-level path handles, not a missing
+# covariate).
+# Returns a list with `matrices` (in the order of `terms_list`), `keep` (logical
+# over the rows of newdata) and `n` (nrow(newdata)).
+.simplex_predict_design <- function(newdata, terms_list, contrasts_list,
+                                    xlev_list, extra_vars = character(0)) {
+  if (!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
+  tms <- lapply(terms_list, stats::delete.response)
+  model_vars <- unique(unlist(lapply(tms, all.vars)))
+  absent <- setdiff(unique(c(model_vars, extra_vars)), names(newdata))
+  if (length(absent)) {
+    stop("Variable(s) required by the model are missing from 'newdata': ",
+         paste(absent, collapse = ", "), ".", call. = FALSE)
+  }
+
+  n <- nrow(newdata)
+  keep <- if (length(model_vars)) {
+    stats::complete.cases(newdata[, model_vars, drop = FALSE])
+  } else {
+    rep(TRUE, n)
+  }
+  nd <- newdata[keep, , drop = FALSE]
+
+  matrices <- lapply(seq_along(tms), function(i) {
+    mm <- stats::model.matrix(tms[[i]], data = nd,
+                              contrasts.arg = contrasts_list[[i]],
+                              xlev = xlev_list[[i]])
+    storage.mode(mm) <- "double"
+    mm
+  })
+  names(matrices) <- names(terms_list)
+  list(matrices = matrices, keep = keep, n = n)
+}
+
+
+# Internal helper: re-expand a prediction computed on the complete rows back to
+# the full length of `newdata`, with NA where a row was dropped.
+.simplex_expand <- function(values, keep) {
+  if (all(keep)) return(values)
+  out <- rep(NA_real_, length(keep))
+  out[keep] <- values
+  out
+}
+
+
 # Internal helper: stable, link-specific starting values c(beta, gamma).
 .simplex_start <- function(y, X, Z, link) {
   p <- ncol(X)
@@ -165,7 +224,13 @@
 #'   (fitted means), `dispersion.values` (fitted dispersions),
 #'   `linear.predictors`, `residuals` (response residuals), `logLik`, `AIC`,
 #'   `BIC`, `nobs`, `df.residual`, `convergence`, `message`, `iterations` and
-#'   the stored `terms`/`design` metadata used for prediction.
+#'   the stored `terms`/`design` metadata used for prediction. Inference
+#'   diagnostics are also stored: `vcov_rank` (rank of the observed information
+#'   matrix), `vcov_pseudo` (`TRUE` when a Moore-Penrose pseudo-inverse was
+#'   required because the matrix was rank deficient or indefinite),
+#'   `vcov_eigenvalues`, and `n_saturated` (observations whose fitted mean hit
+#'   the numerical boundary of the likelihood path). Standard errors of
+#'   parameters that the data do not identify are `NA`, never `0`.
 #'
 #' @references
 #' Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
@@ -278,8 +343,12 @@ fastsimplexreg <- function(
   }
 
   vc <- NULL
-  se <- rep(NA_real_, k)
+  se <- stats::setNames(rep(NA_real_, k), names(theta))
   hessian <- NULL
+  vcov_rank <- NA_integer_
+  vcov_pseudo <- NA
+  vcov_eigenvalues <- NULL
+  vcov_condition <- NA_real_
   # Standard errors are only computed at a converged (stationary) fit; at a
   # non-converged point the Hessian is meaningless, so leave them NA.
   if (isTRUE(inference) && converged) {
@@ -292,15 +361,21 @@ fastsimplexreg <- function(
       rel_step = as.numeric(hessian_rel_step),
       n_threads = as.integer(n_threads)
     )
+    dimnames(hessian) <- list(names(theta), names(theta))
 
-    vc <- tryCatch(
-      solve(hessian),
-      error = function(e) qr.solve(hessian, diag(nrow(hessian)), tol = 1e-10)
-    )
-    vc <- 0.5 * (vc + t(vc))
-    dimnames(vc) <- list(names(theta), names(theta))
-    se <- sqrt(pmax(diag(vc), 0))
+    # Fail-safe inversion: a rank-deficient or indefinite Hessian yields NA
+    # standard errors and a warning, never a confident zero. See R/inference.R.
+    inf <- .simplex_vcov(hessian, names(theta), what = "fastsimplexreg()")
+    vc <- inf$vcov
+    se <- inf$se
+    vcov_rank <- inf$rank
+    vcov_pseudo <- inf$pseudo
+    vcov_eigenvalues <- inf$eigenvalues
+    vcov_condition <- inf$condition
   }
+
+  # Saturation of the mean link is reported, not applied silently.
+  .warn_saturated(opt$n_saturated, n, what = "fastsimplexreg()")
 
   coefficients <- list(
     mean = stats::setNames(theta[seq_len(p)], colnames(X)),
@@ -315,6 +390,11 @@ fastsimplexreg <- function(
     par = theta,
     standard_errors = stats::setNames(se, names(theta)),
     vcov = vc,
+    vcov_rank = vcov_rank,
+    vcov_pseudo = vcov_pseudo,
+    vcov_eigenvalues = vcov_eigenvalues,
+    vcov_condition = vcov_condition,
+    n_saturated = as.integer(opt$n_saturated),
     hessian = hessian,
     fitted.values = as.numeric(pred$mu),
     dispersion.values = as.numeric(pred$phi),
