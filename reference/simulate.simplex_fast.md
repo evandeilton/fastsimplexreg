@@ -3,7 +3,7 @@
 Simulates new response vectors from a fitted `"simplex_fast"` model by
 drawing from the simplex distribution at the fitted means \\\hat\mu_i\\
 and dispersions \\\hat\phi_i\\, using
-[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/rsimplex.md).
+[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md).
 
 ## Usage
 
@@ -41,7 +41,7 @@ simulated response of length `nobs(object)`.
 
 ## See also
 
-[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/rsimplex.md),
+[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
 [`fastsimplexreg()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexreg.md)
 
 ## Examples

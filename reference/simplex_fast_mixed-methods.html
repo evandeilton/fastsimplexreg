@@ -85,7 +85,7 @@ The estimated random-effect covariance matrix
 
     <a class="navbar-brand me-2" href="../index.html">fastsimplexreg</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -214,8 +214,10 @@ the <code>"postVar"</code> attribute.</p></dd>
 
 
 <dt id="arg-sigma">sigma<a class="anchor" aria-label="anchor" href="#arg-sigma"></a></dt>
-<dd><p>For <code>VarCorr</code>, an optional scale multiplier (kept for
-compatibility with the generic; defaults to 1).</p></dd>
+<dd><p>For <code>VarCorr</code>, present only to match the signature of
+<code><a href="https://rdrr.io/pkg/nlme/man/VarCorr.html" class="external-link">nlme::VarCorr()</a></code>. A simplex mixed model has no residual scale parameter,
+so the argument rescales nothing; supplying anything other than <code>1</code> raises
+a warning and is ignored.</p></dd>
 
 
 <dt id="arg-digits">digits<a class="anchor" aria-label="anchor" href="#arg-digits"></a></dt>

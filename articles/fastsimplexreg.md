@@ -213,19 +213,53 @@ round(sort(aic), 2)
 #> -126.06 -126.01 -125.95 -125.84
 ```
 
-## 4. Density and simulation
+## 4. The distribution family
 
-The distribution utilities are vectorised and share the C++ backend:
+[`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
+[`psimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
+[`qsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+and
+[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+form a complete `d`/`p`/`q`/`r` family and follow the base-R conventions
+throughout: arguments are recycled to their common length, `NA`
+propagates as `NA`, a parameter outside its domain gives `NaN` with a
+warning (never a silent zero), and `log`, `log.p` and `lower.tail`
+behave as in
+[`dnorm()`](https://rdrr.io/r/stats/Normal.html)/[`pnorm()`](https://rdrr.io/r/stats/Normal.html)/[`qnorm()`](https://rdrr.io/r/stats/Normal.html).
 
 ``` r
 
 dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
 #> [1] 0.06924763 3.19153824 0.06924763
+
+# The CDF has no closed form; it is obtained by adaptive quadrature.
+psimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
+#> [1] 0.001349898 0.500000000 0.998650102
+
+# qsimplex inverts psimplex.
+qs <- qsimplex(c(0.1, 0.5, 0.9), mu = 0.35, phi = 0.8)
+rbind(q = qs, p_back = psimplex(qs, mu = 0.35, phi = 0.8))
+#>             [,1]      [,2]     [,3]
+#> q      0.2345842 0.3440717 0.473921
+#> p_back 0.1000000 0.5000000 0.900000
+
 set.seed(42)
 y <- rsimplex(1e4, mu = 0.35, phi = 0.8)
 c(mean = mean(y), target_mu = 0.35)   # sample mean approximates mu
 #>      mean target_mu 
 #> 0.3487009 0.3500000
+```
+
+The theoretical quantiles agree with the empirical ones:
+
+``` r
+
+probs <- c(0.05, 0.25, 0.5, 0.75, 0.95)
+rbind(theoretical = qsimplex(probs, mu = 0.35, phi = 0.8),
+      empirical   = unname(quantile(y, probs)))
+#>                  [,1]     [,2]      [,3]      [,4]      [,5]
+#> theoretical 0.2092693 0.282746 0.3440717 0.4113137 0.5110705
+#> empirical   0.2056151 0.279539 0.3427167 0.4113242 0.5103785
 ```
 
 ## 5. Performance notes

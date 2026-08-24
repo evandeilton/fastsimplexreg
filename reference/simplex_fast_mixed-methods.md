@@ -104,8 +104,11 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
 
 - sigma:
 
-  For `VarCorr`, an optional scale multiplier (kept for compatibility
-  with the generic; defaults to 1).
+  For `VarCorr`, present only to match the signature of
+  [`nlme::VarCorr()`](https://rdrr.io/pkg/nlme/man/VarCorr.html). A
+  simplex mixed model has no residual scale parameter, so the argument
+  rescales nothing; supplying anything other than `1` raises a warning
+  and is ignored.
 
 - digits:
 

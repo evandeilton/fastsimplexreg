@@ -120,7 +120,13 @@ An object of S3 class `"simplex_fast"`: a list whose main components are
 dispersions), `linear.predictors`, `residuals` (response residuals),
 `logLik`, `AIC`, `BIC`, `nobs`, `df.residual`, `convergence`, `message`,
 `iterations` and the stored `terms`/`design` metadata used for
-prediction.
+prediction. Inference diagnostics are also stored: `vcov_rank` (rank of
+the observed information matrix), `vcov_pseudo` (`TRUE` when a
+Moore-Penrose pseudo-inverse was required because the matrix was rank
+deficient or indefinite), `vcov_eigenvalues`, and `n_saturated`
+(observations whose fitted mean hit the numerical boundary of the
+likelihood path). Standard errors of parameters that the data do not
+identify are `NA`, never `0`.
 
 ## References
 
@@ -134,8 +140,8 @@ Regression Analysis of Proportional Data Using the Simplex Distribution.
 
 ## See also
 
-[`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/dsimplex.md),
-[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/rsimplex.md),
+[`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
+[`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
 [`simplex_linkinv()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_linkinv.md),
 [`predict.simplex_fast()`](https://evandeilton.github.io/fastsimplexreg/reference/predict.simplex_fast.md),
 [`summary.simplex_fast()`](https://evandeilton.github.io/fastsimplexreg/reference/summary.simplex_fast.md)

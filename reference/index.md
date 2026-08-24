@@ -13,10 +13,11 @@ Fit fixed- and mixed-effects simplex regression models.
 
 Density, random generation and the mean link inverse.
 
-- [`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/dsimplex.md)
-  : Simplex Distribution Density
-- [`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/rsimplex.md)
-  : Simplex Distribution Random Generation
+- [`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+  [`psimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+  [`qsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+  [`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
+  : The Simplex Distribution
 - [`simplex_linkinv()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_linkinv.md)
   : Inverse of the Simplex Mean Link
 
