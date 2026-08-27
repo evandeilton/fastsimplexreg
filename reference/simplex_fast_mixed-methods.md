@@ -48,6 +48,14 @@ produced by
   The estimated random-effect covariance matrix \\\Sigma\\, with
   standard deviations and correlations.
 
+- `confint`:
+
+  Wald confidence intervals over the full parameter vector
+  `c(beta, gamma, omega)`. Note that the intervals for the variance
+  components are on the unconstrained log-Cholesky scale, where a Wald
+  interval is defensible; on the variance scale it would not be, because
+  the null lies on the boundary.
+
 ## Usage
 
 ``` r
@@ -56,6 +64,9 @@ coef(object, model = c("all", "mean", "dispersion"), ...)
 
 # S3 method for class 'simplex_fast_mixed'
 vcov(object, ...)
+
+# S3 method for class 'simplex_fast_mixed'
+confint(object, parm, level = 0.95, ...)
 
 # S3 method for class 'simplex_fast_mixed'
 logLik(object, ...)
@@ -67,7 +78,7 @@ nobs(object, ...)
 fitted(object, model = c("mean", "dispersion"), ...)
 
 # S3 method for class 'simplex_fast_mixed'
-residuals(object, type = c("response", "pearson", "deviance"), ...)
+residuals(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
 # S3 method for class 'simplex_fast_mixed'
 ranef(object, postVar = FALSE, ...)
@@ -93,6 +104,15 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
 - ...:
 
   Additional arguments, currently ignored.
+
+- parm:
+
+  For `confint`, which parameters to report: numeric positions or names,
+  over the full vector `c(beta, gamma, omega)`. Defaults to all.
+
+- level:
+
+  For `confint`, the confidence level.
 
 - type:
 
@@ -125,3 +145,39 @@ matrix with `stddev`/`correlation` attributes; `logLik` returns a
 ## See also
 
 [`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md)
+
+## Examples
+
+``` r
+set.seed(1)
+J <- 40; nj <- 8; n <- J * nj
+dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+b <- rnorm(J, 0, 0.7)[dat$g]
+dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                           nAGQ = 7, n_threads = 1)
+
+coef(fit)
+#> (Intercept)          x1 (Intercept) 
+#>   0.3426428  -0.6330470   0.1200503 
+VarCorr(fit)
+#> Random effects covariance (group: g)
+#>             Variance Std.Dev.
+#> (Intercept)   0.5001   0.7072
+head(ranef(fit))
+#>   (Intercept)
+#> 1  0.88839290
+#> 2  0.89201819
+#> 3  0.61478283
+#> 4 -1.40690710
+#> 5  0.02537066
+#> 6  0.28390210
+confint(fit)
+#>                         2.5 %     97.5 %
+#> (Intercept)        0.11825425  0.5670313
+#> x1                -0.68401629 -0.5820776
+#> (phi)_(Intercept) -0.04579208  0.2858926
+#> logsd.(Intercept) -0.57574879 -0.1171676
+ngrps(fit)
+#> [1] 40
+```

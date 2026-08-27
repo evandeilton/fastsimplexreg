@@ -57,7 +57,8 @@ mu <- simplex_linkinv(0.1 + 0.6 * dat$x1, link = "logit")
 dat$y <- rsimplex(n, mu, exp(-0.5 + 0.3 * dat$z1))
 fit <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L)
 head(predict(fit, type = "response"))
-#> [1] 0.3841861 0.5525140 0.7495474 0.3499761 0.5108834 0.5443204
+#>         1         2         3         4         5         6 
+#> 0.3841861 0.5525140 0.7495474 0.3499761 0.5108834 0.5443204 
 head(predict(fit, newdata = dat[1:5, ], type = "both"))
 #>          mu       phi
 #> 1 0.3841861 0.4715160

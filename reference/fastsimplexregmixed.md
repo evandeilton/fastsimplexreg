@@ -64,7 +64,9 @@ fastsimplexregmixed(
 - nAGQ:
 
   Number of adaptive Gauss-Hermite quadrature points per random- effect
-  dimension. `nAGQ = 1` is the Laplace approximation.
+  dimension. Values below 5 are accepted but warn: the standard errors
+  are then unreliable (see Details). `nAGQ = 1` is the Laplace
+  approximation.
 
 - start:
 
@@ -103,7 +105,9 @@ fastsimplexregmixed(
 
 - inner_maxit:
 
-  Maximum iterations of the per-cluster inner solver.
+  Maximum iterations of the per-cluster inner solver. Must be at least
+  10: the AGHQ expansion is taken at the posterior mode, so a truncated
+  inner solve expands around the wrong point.
 
 - inner_tol:
 
@@ -115,7 +119,10 @@ fastsimplexregmixed(
 
 - subset:
 
-  Optional index vector selecting observations.
+  Optional expression selecting a subset of observations, evaluated
+  inside `data` as in [`stats::lm()`](https://rdrr.io/r/stats/lm.html) –
+  for example `subset = x1 > 0`. A plain index, logical or row-name
+  vector also works.
 
 - na.action:
 
@@ -133,13 +140,17 @@ An object of class `"simplex_fast_mixed"`.
 ## Details
 
 The marginal likelihood integrates the cluster random effects out with
-AGHQ (`nAGQ` points per dimension; `nAGQ = 1` gives the Laplace
-approximation). The per-cluster inner mode-finding, the quadrature and
-the analytic score are implemented in C++ (RcppArmadillo, BLAS) and
-parallelised over clusters with OpenMP, so the fit scales to large
-nested data sets. The random-effect covariance \\\Sigma = D D^\top\\ is
-estimated on an unconstrained log-Cholesky scale, guaranteeing a
-positive-definite estimate.
+AGHQ (`nAGQ` points per dimension). `nAGQ = 1` is the Laplace
+approximation and is accepted only with a warning: the analytic score is
+the score of the exact marginal likelihood, not of the `nAGQ`-point
+quadrature, so at `nAGQ = 1` the two disagree by about 66% and the
+resulting Wald intervals cover 57% rather than 95%. Use `nAGQ >= 5`, and
+`nAGQ >= 11` when reporting inference. The per-cluster inner
+mode-finding, the quadrature and the analytic score are implemented in
+C++ (RcppArmadillo, BLAS) and parallelised over clusters with OpenMP, so
+the fit scales to large nested data sets. The random-effect covariance
+\\\Sigma = D D^\top\\ is estimated on an unconstrained log-Cholesky
+scale, guaranteeing a positive-definite estimate.
 
 This version supports a single grouping factor (two-level nesting),
 Gaussian random effects in the mean submodel, and fixed-effect
@@ -182,9 +193,9 @@ summary(fit)
 #> fastsimplexregmixed(formula = y ~ x1 | z1, data = dat, random = ~1 | 
 #>     g, nAGQ = 7, n_threads = 1)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.44761 -0.63577  0.02067  0.59711  2.73018 
+#> -2.66430 -0.63125  0.01207  0.58640  3.12446 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
@@ -223,9 +234,9 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 #> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
 #>     random = ~1 | batch, link = "logit", nAGQ = 15)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
+#> -2.19861 -0.47152  0.15437  0.53801  1.29449 
 #> 
 #> Coefficients (mean model with logit link):
 #>               Estimate Std. Error z value Pr(>|z|)    

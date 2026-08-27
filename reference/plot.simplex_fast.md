@@ -20,7 +20,7 @@ using ggplot2. Up to four panels are available:
 plot(
   x,
   which = 1:4,
-  type = c("deviance", "pearson", "response"),
+  type = c("quantile", "deviance", "pearson", "response"),
   smooth = TRUE,
   ...
 )

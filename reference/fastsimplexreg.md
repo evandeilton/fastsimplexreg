@@ -30,6 +30,7 @@ fastsimplexreg(
   grad_tol = 1e-06,
   n_threads = 1L,
   inference = TRUE,
+  information = c("observed", "expected"),
   hessian_rel_step = 1e-05,
   trace = FALSE,
   subset = NULL,
@@ -79,8 +80,22 @@ fastsimplexreg(
 
 - inference:
 
-  Logical; if `TRUE`, computes the Hessian, the variance-covariance
-  matrix and the standard errors.
+  Logical; if `TRUE`, computes the information matrix, the
+  variance-covariance matrix and the standard errors.
+
+- information:
+
+  Character; which information matrix to invert for the standard errors.
+  `"observed"` (default) uses the observed information, the Hessian of
+  the negative log-likelihood obtained by central differences of the
+  analytic score. `"expected"` uses the exact Fisher information, which
+  for the simplex is available in closed form and is block diagonal in
+  \\(\beta, \gamma)\\: it needs no finite differencing, is positive
+  definite by construction, and is roughly twenty times cheaper. The two
+  agree asymptotically and, at \\n = 4000\\, to within 0.4\\ stays
+  `"observed"` because Efron and Hinkley (1978) argue it is the better
+  variance estimator for conditional inference; `"expected"` is the more
+  robust choice when the observed information is ill-conditioned.
 
 - hessian_rel_step:
 
@@ -93,7 +108,10 @@ fastsimplexreg(
 
 - subset:
 
-  Optional vector specifying a subset of observations.
+  Optional expression selecting a subset of observations, evaluated
+  inside `data` as in [`stats::lm()`](https://rdrr.io/r/stats/lm.html) –
+  for example `subset = x1 > 0`. A plain index, logical or row-name
+  vector also works. An `NA` in a logical subset drops that row.
 
 - na.action:
 
@@ -138,6 +156,10 @@ Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for
 Regression Analysis of Proportional Data Using the Simplex Distribution.
 *Journal of Statistical Software*, **71**(11), 1–21.
 
+Efron, B. and Hinkley, D. V. (1978). Assessing the accuracy of the
+maximum likelihood estimator: observed versus expected Fisher
+information. *Biometrika*, **65**(3), 457–483.
+
 ## See also
 
 [`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
@@ -165,9 +187,9 @@ summary(fit)
 #> fastsimplexreg(formula = y ~ x1 + x2 | z1, data = dat, link = "logit", 
 #>     n_threads = 1L)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.46935 -0.70189 -0.06618  0.67738  2.87579 
+#> -2.72184 -0.67703 -0.02365  0.68464  2.62614 
 #> 
 #> Coefficients (mean model with logit link):
 #>              Estimate Std. Error z value Pr(>|z|)    
@@ -183,11 +205,13 @@ summary(fit)
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 
 #> Log-likelihood: 774.8 | AIC: -1540 | BIC: -1519 
-#> Deviance:   500 | Observations: 500 | Iterations: 18 
+#> Deviance: 219.9 | Observations: 500 | Iterations: 18 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 coef(fit)
-#> (Intercept)          x1          x2 (Intercept)          z1 
-#>  -0.3969817   0.8066782  -0.5257617  -1.0403689   0.6303906 
+#>       (Intercept)                x1                x2 (phi)_(Intercept) 
+#>        -0.3969817         0.8066782        -0.5257617        -1.0403689 
+#>          (phi)_z1 
+#>         0.6303906 
 head(predict(fit, type = "both"))
 #>          mu       phi
 #> 1 0.2996206 0.9318746
@@ -209,9 +233,9 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 #> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
 #>     data = ReadingSkills, link = "logit")
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
+#> -2.37009 -0.80217  0.14154  0.90867  1.55583 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
@@ -227,6 +251,6 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 
 #> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
-#> Deviance:    44 | Observations: 44 | Iterations: 15 
+#> Deviance:  1538 | Observations: 44 | Iterations: 15 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 ```

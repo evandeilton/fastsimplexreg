@@ -37,7 +37,7 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
 An object of class `"summary.simplex_fast"`, a list whose main component
 `coefficients` is itself a list with the `mean` and `dispersion`
 coefficient tables (each with columns `Estimate`, `Std. Error`,
-`z value` and `Pr(>|z|)`), together with the Pearson residuals, the
+`z value` and `Pr(>|z|)`), together with the quantile residuals, the
 links, fit statistics (log-likelihood, AIC, BIC, deviance) and optimiser
 diagnostics. The `print` method returns its argument invisibly.
 
@@ -59,9 +59,9 @@ summary(fit)
 #> Call:
 #> fastsimplexreg(formula = y ~ x1 | z1, data = dat, n_threads = 1L)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.69348 -0.62167 -0.00168  0.60695  2.53326 
+#> -2.94924 -0.60432 -0.02211  0.61708  3.16909 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
@@ -76,6 +76,6 @@ summary(fit)
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 
 #> Log-likelihood: 335.4 | AIC: -662.9 | BIC:  -648 
-#> Deviance:   300 | Observations: 300 | Iterations: 12 
+#> Deviance: 174.7 | Observations: 300 | Iterations: 12 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 ```

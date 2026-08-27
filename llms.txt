@@ -273,7 +273,8 @@ Fit fixed- and mixed-effects simplex regression models.
 
 ## The simplex distribution
 
-Density, random generation and the mean link inverse.
+Density, distribution and quantile functions, random generation, and the
+mean link inverse.
 
 - [`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
   [`psimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md)
@@ -319,6 +320,7 @@ Methods for objects of class simplex_fast_mixed.
 
 - [`coef(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`vcov(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
+  [`confint(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`logLik(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`nobs(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`fitted(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)

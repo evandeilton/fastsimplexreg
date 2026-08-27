@@ -51,8 +51,12 @@ generalised linear models.
 
 - `deviance`:
 
-  Returns the scaled deviance \\\sum_i d(y_i;\hat\mu_i)/\hat\phi_i\\,
-  equal to the sum of squared deviance residuals.
+  Returns the unscaled deviance \\\sum_i d(y_i;\hat\mu_i)\\.
+  `type = "scaled"` gives \\\sum_i d(y_i;\hat\mu_i)/\hat\phi_i\\, the
+  sum of squared deviance residuals – but note that this is identically
+  `nobs(object)` whenever the dispersion submodel contains an intercept,
+  since that is what the score equation for \\\gamma\\ forces, so it
+  cannot distinguish two models.
 
 - `model.matrix`:
 
@@ -98,10 +102,10 @@ nobs(object, ...)
 fitted(object, model = c("mean", "dispersion"), ...)
 
 # S3 method for class 'simplex_fast'
-residuals(object, type = c("response", "pearson", "deviance"), ...)
+residuals(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
 # S3 method for class 'simplex_fast'
-deviance(object, ...)
+deviance(object, type = c("unscaled", "scaled"), ...)
 
 # S3 method for class 'simplex_fast'
 model.matrix(object, model = c("mean", "dispersion"), ...)
@@ -140,7 +144,10 @@ confint(object, parm, level = 0.95, ...)
 
 - type:
 
-  For `residuals`, one of `"response"`, `"pearson"` or `"deviance"`.
+  For `residuals`, one of `"quantile"` (the default; randomized quantile
+  residuals in the sense of Dunn and Smyth, 1996, which are exactly
+  standard normal under a correct model), `"response"`, `"pearson"` or
+  `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 
 - formula.:
 
@@ -191,17 +198,17 @@ mu <- simplex_linkinv(0.2 + 0.7 * dat$x1, link = "logit")
 dat$y <- rsimplex(n, mu, exp(-0.5 + 0.4 * dat$z1))
 fit <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L, x = TRUE)
 coef(fit)
-#> (Intercept)          x1 (Intercept)          z1 
-#>   0.2143249   0.6415763  -0.5119182   0.3018411 
+#>       (Intercept)                x1 (phi)_(Intercept)          (phi)_z1 
+#>         0.2143249         0.6415763        -0.5119182         0.3018411 
 coef(fit, model = "mean")
 #> (Intercept)          x1 
 #>   0.2143249   0.6415763 
 vcov(fit)
-#>               (Intercept)            x1   (Intercept)            z1
-#> (Intercept)  3.967456e-04 -3.906052e-05 -2.114382e-06 -1.979151e-04
-#> x1          -3.906052e-05  3.371293e-04  4.858998e-07  4.546619e-05
-#> (Intercept) -2.114382e-06  4.858998e-07  6.667492e-03  7.725160e-05
-#> z1          -1.979151e-04  4.546619e-05  7.725160e-05  7.230706e-03
+#>                     (Intercept)            x1 (phi)_(Intercept)      (phi)_z1
+#> (Intercept)        3.967456e-04 -3.906052e-05     -2.114382e-06 -1.979151e-04
+#> x1                -3.906052e-05  3.371293e-04      4.858998e-07  4.546619e-05
+#> (phi)_(Intercept) -2.114382e-06  4.858998e-07      6.667492e-03  7.725160e-05
+#> (phi)_z1          -1.979151e-04  4.546619e-05      7.725160e-05  7.230706e-03
 logLik(fit)
 #> 'log Lik.' 338.8326 (df=4)
 AIC(fit)
@@ -209,17 +216,19 @@ AIC(fit)
 nobs(fit)
 #> [1] 300
 deviance(fit)
-#> [1] 300
+#> [1] 186.9003
 head(fitted(fit))
-#> [1] 0.4532388 0.5822815 0.4202384 0.7751842 0.6048534 0.4226100
+#>         1         2         3         4         5         6 
+#> 0.4532388 0.5822815 0.4202384 0.7751842 0.6048534 0.4226100 
 head(residuals(fit, type = "deviance"))
-#> [1]  0.5268738 -0.1993220  0.1995192  0.6009328  0.7250423 -0.3582411
+#>          1          2          3          4          5          6 
+#>  0.5268738 -0.1993220  0.1995192  0.6009328  0.7250423 -0.3582411 
 confint(fit)
-#>                  2.5 %     97.5 %
-#> (Intercept)  0.1752854  0.2533644
-#> x1           0.6055893  0.6775634
-#> (Intercept) -0.6719585 -0.3518779
-#> z1           0.1351783  0.4685038
+#>                        2.5 %     97.5 %
+#> (Intercept)        0.1752854  0.2533644
+#> x1                 0.6055893  0.6775634
+#> (phi)_(Intercept) -0.6719585 -0.3518779
+#> (phi)_z1           0.1351783  0.4685038
 head(model.matrix(fit, model = "mean"))
 #>   (Intercept)         x1
 #> 1           1 -0.6264538
@@ -230,5 +239,5 @@ head(model.matrix(fit, model = "mean"))
 #> 6           1 -0.8204684
 formula(fit)
 #> y ~ x1 | z1
-#> <environment: 0x55bfce21d6e8>
+#> <environment: 0x556c28b285a0>
 ```

@@ -47,3 +47,20 @@ A numeric vector, list or `data.frame`, depending on `type`.
 ## See also
 
 [`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md)
+
+## Examples
+
+``` r
+set.seed(1)
+J <- 40; nj <- 8; n <- J * nj
+dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+b <- rnorm(J, 0, 0.7)[dat$g]
+dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                           nAGQ = 7, n_threads = 1)
+head(predict(fit))
+#>         1         2         3         4         5         6 
+#> 0.8358420 0.7530193 0.8532131 0.5550628 0.7354480 0.8520071 
+head(predict(fit, re.form = NA))
+#> [1] 0.6768247 0.5563565 0.7050858 0.3391140 0.5334621 0.7030862
+```

@@ -12,7 +12,7 @@ empirical-Bayes random effects).
 plot(
   x,
   which = 1:4,
-  type = c("deviance", "pearson", "response"),
+  type = c("quantile", "deviance", "pearson", "response"),
   smooth = TRUE,
   ...
 )
@@ -48,3 +48,16 @@ Invisibly, a `ggplot`/patchwork object or a list of `ggplot`s.
 
 [`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md),
 [`plot.simplex_fast()`](https://evandeilton.github.io/fastsimplexreg/reference/plot.simplex_fast.md)
+
+## Examples
+
+``` r
+set.seed(1)
+J <- 40; nj <- 8; n <- J * nj
+dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+b <- rnorm(J, 0, 0.7)[dat$g]
+dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                           nAGQ = 7, n_threads = 1)
+if (requireNamespace("ggplot2", quietly = TRUE)) p <- plot(fit, which = 1:2)
+```

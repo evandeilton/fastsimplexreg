@@ -140,9 +140,9 @@ summary(fit)
 #> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
 #>     data = ReadingSkills, link = "logit")
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
+#> -2.37009 -0.80217  0.14154  0.90867  1.55583 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
@@ -158,7 +158,7 @@ summary(fit)
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> 
 #> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
-#> Deviance:    44 | Observations: 44 | Iterations: 15 
+#> Deviance:  1538 | Observations: 44 | Iterations: 15 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied.
 ```
 
@@ -169,20 +169,20 @@ available directly:
 ``` r
 
 head(cbind(mu = fitted(fit), phi = fitted(fit, "dispersion")))
-#>             mu      phi
-#> [1,] 0.9103076 61.30942
-#> [2,] 0.9111495 61.30942
-#> [3,] 0.9115695 61.30942
-#> [4,] 0.9091703 61.30942
-#> [5,] 0.9155269 61.30942
-#> [6,] 0.9159281 61.30942
+#>          mu      phi
+#> 1 0.9103076 61.30942
+#> 2 0.9111495 61.30942
+#> 3 0.9115695 61.30942
+#> 4 0.9091703 61.30942
+#> 5 0.9155269 61.30942
+#> 6 0.9159281 61.30942
 confint(fit)
-#>                  2.5 %      97.5 %
-#> (Intercept)  1.0760642  1.67786626
-#> dyslexia    -1.2800609 -0.67306929
-#> iq          -0.1834433  0.09605926
-#> (Intercept)  1.0023482  1.84603360
-#> dyslexia    -3.1155107 -2.26797445
+#>                        2.5 %      97.5 %
+#> (Intercept)        1.0760642  1.67786626
+#> dyslexia          -1.2800609 -0.67306929
+#> iq                -0.1834433  0.09605926
+#> (phi)_(Intercept)  1.0023482  1.84603360
+#> (phi)_dyslexia    -3.1155107 -2.26797445
 ```
 
 ### Diagnostics

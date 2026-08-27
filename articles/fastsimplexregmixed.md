@@ -116,9 +116,9 @@ summary(fit)
 #> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
 #>     random = ~1 | batch, link = "logit", nAGQ = 15, n_threads = 1)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
+#> -2.19861 -0.47152  0.15437  0.53801  1.29449 
 #> 
 #> Coefficients (mean model with logit link):
 #>               Estimate Std. Error z value Pr(>|z|)    
