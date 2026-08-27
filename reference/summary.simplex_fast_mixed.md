@@ -60,12 +60,12 @@ summary(fit)
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept)  0.34264    0.11449   2.993  0.00276 ** 
+#> (Intercept)  0.34265    0.11449   2.993  0.00276 ** 
 #> x1          -0.63305    0.02601 -24.343  < 2e-16 ***
 #> 
 #> Coefficients (dispersion model with log link):
 #>             Estimate Std. Error z value Pr(>|z|)
-#> (Intercept)  0.12005    0.08461   1.419    0.156
+#> (Intercept)  0.12005    0.08462   1.419    0.156
 #> 
 #> Random effects:
 #> Random effects covariance (group: g)

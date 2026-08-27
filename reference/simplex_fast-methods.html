@@ -367,16 +367,16 @@ and <code>model.frame</code> return the corresponding model-description objects.
 <span class="r-in"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="fastsimplexreg.html">fastsimplexreg</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x1</span> <span class="op">|</span> <span class="va">z1</span>, data <span class="op">=</span> <span class="va">dat</span>, n_threads <span class="op">=</span> <span class="fl">1L</span>, x <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       (Intercept)                x1 (phi)_(Intercept)          (phi)_z1 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>         0.2143249         0.6415763        -0.5119182         0.3018411 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         0.2143248         0.6415763        -0.5119182         0.3018420 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span>, model <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)          x1 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   0.2143249   0.6415763 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   0.2143248   0.6415763 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/vcov.html" class="external-link">vcov</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                     (Intercept)            x1 (phi)_(Intercept)      (phi)_z1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)        3.967456e-04 -3.906052e-05     -2.114382e-06 -1.979151e-04</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> x1                -3.906052e-05  3.371293e-04      4.858998e-07  4.546619e-05</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_(Intercept) -2.114382e-06  4.858998e-07      6.667492e-03  7.725160e-05</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_z1          -1.979151e-04  4.546619e-05      7.725160e-05  7.230706e-03</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)        3.967455e-04 -3.906049e-05     -2.114781e-06 -1.979147e-04</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> x1                -3.906049e-05  3.371292e-04      4.858320e-07  4.546636e-05</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_(Intercept) -2.114781e-06  4.858320e-07      6.667492e-03  7.725782e-05</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_z1          -1.979147e-04  4.546636e-05      7.725782e-05  7.230704e-03</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 'log Lik.' 338.8326 (df=4)</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/AIC.html" class="external-link">AIC</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
@@ -390,13 +390,13 @@ and <code>model.frame</code> return the corresponding model-description objects.
 <span class="r-out co"><span class="r-pr">#&gt;</span> 0.4532388 0.5822815 0.4202384 0.7751842 0.6048534 0.4226100 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/residuals.html" class="external-link">residuals</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"deviance"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>          1          2          3          4          5          6 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  0.5268738 -0.1993220  0.1995192  0.6009328  0.7250423 -0.3582411 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  0.5268737 -0.1993219  0.1995191  0.6009331  0.7250419 -0.3582407 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                        2.5 %     97.5 %</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)        0.1752854  0.2533644</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)        0.1752854  0.2533643</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> x1                 0.6055893  0.6775634</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_(Intercept) -0.6719585 -0.3518779</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_z1           0.1351783  0.4685038</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (phi)_z1           0.1351793  0.4685047</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/model.matrix.html" class="external-link">model.matrix</a></span><span class="op">(</span><span class="va">fit</span>, model <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   (Intercept)         x1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1           1 -0.6264538</span>
@@ -407,7 +407,7 @@ and <code>model.frame</code> return the corresponding model-description objects.
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6           1 -0.8204684</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">formula</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> y ~ x1 | z1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;environment: 0x556c28b285a0&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;environment: 0x55df04b51528&gt;</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

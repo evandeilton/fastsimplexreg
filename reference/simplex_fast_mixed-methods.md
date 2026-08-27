@@ -159,25 +159,25 @@ fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
 
 coef(fit)
 #> (Intercept)          x1 (Intercept) 
-#>   0.3426428  -0.6330470   0.1200503 
+#>   0.3426502  -0.6330471   0.1200507 
 VarCorr(fit)
 #> Random effects covariance (group: g)
 #>             Variance Std.Dev.
 #> (Intercept)   0.5001   0.7072
 head(ranef(fit))
 #>   (Intercept)
-#> 1  0.88839290
-#> 2  0.89201819
-#> 3  0.61478283
-#> 4 -1.40690710
-#> 5  0.02537066
-#> 6  0.28390210
+#> 1  0.88838598
+#> 2  0.89201113
+#> 3  0.61477597
+#> 4 -1.40691453
+#> 5  0.02536362
+#> 6  0.28389508
 confint(fit)
 #>                         2.5 %     97.5 %
-#> (Intercept)        0.11825425  0.5670313
-#> x1                -0.68401629 -0.5820776
-#> (phi)_(Intercept) -0.04579208  0.2858926
-#> logsd.(Intercept) -0.57574879 -0.1171676
+#> (Intercept)        0.11826112  0.5670393
+#> x1                -0.68401645 -0.5820778
+#> (phi)_(Intercept) -0.04579166  0.2858931
+#> logsd.(Intercept) -0.57574656 -0.1171643
 ngrps(fit)
 #> [1] 40
 ```

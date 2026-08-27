@@ -87,13 +87,20 @@ fastsimplexregmixed(
 
 - n_threads:
 
-  Number of OpenMP threads (the cluster loop is parallelised). Zero uses
-  all available threads. Parallelism helps most when the per-cluster
-  work is substantial (two or more random effects, or larger clusters);
-  for many tiny clusters a small `n_threads` (or `1`) can be faster,
-  because a multi-threaded BLAS may otherwise oversubscribe the cores.
-  Results can differ by a negligible amount (around `1e-13`) between
-  thread counts.
+  Number of OpenMP threads; the loop over clusters is parallelised. Zero
+  uses all threads available to the backend. What parallelism buys here
+  is governed by the work per CLUSTER, not by the number of clusters:
+  measured on this design at 64000 observations, speed-up at 4 threads
+  was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x
+  with 128. Eight threads is a loss for clusters smaller than about 32.
+  If RhpcBLASctl is installed it is used to pin the BLAS to one thread
+  for the duration of the fit and restore it afterwards, which was worth
+  a further 34\\
+
+  Results are reproducible for a fixed `n_threads`, but the per-thread
+  accumulators are summed in thread order, so different thread counts
+  differ by floating-point reassociation – around `1e-16` relative on
+  the log-likelihood.
 
 - inference:
 
@@ -215,7 +222,7 @@ summary(fit)
 #> (Intercept)   0.5437   0.7374
 #> 
 #> Log-likelihood: 485.8 | AIC: -961.7 | BIC: -940.8 
-#> Observations: 480 | Groups: 60 | nAGQ: 7 | Iterations: 17 
+#> Observations: 480 | Groups: 60 | nAGQ: 7 | Iterations: 16 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 VarCorr(fit)
 #> Random effects covariance (group: g)

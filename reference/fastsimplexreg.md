@@ -75,8 +75,30 @@ fastsimplexreg(
 
 - n_threads:
 
-  Integer number of OpenMP threads. Use `0` to request all threads
-  available to the backend.
+  Integer number of OpenMP threads; the loop over observations is
+  parallelised. Use `0` to request all threads available to the backend.
+  The linear predictors are accumulated inside that loop rather than
+  through BLAS, so performance does not depend on how your BLAS is
+  configured. Measured end-to-end speed-ups on a 24-core machine:
+
+  |                 |               |       |       |        |
+  |-----------------|---------------|-------|-------|--------|
+  | **problem**     | **2 threads** | **4** | **8** | **16** |
+  | n = 1e5, p = 5  | 1.4x          | 2.2x  | 2.1x  | 2.2x   |
+  | n = 1e6, p = 10 | 1.9x          | 3.2x  | 5.0x  | 5.2x   |
+  | n = 5e6, p = 10 | 1.1x          | 3.3x  | 5.1x  | 5.1x   |
+
+  Threading pays from roughly `n = 1e5` upwards and saturates near 5x,
+  at which point the loop is memory-bound. The default is `1L` so that
+  the package never oversubscribes a machine it does not own.
+
+  Results are reproducible for a fixed `n_threads`. Across DIFFERENT
+  thread counts the per-thread accumulators are summed in a different
+  order, which perturbs the objective at the rounding level (~1e-14
+  relative); the line search then follows a slightly different path, so
+  coefficients can differ by around `1e-8` relative. Compare with
+  [`all.equal()`](https://rdrr.io/r/base/all.equal.html), not
+  [`identical()`](https://rdrr.io/r/base/identical.html).
 
 - inference:
 
@@ -205,21 +227,21 @@ summary(fit)
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 
 #> Log-likelihood: 774.8 | AIC: -1540 | BIC: -1519 
-#> Deviance: 219.9 | Observations: 500 | Iterations: 18 
+#> Deviance: 219.9 | Observations: 500 | Iterations: 20 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 coef(fit)
 #>       (Intercept)                x1                x2 (phi)_(Intercept) 
-#>        -0.3969817         0.8066782        -0.5257617        -1.0403689 
+#>        -0.3969818         0.8066782        -0.5257615        -1.0403692 
 #>          (phi)_z1 
 #>         0.6303906 
 head(predict(fit, type = "both"))
 #>          mu       phi
-#> 1 0.2996206 0.9318746
-#> 2 0.3583206 0.3297141
-#> 3 0.7027430 0.4877547
-#> 4 0.2961153 0.4043430
-#> 5 0.3060928 0.3142088
-#> 6 0.7284008 0.3275010
+#> 1 0.2996206 0.9318743
+#> 2 0.3583205 0.3297140
+#> 3 0.7027430 0.4877546
+#> 4 0.2961153 0.4043428
+#> 5 0.3060928 0.3142087
+#> 6 0.7284007 0.3275009
 
 # Real data: reading accuracy from the 'betareg' package.
 if (requireNamespace("betareg", quietly = TRUE)) {
@@ -235,18 +257,18 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 #> 
 #> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.37009 -0.80217  0.14154  0.90867  1.55583 
+#> -2.37009 -0.80217  0.14155  0.90867  1.55585 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept)  1.37697    0.15352   8.969  < 2e-16 ***
-#> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***
+#> (Intercept)  1.37696    0.15352   8.969  < 2e-16 ***
+#> dyslexia    -0.97656    0.15485  -6.307 2.85e-10 ***
 #> iq          -0.04369    0.07130  -0.613     0.54    
 #> 
 #> Coefficients (dispersion model with log link):
 #>             Estimate Std. Error z value Pr(>|z|)    
 #> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***
-#> dyslexia     -2.6917     0.2162 -12.450  < 2e-16 ***
+#> dyslexia     -2.6918     0.2162 -12.450  < 2e-16 ***
 #> ---
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 

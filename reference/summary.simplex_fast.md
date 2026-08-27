@@ -76,6 +76,6 @@ summary(fit)
 #> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 #> 
 #> Log-likelihood: 335.4 | AIC: -662.9 | BIC:  -648 
-#> Deviance: 174.7 | Observations: 300 | Iterations: 12 
+#> Deviance: 174.7 | Observations: 300 | Iterations: 14 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied. 
 ```

@@ -83,6 +83,39 @@
 <code><a href="https://rdrr.io/r/base/summary.html" class="external-link">summary()</a></code> now reports the diagnostics the fit object already stored: vcov rank, pseudo-inverse use, ill-conditioning, saturated observations, aliased coefficients, and whether inference was computed at all.</li>
 </ul></div>
 <div class="section level3">
+<h3 id="parallelism-and-the-c-backend-audit-of-the-openmp-layer-0-2-4">Parallelism and the C++ backend (audit of the OpenMP layer)<a class="anchor" aria-label="anchor" href="#parallelism-and-the-c-backend-audit-of-the-openmp-layer-0-2-4"></a></h3>
+<ul><li>
+<p><strong>The linear predictors are no longer computed through BLAS.</strong> <code>X %*% beta</code> and <code>Z %*% gamma</code> were two <code>gemv</code> calls, serial with respect to the package’s own OpenMP region, and a threaded BLAS made them <em>slower</em>: a 1e6 x 2 matvec took 14.9 ms across 24 OpenBLAS threads against 5.4 ms pinned to one. They were also an Amdahl ceiling – 24% of an evaluation on one thread but 71% on sixteen. <code>eta</code> is now accumulated inside the existing parallel loop, in the same column order a column-major <code>gemv</code> uses, and the single-threaded result is <strong>bit-identical</strong> to the BLAS version across every <code>p</code> and link tested. End-to-end speed-ups on a 24-core machine:</p>
+<table class="table"><thead><tr><th>problem</th>
+<th>2 threads</th>
+<th>4</th>
+<th>8</th>
+<th>16</th>
+</tr></thead><tbody><tr><td>n = 1e5, p = 5</td>
+<td>1.4x</td>
+<td>2.2x</td>
+<td>2.1x</td>
+<td>2.2x</td>
+</tr><tr><td>n = 1e6, p = 10</td>
+<td>1.9x</td>
+<td>3.2x</td>
+<td>5.0x</td>
+<td>5.2x</td>
+</tr><tr><td>n = 5e6, p = 10</td>
+<td>1.1x</td>
+<td>3.3x</td>
+<td>5.1x</td>
+<td>5.1x</td>
+</tr></tbody></table><p>The same n = 1e5 case was previously a <em>loss</em> at every thread count under default BLAS settings (0.22x at 16 threads).</p>
+</li>
+<li><p><strong>Long calls can be interrupted.</strong> There was no interrupt check anywhere in the C++ backend, so <code>Ctrl-C</code> was dead for the whole of a <code>.Call</code> – measured at 154 s for a single-threaded fit at n = 2e6. <code>Rcpp::checkUserInterrupt()</code> (which throws, so destructors unwind, rather than <code>R_CheckUserInterrupt()</code> which longjmps) now runs at the top of each BFGS iteration, at the top of each finite-difference Hessian column, and between 65536-element chunks of the <code>d</code>/<code>p</code>/<code>q</code> loops.</p></li>
+<li><p><strong>Exceptions can no longer escape a parallel region.</strong> A throw crossing an OpenMP structured block terminates the process rather than unwinding (verified: SIGABRT, the outer <code>catch</code> never runs). One <code>arma::inv()</code> call in the cluster loop used the throwing overload; it now uses the boolean form like every other decomposition there. The cluster loop body, which performs about twenty Armadillo allocations per cluster, is wrapped so that a <code>std::bad_alloc</code> under memory pressure becomes a clean R error instead of an abort.</p></li>
+<li><p><strong>A badly scaled design converges.</strong> The first BFGS trial step was 1.0 in the units of the raw gradient. With a covariate scaled by 1e5 that overshoots by eight orders of magnitude and the 40 available halvings never reach a decrease, so the fit stopped at iteration 1 with a log-likelihood 155.5 units below what <code><a href="https://rdrr.io/r/stats/nlminb.html" class="external-link">nlminb()</a></code> reaches on the identical objective. The step is now scaled while <code>H</code> is still the identity – which is also 22% <em>cheaper</em> on ordinary fits.</p></li>
+<li><p><strong><code>RhpcBLASctl</code> (Suggests) is used to pin the BLAS</strong> for the duration of a mixed fit and restore it afterwards, worth a further 34% at four threads.</p></li>
+<li><p>Parallel behaviour is now tested (<code>tests/testthat/test-parallel.R</code>): the distribution functions are bit-identical across thread counts, fits agree to floating-point noise, and interruptibility has a regression test.</p></li>
+<li><p>Removed the adaptive Gauss-Legendre quadrature, dead since the CDF became a closed form.</p></li>
+</ul></div>
+<div class="section level3">
 <h3 id="packaging-0-2-4">Packaging<a class="anchor" aria-label="anchor" href="#packaging-0-2-4"></a></h3>
 <ul><li>
 <code>Depends: R (&gt;= 4.0.0)</code> – no R 4.1 feature is used.</li>

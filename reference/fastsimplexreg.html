@@ -134,8 +134,19 @@ fast link-specific starting values are used.</p></dd>
 
 
 <dt id="arg-n-threads">n_threads<a class="anchor" aria-label="anchor" href="#arg-n-threads"></a></dt>
-<dd><p>Integer number of OpenMP threads. Use <code>0</code> to request all
-threads available to the backend.</p></dd>
+<dd><p>Integer number of OpenMP threads; the loop over observations
+is parallelised. Use <code>0</code> to request all threads available to the backend.
+The linear predictors are accumulated inside that loop rather than through
+BLAS, so performance does not depend on how your BLAS is configured.
+Measured end-to-end speed-ups on a 24-core machine:</p>
+<table class="table table"><tr><td><strong>problem</strong></td><td><strong>2 threads</strong></td><td><strong>4</strong></td><td><strong>8</strong></td><td><strong>16</strong></td></tr><tr><td>n = 1e5, p = 5</td><td>1.4x</td><td>2.2x</td><td>2.1x</td><td>2.2x</td></tr><tr><td>n = 1e6, p = 10</td><td>1.9x</td><td>3.2x</td><td>5.0x</td><td>5.2x</td></tr><tr><td>n = 5e6, p = 10</td><td>1.1x</td><td>3.3x</td><td>5.1x</td><td>5.1x</td></tr></table><p>Threading pays from roughly <code>n = 1e5</code> upwards and saturates near 5x, at
+which point the loop is memory-bound. The default is <code>1L</code> so that the
+package never oversubscribes a machine it does not own.</p>
+<p>Results are reproducible for a fixed <code>n_threads</code>. Across DIFFERENT thread
+counts the per-thread accumulators are summed in a different order, which
+perturbs the objective at the rounding level (~1e-14 relative); the line
+search then follows a slightly different path, so coefficients can differ
+by around <code>1e-8</code> relative. Compare with <code><a href="https://rdrr.io/r/base/all.equal.html" class="external-link">all.equal()</a></code>, not <code><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical()</a></code>.</p></dd>
 
 
 <dt id="arg-inference">inference<a class="anchor" aria-label="anchor" href="#arg-inference"></a></dt>
@@ -261,21 +272,21 @@ expected Fisher information.
 <span class="r-out co"><span class="r-pr">#&gt;</span> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Log-likelihood: 774.8 | AIC: -1540 | BIC: -1519 </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Deviance: 219.9 | Observations: 500 | Iterations: 18 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Deviance: 219.9 | Observations: 500 | Iterations: 20 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Convergence: 0 - Converged: relative objective tolerance satisfied. </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>       (Intercept)                x1                x2 (phi)_(Intercept) </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        -0.3969817         0.8066782        -0.5257617        -1.0403689 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        -0.3969818         0.8066782        -0.5257615        -1.0403692 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>          (phi)_z1 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>         0.6303906 </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>          mu       phi</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 0.2996206 0.9318746</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 0.3583206 0.3297141</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 3 0.7027430 0.4877547</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.2961153 0.4043430</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 5 0.3060928 0.3142088</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 6 0.7284008 0.3275010</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 0.2996206 0.9318743</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 0.3583205 0.3297140</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3 0.7027430 0.4877546</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 4 0.2961153 0.4043428</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 5 0.3060928 0.3142087</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 6 0.7284007 0.3275009</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Real data: reading accuracy from the 'betareg' package.</span></span></span>
 <span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"betareg"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span></span>
@@ -291,18 +302,18 @@ expected Fisher information.
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Quantile residuals:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      Min       1Q   Median       3Q      Max </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> -2.37009 -0.80217  0.14154  0.90867  1.55583 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> -2.37009 -0.80217  0.14155  0.90867  1.55585 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (mean model with logit link):</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>             Estimate Std. Error z value Pr(&gt;|z|)    </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)  1.37697    0.15352   8.969  &lt; 2e-16 ***</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)  1.37696    0.15352   8.969  &lt; 2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia    -0.97656    0.15485  -6.307 2.85e-10 ***</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> iq          -0.04369    0.07130  -0.613     0.54    </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Coefficients (dispersion model with log link):</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>             Estimate Std. Error z value Pr(&gt;|z|)    </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia     -2.6917     0.2162 -12.450  &lt; 2e-16 ***</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> dyslexia     -2.6918     0.2162 -12.450  &lt; 2e-16 ***</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> ---</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
