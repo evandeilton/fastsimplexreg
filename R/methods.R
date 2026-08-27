@@ -272,30 +272,8 @@ confint.simplex_fast <- function(object, parm, level = 0.95, ...) {
   if (is.null(object$vcov)) {
     stop("Covariance matrix was not computed. Refit with inference = TRUE.", call. = FALSE)
   }
-  est <- object$par
-  se <- object$standard_errors
-  pnames <- names(est)
-
-  # Select parameters by position so that duplicated coefficient names (e.g. a
-  # "(Intercept)" in both the mean and dispersion submodels) are never confused.
-  if (missing(parm) || is.null(parm)) {
-    idx <- seq_along(est)
-  } else if (is.numeric(parm)) {
-    idx <- as.integer(parm)
-  } else {
-    idx <- which(pnames %in% parm)
-  }
-  idx <- idx[idx >= 1L & idx <= length(est)]
-  if (!length(idx)) {
-    stop("No valid parameters selected in 'parm'.", call. = FALSE)
-  }
-
-  a <- (1 - level) / 2
-  z <- stats::qnorm(1 - a)
-  ci <- cbind(est[idx] - z * se[idx], est[idx] + z * se[idx])
-  colnames(ci) <- paste0(format(100 * c(a, 1 - a), trim = TRUE, digits = 3), " %")
-  rownames(ci) <- pnames[idx]
-  ci
+  .simplex_confint(object$par, object$standard_errors, parm, level,
+                   missing(parm))
 }
 
 

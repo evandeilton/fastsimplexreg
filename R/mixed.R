@@ -141,7 +141,15 @@
   q <- length(re_names)
   labs <- character(0)
   for (j in seq_len(q)) {
-    labs <- c(labs, paste0("logsd.", re_names[j]))
+    # The diagonal entry is log D[j, j], where Sigma = D D'. That is the
+    # marginal standard deviation ONLY for j = 1; for j >= 2 it is the
+    # CONDITIONAL standard deviation of random effect j given effects 1..j-1.
+    # Labelling it "logsd." understated a random slope's SD by a factor of
+    # nearly two in a measured q = 2 fit (0.389 against a true 0.758), read
+    # straight off fit$omega. "logchol." names what the number actually is;
+    # VarCorr() remains the only supported route to marginal SDs.
+    labs <- c(labs, if (q == 1L) paste0("logsd.", re_names[j])
+                    else paste0("logchol.", re_names[j], ".", re_names[j]))
     for (r in seq_len(q)[-seq_len(j)]) {
       labs <- c(labs, paste0("chol.", re_names[r], ".", re_names[j]))
     }
@@ -451,7 +459,8 @@ fastsimplexregmixed <- function(
   k <- length(theta)
   n <- length(response)
 
-  par_names <- c(colnames(X), colnames(W), .omega_labels(re_names))
+  par_names <- c(.simplex_par_names(colnames(X), colnames(W)),
+                 .omega_labels(re_names))
   names(theta) <- par_names
 
   converged <- as.integer(opt$convergence) == 0L

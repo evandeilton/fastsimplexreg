@@ -54,6 +54,11 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'     the `"postVar"` attribute.}
 #'   \item{`VarCorr`}{The estimated random-effect covariance matrix
 #'     \eqn{\Sigma}, with standard deviations and correlations.}
+#'   \item{`confint`}{Wald confidence intervals over the full parameter vector
+#'     `c(beta, gamma, omega)`. Note that the intervals for the variance
+#'     components are on the unconstrained log-Cholesky scale, where a Wald
+#'     interval is defensible; on the variance scale it would not be, because
+#'     the null lies on the boundary.}
 #' }
 #'
 #' @param object,x A fitted `"simplex_fast_mixed"` object.
@@ -62,6 +67,9 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #' @param type For `residuals`, one of `"response"`, `"pearson"` or
 #'   `"deviance"`.
 #' @param postVar For `ranef`, logical; attach posterior covariances.
+#' @param parm For `confint`, which parameters to report: numeric positions or
+#'   names, over the full vector `c(beta, gamma, omega)`. Defaults to all.
+#' @param level For `confint`, the confidence level.
 #' @param sigma For `VarCorr`, present only to match the signature of
 #'   [nlme::VarCorr()]. A simplex mixed model has no residual scale parameter,
 #'   so the argument rescales nothing; supplying anything other than `1` raises
@@ -97,6 +105,25 @@ vcov.simplex_fast_mixed <- function(object, ...) {
     stop("Covariance matrix was not computed. Refit with inference = TRUE.", call. = FALSE)
   }
   object$vcov
+}
+
+#' @rdname simplex_fast_mixed-methods
+#' @export
+confint.simplex_fast_mixed <- function(object, parm, level = 0.95, ...) {
+  # A method is REQUIRED here, not optional. Without one, dispatch fell through
+  # to stats::confint.default, which indexes vcov() by NAME -- and coef() of a
+  # mixed fit repeats "(Intercept)" across the mean and dispersion submodels.
+  # Both rows then resolved to the first match, so the dispersion intercept was
+  # reported with the mean intercept's interval, one that need not even contain
+  # its own estimate; and the variance components were dropped entirely, since
+  # coef() is shorter than the parameter vector. Selection is by position, over
+  # the FULL parameter vector c(beta, gamma, omega).
+  if (is.null(object$vcov)) {
+    stop("Covariance matrix was not computed. Refit with inference = TRUE.",
+         call. = FALSE)
+  }
+  .simplex_confint(object$par, object$standard_errors, parm, level,
+                   missing(parm))
 }
 
 #' @rdname simplex_fast_mixed-methods

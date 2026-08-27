@@ -415,11 +415,14 @@ fastsimplexreg <- function(
   )
 
   theta <- as.numeric(opt$par)
-  # Bare coefficient names, matching the convention of other simplex/beta
-  # regression packages. The mean and dispersion submodels are distinguished by
-  # position (the first p entries are the mean coefficients, the remaining q are
-  # the dispersion coefficients) rather than by a name prefix.
-  names(theta) <- c(colnames(X), colnames(Z))
+  # Dispersion coefficients carry a "(phi)_" prefix in the FULL parameter
+  # vector, as betareg does. Distinguishing the two submodels by position alone
+  # is not enough: with an intercept in both, names(theta) repeated
+  # "(Intercept)", so vcov(fit)["(Intercept)", "(Intercept)"] silently returned
+  # the MEAN intercept's variance whatever the user meant, and
+  # confint(fit, parm = "(Intercept)") returned two indistinguishable rows.
+  # The per-submodel tables in summary()/coef(model=) keep the bare names.
+  names(theta) <- .simplex_par_names(colnames(X), colnames(Z))
 
   pred <- simplex_predict_cpp(theta, X, Z, mean_link = link_spec$id,
                               off_mu_ = off_mu, off_phi_ = off_phi)

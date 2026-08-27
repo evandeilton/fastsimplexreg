@@ -4,6 +4,7 @@
 \alias{simplex_fast_mixed-methods}
 \alias{coef.simplex_fast_mixed}
 \alias{vcov.simplex_fast_mixed}
+\alias{confint.simplex_fast_mixed}
 \alias{logLik.simplex_fast_mixed}
 \alias{nobs.simplex_fast_mixed}
 \alias{fitted.simplex_fast_mixed}
@@ -16,6 +17,8 @@
 \method{coef}{simplex_fast_mixed}(object, model = c("all", "mean", "dispersion"), ...)
 
 \method{vcov}{simplex_fast_mixed}(object, ...)
+
+\method{confint}{simplex_fast_mixed}(object, parm, level = 0.95, ...)
 
 \method{logLik}{simplex_fast_mixed}(object, ...)
 
@@ -38,6 +41,11 @@
 \code{fitted}, one of \code{"mean"} or \code{"dispersion"}.}
 
 \item{...}{Additional arguments, currently ignored.}
+
+\item{parm}{For \code{confint}, which parameters to report: numeric positions or
+names, over the full vector \code{c(beta, gamma, omega)}. Defaults to all.}
+
+\item{level}{For \code{confint}, the confidence level.}
 
 \item{type}{For \code{residuals}, one of \code{"response"}, \code{"pearson"} or
 \code{"deviance"}.}
@@ -79,6 +87,11 @@ matrix); with \code{postVar = TRUE}, the posterior covariances are attached as
 the \code{"postVar"} attribute.}
 \item{\code{VarCorr}}{The estimated random-effect covariance matrix
 \eqn{\Sigma}, with standard deviations and correlations.}
+\item{\code{confint}}{Wald confidence intervals over the full parameter vector
+\code{c(beta, gamma, omega)}. Note that the intervals for the variance
+components are on the unconstrained log-Cholesky scale, where a Wald
+interval is defensible; on the variance scale it would not be, because
+the null lies on the boundary.}
 }
 }
 \seealso{

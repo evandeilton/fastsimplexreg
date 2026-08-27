@@ -51,7 +51,10 @@ obtained by central differences of the analytic gradient.}
 
 \item{trace}{Logical; if \code{TRUE}, prints optimiser progress.}
 
-\item{subset}{Optional vector specifying a subset of observations.}
+\item{subset}{Optional expression selecting a subset of observations,
+evaluated inside \code{data} as in \code{\link[stats:lm]{stats::lm()}} -- for example
+\code{subset = x1 > 0}. A plain index, logical or row-name vector also
+works. An \code{NA} in a logical subset drops that row.}
 
 \item{na.action}{A function indicating how to handle missing values.}
 

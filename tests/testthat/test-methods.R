@@ -109,26 +109,41 @@ test_that("AIC, BIC and logLik are mutually consistent", {
   expect_equal(BIC(fit), -2 * as.numeric(ll) + log(nobs(fit)) * k)
 })
 
-test_that("coefficient names are bare and summary tables match the standard", {
+test_that("full-vector names are unambiguous and summary tables stay bare", {
   fit <- make_fit()$fit
 
-  # No "mean_"/"dispersion_" prefixes anywhere in the user-facing names.
+  # The FULL parameter vector must be addressable by name. Before 0.2.4 the
+  # dispersion block reused the mean's bare names, so with an intercept in both
+  # submodels names(coef(fit)) repeated "(Intercept)": vcov()["(Intercept)",
+  # "(Intercept)"] silently returned the MEAN intercept's variance whatever the
+  # user meant, and confint(parm = "(Intercept)") returned two identical-looking
+  # rows. betareg solves this the same way, with a "(phi)_" prefix.
   all_names <- names(coef(fit, "all"))
   expect_false(any(grepl("^mean_|^dispersion_", all_names)))
-  expect_identical(all_names, c("(Intercept)", "x1", "x2", "(Intercept)", "z1"))
+  expect_identical(all_names,
+                   c("(Intercept)", "x1", "x2", "(phi)_(Intercept)", "(phi)_z1"))
+  expect_false(anyDuplicated(all_names) > 0L)
   expect_identical(rownames(vcov(fit)), all_names)
   expect_identical(rownames(confint(fit)), all_names)
 
+  # Name-based access now reaches the parameter it names.
+  expect_equal(unname(vcov(fit)["(phi)_(Intercept)", "(phi)_(Intercept)"]),
+               unname(fit$standard_errors[["(phi)_(Intercept)"]]^2))
+  expect_identical(nrow(confint(fit, parm = "(phi)_(Intercept)")), 1L)
+
   s <- summary(fit)
-  # summary$coefficients is a list of mean/dispersion tables with bare rownames.
+  # The per-submodel tables keep the BARE names: within a table there is no
+  # ambiguity, and the prefix would only add noise.
   expect_type(s$coefficients, "list")
   expect_named(s$coefficients, c("mean", "dispersion"))
   expect_identical(rownames(s$coefficients$mean), c("(Intercept)", "x1", "x2"))
   expect_identical(rownames(s$coefficients$dispersion), c("(Intercept)", "z1"))
   expect_identical(colnames(s$coefficients$mean),
                    c("Estimate", "Std. Error", "z value", "Pr(>|z|)"))
+  # coef(model = ) likewise stays bare.
+  expect_identical(names(coef(fit, "dispersion")), c("(Intercept)", "z1"))
 
-  # confint selects the correct row by position even with duplicated names.
+  # Positional selection keeps working.
   ci_disp_int <- confint(fit, parm = 4L)
   expect_equal(unname(ci_disp_int[1, ]),
                unname(coef(fit, "all")[4] +

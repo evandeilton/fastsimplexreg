@@ -402,3 +402,55 @@ test_that("degenerate cluster structures are refused or flagged", {
                         n_threads = 1L, inference = FALSE),
     "single observation")
 })
+
+
+# confint() on a mixed fit. Until 0.2.4 there was no method, so dispatch fell
+# through to stats::confint.default, which indexes vcov() by NAME -- and the
+# repeated "(Intercept)" made it report the MEAN intercept's interval for the
+# DISPERSION intercept, an interval that need not contain its own estimate.
+# The variance components were dropped entirely, coef() being shorter than par.
+test_that("confint on a mixed fit reports each parameter's own interval", {
+  dat <- sim_mixed(J = 40L, nj = 10L, seed = 21L)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                             n_threads = 1L)
+  ci <- confint(fit)
+  est <- fit$par
+  se <- fit$standard_errors
+
+  expect_identical(nrow(ci), length(est))
+  expect_identical(rownames(ci), names(est))
+  expect_true(all(est >= ci[, 1] & est <= ci[, 2]))
+  expect_equal(unname(ci),
+               unname(cbind(est - qnorm(0.975) * se, est + qnorm(0.975) * se)))
+
+  # Selection by position and by the now-unambiguous names.
+  expect_identical(nrow(confint(fit, parm = 2L)), 1L)
+  expect_identical(nrow(confint(fit, parm = "(phi)_(Intercept)")), 1L)
+  expect_error(confint(fit, level = 1.5), "strictly between 0 and 1")
+})
+
+test_that("the packed omega diagonal is labelled as a Cholesky factor when q >= 2", {
+  skip_if_not_installed("MASS")
+  set.seed(31)
+  J <- 60L; nj <- 10L; n <- J * nj
+  d <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = stats::rnorm(n))
+  B <- MASS::mvrnorm(J, c(0, 0), matrix(c(0.6, 0.45, 0.45, 0.5), 2, 2))
+  d$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * d$x1 + B[d$g, 1] +
+                                       B[d$g, 2] * d$x1, "logit"), 1)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 + x1 | g, data = d,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+
+  # The label must not promise a marginal standard deviation it is not: for
+  # j >= 2, exp(omega_jj) is D[j, j], the CONDITIONAL sd. In a measured fit it
+  # understated the marginal sd of the random slope by a factor of ~1.95.
+  expect_false(any(grepl("^logsd\\.", names(fit$omega))))
+  expect_match(names(fit$omega)[3], "^logchol\\.")
+  expect_equal(unname(exp(fit$omega[3])), unname(fit$D[2, 2]))
+  expect_gt(sqrt(diag(fit$Sigma))[2], exp(fit$omega[3]))
+
+  # q = 1 keeps "logsd.", where it is exactly right.
+  f1 <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = d, nAGQ = 5L,
+                            n_threads = 1L, inference = FALSE)
+  expect_match(names(f1$omega)[1], "^logsd\\.")
+  expect_equal(unname(exp(f1$omega[1])), unname(sqrt(f1$Sigma[1, 1])))
+})

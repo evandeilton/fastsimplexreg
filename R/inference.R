@@ -131,6 +131,49 @@
 }
 
 
+# Internal: names for the FULL parameter vector. The dispersion block is
+# prefixed so that a coefficient appearing in both submodels (typically
+# "(Intercept)") is addressable unambiguously by name in coef(), vcov(),
+# confint() and every downstream tool that indexes by name. This follows
+# betareg, whose coef() reads "(Intercept)", "x1", "(phi)_(Intercept)".
+.simplex_par_names <- function(mean_names, disp_names) {
+  c(mean_names, paste0("(phi)_", disp_names))
+}
+
+
+# Internal: shared Wald-interval builder for both fit classes.
+#
+# Selection is BY POSITION throughout. That matters because `parm` may name a
+# coefficient that appears in more than one submodel; resolving such a name by
+# `%in%` returns every match, and letting stats::confint.default index vcov()
+# by name returns the FIRST match for all of them -- which is how a mixed fit
+# used to report the mean intercept's interval for the dispersion intercept.
+.simplex_confint <- function(est, se, parm, level, missing_parm) {
+  pnames <- names(est)
+  if (missing_parm || is.null(parm)) {
+    idx <- seq_along(est)
+  } else if (is.numeric(parm)) {
+    idx <- as.integer(parm)
+  } else {
+    idx <- which(pnames %in% parm)
+  }
+  idx <- idx[!is.na(idx) & idx >= 1L & idx <= length(est)]
+  if (!length(idx)) {
+    stop("No valid parameters selected in 'parm'.", call. = FALSE)
+  }
+  if (length(level) != 1L || !is.finite(level) || level <= 0 || level >= 1) {
+    stop("'level' must be a single number strictly between 0 and 1.", call. = FALSE)
+  }
+
+  a <- (1 - level) / 2
+  z <- stats::qnorm(1 - a)
+  ci <- cbind(est[idx] - z * se[idx], est[idx] + z * se[idx])
+  colnames(ci) <- paste0(format(100 * c(a, 1 - a), trim = TRUE, digits = 3), " %")
+  rownames(ci) <- pnames[idx]
+  ci
+}
+
+
 # Internal: report saturation of the mean link instead of applying it silently.
 # `n` counts the observations whose fitted mean hit the numerical floor of the
 # likelihood path, where the score contribution is exactly zero by construction.
