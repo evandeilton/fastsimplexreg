@@ -89,3 +89,57 @@ test_that("qsimplex agrees with the empirical quantiles of rsimplex", {
   expect_equal(unname(stats::quantile(s, ps)), qsimplex(ps, 0.35, 0.8),
                tolerance = 5e-3)
 })
+
+
+# The CDF is a closed form from 0.2.4 on, not adaptive quadrature. These tests
+# pin it against an INDEPENDENT route and against the tail behaviour that the
+# quadrature could not deliver.
+test_that("the closed-form CDF matches seeded numerical integration", {
+  ref <- function(q, mu, phi) {
+    # Knots seeded around the mean: a naive integrate() misses the needle when
+    # phi is small and returns 6.2e-163 for a probability of 1.
+    sd <- sqrt(phi * (mu * (1 - mu))^3)
+    kn <- sort(unique(pmax(1e-14, pmin(q, mu + c(-12, -6, -3, -1, 0, 1, 3, 6, 12) * sd))))
+    kn <- c(1e-14, kn[kn > 1e-14 & kn < q], q)
+    sum(vapply(seq_len(length(kn) - 1L), function(i)
+      stats::integrate(function(t) dsimplex(t, mu, phi), kn[i], kn[i + 1L],
+                       rel.tol = 1e-13, subdivisions = 2000L)$value, numeric(1)))
+  }
+  for (mu in c(0.05, 0.5, 0.95)) {
+    for (phi in c(1e-3, 1, 100)) {
+      for (q in c(0.15, 0.5, 0.85)) {
+        r <- ref(q, mu, phi)
+        if (r < 1e-12) next
+        expect_equal(psimplex(q, mu, phi), r, tolerance = 1e-9)
+      }
+    }
+  }
+})
+
+test_that("log.p keeps full precision in the far lower tail", {
+  # psimplex(0.15, 0.5, 0.01, log.p = TRUE) used to return -Inf, because it
+  # computed log() of a linear value that had already underflowed to zero.
+  expect_equal(psimplex(0.15, 0.5, 0.01, log.p = TRUE), -773.2159, tolerance = 1e-4)
+  expect_true(is.finite(psimplex(0.4, 0.5, 1e-4, log.p = TRUE)))
+  expect_lt(psimplex(0.4, 0.5, 1e-4, log.p = TRUE), -3000)
+  # Consistent with the linear scale wherever the linear scale still works.
+  q <- c(0.05, 0.2, 0.5, 0.8, 0.95)
+  expect_equal(psimplex(q, 0.4, 1, log.p = TRUE), log(psimplex(q, 0.4, 1)),
+               tolerance = 1e-12)
+  expect_equal(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
+               log(psimplex(q, 0.4, 1, lower.tail = FALSE)), tolerance = 1e-12)
+})
+
+test_that("both tails keep full relative accuracy", {
+  # P(Y > y | mu) is computed by the exact reflection F(1-y | 1-mu), not as
+  # 1 - F(y), so the upper tail does not lose precision to cancellation.
+  for (mu in c(0.1, 0.5, 0.9)) {
+    for (phi in c(1e-3, 1, 100)) {
+      q <- seq(0.05, 0.95, by = 0.15)
+      expect_equal(psimplex(q, mu, phi, lower.tail = FALSE),
+                   psimplex(1 - q, 1 - mu, phi), tolerance = 1e-12)
+      expect_equal(psimplex(q, mu, phi) + psimplex(q, mu, phi, lower.tail = FALSE),
+                   rep(1, length(q)), tolerance = 1e-12)
+    }
+  }
+})

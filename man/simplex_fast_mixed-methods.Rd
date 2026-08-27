@@ -26,7 +26,7 @@
 
 \method{fitted}{simplex_fast_mixed}(object, model = c("mean", "dispersion"), ...)
 
-\method{residuals}{simplex_fast_mixed}(object, type = c("response", "pearson", "deviance"), ...)
+\method{residuals}{simplex_fast_mixed}(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
 \method{ranef}{simplex_fast_mixed}(object, postVar = FALSE, ...)
 

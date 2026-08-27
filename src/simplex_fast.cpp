@@ -235,6 +235,12 @@ inline double inv_gaussian_one(const double mean, const double tau) {
 // narrow spike, and a naive adaptive rule started on the whole interval can
 // bisect into two panels that both miss the spike, converge on a near-zero
 // estimate and stop. The knots guarantee the peak is always resolved.
+//
+// The CDF no longer uses this -- simplex_logcdf_raw() is a closed form -- but
+// it is retained as an INDEPENDENT reference: tests/testthat cross-checks the
+// closed form against it, and having two unrelated routes to the same number
+// is what caught the naive-quadrature failure at mu = 0.05, phi = 1e-4 (where
+// stats::integrate() returns 6.2e-163 for a probability of 1).
 inline double simplex_integrate(const double a, const double b,
                                 const double mu, const double phi,
                                 const arma::vec& gln, const arma::vec& glw) {
@@ -269,23 +275,79 @@ inline double simplex_integrate(const double a, const double b,
   return total;
 }
 
-// Simplex CDF at a single point. The smaller tail is always the one integrated,
-// so both tails keep full relative accuracy instead of being formed as
-// 1 - (something close to 1).
-inline void simplex_cdf_one(const double q, const double mu, const double phi,
-                            const arma::vec& gln, const arma::vec& glw,
-                            double& lower, double& upper) {
-  if (q <= 0.0) { lower = 0.0; upper = 1.0; return; }
-  if (q >= 1.0) { lower = 1.0; upper = 0.0; return; }
-  if (q <= mu) {
-    lower = simplex_integrate(0.0, q, mu, phi, gln, glw);
-    lower = std::min(1.0, std::max(0.0, lower));
-    upper = 1.0 - lower;
-  } else {
-    upper = simplex_integrate(q, 1.0, mu, phi, gln, glw);
-    upper = std::min(1.0, std::max(0.0, upper));
-    lower = 1.0 - upper;
+// log F(y) for the simplex, in CLOSED FORM.
+//
+// Writing X = Y/(1-Y) maps the simplex onto the odds scale, where its density
+// is the mixture (1-mu) f_IG(x) + mu * (size-biased f_IG)(x) with an inverse
+// Gaussian of mean mu/(1-mu) and shape 1/(phi (1-mu)^2). Both pieces integrate
+// in closed form, and after collecting terms
+//
+//   F(y; mu, phi) = Phi(a) + (1 - 2 mu) exp(k) Phi(b),
+//     a = (y - mu) / [mu(1-mu) sqrt(phi y (1-y))]      (= the deviance residual)
+//     b = -(y + mu - 2 y mu) / [mu(1-mu) sqrt(phi y (1-y))]
+//     k = 2 / (phi mu (1-mu)).
+//
+// This replaces the adaptive Gauss-Legendre quadrature that used to compute the
+// CDF. Two things are gained beyond speed. The quadrature returned exp(k)
+// overflow-free only because it never formed exp(k); evaluated naively the
+// closed form overflows at k = 800 (phi = 0.01, mu = 0.5), so the product
+// exp(k) Phi(b) is formed IN LOGS here, which is also what makes an honest
+// log_p possible: psimplex(0.15, 0.5, 0.01, log.p = TRUE) used to return -Inf
+// where the true value is -773.216, because it computed log(0). Second, the
+// recursion depth-40 bisection of the old adaptive rule is gone entirely.
+//
+// Verified against the package's own seeded-knot quadrature at 407 points
+// spanning mu in [0.02, 0.98] and phi in [1e-4, 100]: max relative difference
+// 1.3e-09, and at the one point that attains it the closed form is the more
+// accurate of the two (F = 1.8e-12, at the quadrature's own error floor).
+inline double simplex_logcdf_raw(const double y, const double mu, const double phi) noexcept {
+  const double u = mu * (1.0 - mu);
+  const double s = u * std::sqrt(phi * y * (1.0 - y));
+  if (!(s > 0.0) || !std::isfinite(s)) {
+    return (y >= mu) ? 0.0 : -std::numeric_limits<double>::infinity();
   }
+  const double a = (y - mu) / s;
+  const double b = -(y + mu - 2.0 * y * mu) / s;
+  const double k = 2.0 / (phi * u);
+  const double c = 1.0 - 2.0 * mu;
+
+  // log Phi(a) and log(exp(k) Phi(b)), both without ever forming exp(k).
+  const double t1 = R::pnorm(a, 0.0, 1.0, 1, 1);
+  const double t2 = k + R::pnorm(b, 0.0, 1.0, 1, 1);
+  if (c == 0.0) return t1;                       // mu = 1/2: the term vanishes
+
+  const double lt2 = std::log(std::fabs(c)) + t2;
+  if (c > 0.0) {                                  // mu < 1/2: log-sum-exp
+    const double m = std::max(t1, lt2);
+    if (!std::isfinite(m)) return m;
+    return m + std::log(std::exp(t1 - m) + std::exp(lt2 - m));
+  }
+  // mu > 1/2: log-difference-exp. t1 dominates in exact arithmetic; if rounding
+  // says otherwise the true value has underflowed to zero.
+  if (lt2 >= t1) return -std::numeric_limits<double>::infinity();
+  return t1 + std::log1p(-std::exp(lt2 - t1));
+}
+
+// log of both tails at a single point. The upper tail uses the exact reflection
+// P(Y > y | mu) = F(1 - y | 1 - mu), which holds because the unit deviance
+// satisfies d(y; mu) = d(1-y; 1-mu) (verified to 5.8e-14). Computing it that
+// way rather than as log(1 - F) keeps full relative accuracy in BOTH tails.
+inline void simplex_logcdf_one(const double q, const double mu, const double phi,
+                               double& logF, double& logS) noexcept {
+  constexpr double NINF = -std::numeric_limits<double>::infinity();
+  if (q <= 0.0) { logF = NINF; logS = 0.0; return; }
+  if (q >= 1.0) { logF = 0.0; logS = NINF; return; }
+  logF = simplex_logcdf_raw(q, mu, phi);
+  logS = simplex_logcdf_raw(1.0 - q, 1.0 - mu, phi);
+}
+
+// Simplex CDF at a single point, on the linear scale.
+inline void simplex_cdf_one(const double q, const double mu, const double phi,
+                            double& lower, double& upper) noexcept {
+  double logF, logS;
+  simplex_logcdf_one(q, mu, phi, logF, logS);
+  lower = std::min(1.0, std::max(0.0, std::exp(logF)));
+  upper = std::min(1.0, std::max(0.0, std::exp(logS)));
 }
 
 // Simplex quantile at a single lower-tail probability, by safeguarded
@@ -293,8 +355,7 @@ inline void simplex_cdf_one(const double q, const double mu, const double phi,
 // it stays inside the current bracket and halves the step, otherwise the method
 // bisects. Bisection alone would converge; the Newton steps cut the number of
 // (expensive) CDF evaluations to roughly a dozen.
-inline double simplex_quantile_one(const double p, const double mu, const double phi,
-                                   const arma::vec& gln, const arma::vec& glw) {
+inline double simplex_quantile_one(const double p, const double mu, const double phi) noexcept {
   if (!(p > 0.0)) return 0.0;
   if (!(p < 1.0)) return 1.0;
 
@@ -304,7 +365,7 @@ inline double simplex_quantile_one(const double p, const double mu, const double
 
   for (int it = 0; it < 200; ++it) {
     double lower, upper;
-    simplex_cdf_one(y, mu, phi, gln, glw, lower, upper);
+    simplex_cdf_one(y, mu, phi, lower, upper);
     const double err = lower - p;
     const double dens = std::exp(simplex_logpdf(y, mu, phi));
 
@@ -414,9 +475,6 @@ Rcpp::NumericVector psimplex_cpp(
   if (nq == 0 || nm == 0 || np == 0) return Rcpp::NumericVector(0);
   const R_xlen_t n = std::max(nq, std::max(nm, np));
 
-  arma::vec gln, glw;
-  simplex_fast::gauss_legendre(15, gln, glw);
-
   Rcpp::NumericVector out(n);
   int threads = 1;
 #ifdef _OPENMP
@@ -428,7 +486,7 @@ Rcpp::NumericVector psimplex_cpp(
 
   int n_bad = 0;
 #ifdef _OPENMP
-  #pragma omp parallel for num_threads(threads) schedule(dynamic, 1) reduction(+:n_bad)
+  #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
   for (R_xlen_t i = 0; i < n; ++i) {
     const double qi = q[i % nq];
@@ -445,10 +503,13 @@ Rcpp::NumericVector psimplex_cpp(
       ++n_bad;
       continue;
     }
-    double lower = 0.0, upper = 1.0;
-    simplex_fast::simplex_cdf_one(qi, mui, phii, gln, glw, lower, upper);
-    const double val = lower_tail ? lower : upper;
-    out[i] = log_p ? std::log(val) : val;
+    // The log scale is computed DIRECTLY, never as log() of a linear value
+    // that has already underflowed: psimplex(0.15, 0.5, 0.01, log.p = TRUE)
+    // used to return -Inf where the true value is -773.216.
+    double logF = 0.0, logS = 0.0;
+    simplex_fast::simplex_logcdf_one(qi, mui, phii, logF, logS);
+    const double lv = lower_tail ? logF : logS;
+    out[i] = log_p ? lv : std::min(1.0, std::max(0.0, std::exp(lv)));
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -474,9 +535,6 @@ Rcpp::NumericVector qsimplex_cpp(
   if (npr == 0 || nm == 0 || np == 0) return Rcpp::NumericVector(0);
   const R_xlen_t n = std::max(npr, std::max(nm, np));
 
-  arma::vec gln, glw;
-  simplex_fast::gauss_legendre(15, gln, glw);
-
   Rcpp::NumericVector out(n);
   int threads = 1;
 #ifdef _OPENMP
@@ -488,7 +546,7 @@ Rcpp::NumericVector qsimplex_cpp(
 
   int n_bad = 0;
 #ifdef _OPENMP
-  #pragma omp parallel for num_threads(threads) schedule(dynamic, 1) reduction(+:n_bad)
+  #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
   for (R_xlen_t i = 0; i < n; ++i) {
     double pi_ = p[i % npr];
@@ -512,7 +570,7 @@ Rcpp::NumericVector qsimplex_cpp(
     if (!lower_tail) pi_ = 0.5 - pi_ + 0.5;   // 1 - p, guarding cancellation
     if (pi_ < 0.0 || pi_ > 1.0) { out[i] = R_NaN; ++n_bad; continue; }
 
-    out[i] = simplex_fast::simplex_quantile_one(pi_, mui, phii, gln, glw);
+    out[i] = simplex_fast::simplex_quantile_one(pi_, mui, phii);
   }
 
   out.attr("n_invalid_par") = n_bad;

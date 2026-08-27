@@ -49,11 +49,31 @@ test_that("model.matrix rebuilds from the model frame when x is not stored", {
   expect_error(model.matrix(fit_none, "mean"), "Refit with")
 })
 
-test_that("deviance equals the sum of squared deviance residuals", {
-  fit <- make_fit()$fit
+test_that("deviance is informative by default and scaled on request", {
+  obj <- make_fit()
+  fit <- obj$fit
   rdev <- residuals(fit, type = "deviance")
-  expect_equal(deviance(fit), sum(rdev^2))
-  expect_true(is.finite(deviance(fit)))
+
+  # The SCALED deviance is the sum of squared deviance residuals -- and is
+  # identically nobs whenever the dispersion submodel has an intercept, because
+  # that is exactly what the score equation for gamma forces. It therefore
+  # cannot distinguish two models, which is why it is no longer the default.
+  expect_equal(deviance(fit, type = "scaled"), sum(rdev^2))
+  expect_equal(deviance(fit, type = "scaled"), as.numeric(nobs(fit)),
+               tolerance = 1e-6)
+
+  # The default is the UNSCALED deviance, which does respond to the mean model.
+  expect_equal(deviance(fit), sum(rdev^2 * fitted(fit, "dispersion")))
+  expect_false(isTRUE(all.equal(deviance(fit), as.numeric(nobs(fit)),
+                                tolerance = 1e-3)))
+
+  dat <- obj$dat
+  bigger <- fastsimplexreg(y ~ x1 + x2 + I(x1^2) | z1, data = dat,
+                           n_threads = 1L)
+  expect_false(isTRUE(all.equal(deviance(fit), deviance(bigger))))
+  # ... where the scaled version would have been identical for both.
+  expect_equal(deviance(fit, type = "scaled"),
+               deviance(bigger, type = "scaled"), tolerance = 1e-5)
 })
 
 test_that("all residual types are finite and correctly signed", {
@@ -242,4 +262,49 @@ test_that("fitted, residuals and predict carry the observation labels", {
   expect_identical(names(residuals(fit)), rownames(dat))
   expect_identical(names(predict(fit, newdata = dat[5:8, ])),
                    rownames(dat)[5:8])
+})
+
+
+# Randomized quantile residuals (Dunn and Smyth, 1996). Under a correct model
+# these are EXACTLY standard normal, which neither Pearson nor deviance
+# residuals are once the fitted means move away from 1/2.
+test_that("quantile residuals are standard normal under a correct model", {
+  set.seed(505)
+  rate <- function(b0, phi0, B = 60L, n = 300L) {
+    rej <- vapply(seq_len(B), function(b) {
+      d <- data.frame(x1 = rnorm(n))
+      d$y <- rsimplex(n, simplex_linkinv(b0 + 0.8 * d$x1, "logit"), phi0)
+      f <- suppressWarnings(fastsimplexreg(y ~ x1, data = d, n_threads = 1L,
+                                           inference = FALSE))
+      c(quantile = stats::shapiro.test(residuals(f, "quantile"))$p.value,
+        pearson = stats::shapiro.test(residuals(f, "pearson"))$p.value) < 0.05
+    }, logical(2))
+    rowMeans(rej)
+  }
+
+  # Means near 1/2: both behave.
+  centred <- rate(0.0, 1)
+  expect_lt(centred[["quantile"]], 0.20)
+  # Means away from 1/2: Pearson rejects almost every CORRECT model, quantile
+  # residuals hold their nominal rate.
+  skewed <- rate(-1.4, 1)
+  expect_lt(skewed[["quantile"]], 0.20)
+  expect_gt(skewed[["pearson"]], 0.70)
+})
+
+test_that("quantile residuals are finite, named and the plot default", {
+  obj <- make_fit()
+  fit <- obj$fit
+  r <- residuals(fit)                       # default type
+  expect_equal(r, residuals(fit, "quantile"))
+  expect_true(all(is.finite(r)))
+  expect_identical(names(r), names(fitted(fit)))
+  # Standard normal: mean ~ 0, sd ~ 1 on a correct model.
+  expect_lt(abs(mean(r)), 0.15)
+  expect_equal(stats::sd(r), 1, tolerance = 0.1)
+
+  expect_identical(
+    eval(formals(fastsimplexreg:::residuals.simplex_fast)$type)[1L], "quantile")
+  expect_identical(
+    eval(formals(fastsimplexreg:::plot.simplex_fast)$type)[1L], "quantile")
 })

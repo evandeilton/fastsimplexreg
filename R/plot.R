@@ -48,7 +48,7 @@
 #' @export
 plot.simplex_fast <- function(x,
                               which = 1:4,
-                              type = c("deviance", "pearson", "response"),
+                              type = c("quantile", "deviance", "pearson", "response"),
                               smooth = TRUE,
                               ...) {
   .simplex_diag_plot(x, which = which, type = match.arg(type), smooth = smooth)
@@ -60,7 +60,7 @@ plot.simplex_fast <- function(x,
 # generic accessors residuals()/fitted() and on x$residuals, so it applies to
 # any fitted object exposing them.
 .simplex_diag_plot <- function(x, which = 1:4,
-                               type = c("deviance", "pearson", "response"),
+                               type = c("quantile", "deviance", "pearson", "response"),
                                smooth = TRUE) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for the diagnostic plots.", call. = FALSE)

@@ -28,9 +28,13 @@
 #'   \item{`confint`}{Returns Wald confidence intervals
 #'     \eqn{\hat\theta \pm z_{1-\alpha/2}\,\mathrm{SE}(\hat\theta)}, using the
 #'     covariance matrix from `vcov`.}
-#'   \item{`deviance`}{Returns the scaled deviance
-#'     \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, equal to the sum of squared
-#'     deviance residuals.}
+#'   \item{`deviance`}{Returns the unscaled deviance
+#'     \eqn{\sum_i d(y_i;\hat\mu_i)}. `type = "scaled"` gives
+#'     \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, the sum of squared deviance
+#'     residuals -- but note that this is identically `nobs(object)` whenever
+#'     the dispersion submodel contains an intercept, since that is what the
+#'     score equation for \eqn{\gamma} forces, so it cannot distinguish two
+#'     models.}
 #'   \item{`model.matrix`}{Returns the mean (`model = "mean"`) or dispersion
 #'     (`model = "dispersion"`) design matrix. Requires the fit to have stored
 #'     the design (`x = TRUE`) or the model frame (`model = TRUE`).}
@@ -54,8 +58,10 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"response"`, `"pearson"` or
-#'   `"deviance"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; randomized
+#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+#'   standard normal under a correct model), `"response"`, `"pearson"` or
+#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param parm For `confint`, a specification of which parameters to report,
 #'   either a vector of numeric indices or of names. Defaults to all.
 #' @param level For `confint`, the confidence level.
@@ -141,7 +147,7 @@ fitted.simplex_fast <- function(object, model = c("mean", "dispersion"), ...) {
 
 #' @rdname simplex_fast-methods
 #' @export
-residuals.simplex_fast <- function(object, type = c("response", "pearson", "deviance"), ...) {
+residuals.simplex_fast <- function(object, type = c("quantile", "response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
   .simplex_pad(object, .simplex_resid_raw(object, type))
 }
@@ -150,12 +156,21 @@ residuals.simplex_fast <- function(object, type = c("response", "pearson", "devi
 
 #' @rdname simplex_fast-methods
 #' @export
-deviance.simplex_fast <- function(object, ...) {
+deviance.simplex_fast <- function(object,
+                                  type = c("unscaled", "scaled"), ...) {
+  type <- match.arg(type)
   mu <- object$fitted.values
   y <- .simplex_response(object)
-  phi <- object$dispersion.values
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-  sum(d / phi)
+  # The SCALED deviance carries no information whenever the dispersion submodel
+  # has an intercept: the score equation for gamma is sum(-1/2 + dev/(2 phi)) = 0
+  # over the columns of Z, so an intercept forces sum(dev_i / phi_i) = nobs
+  # EXACTLY. Measured across five different specifications on the same data it
+  # returned 250.0000 every time while the log-likelihood ranged from 70.8 to
+  # 309.1. The default is therefore the UNSCALED deviance, which does respond to
+  # the mean submodel.
+  if (type == "scaled") return(sum(d / object$dispersion.values))
+  sum(d)
 }
 
 
@@ -491,7 +506,7 @@ summary.simplex_fast <- function(object, ...) {
       logLik = object$logLik,
       AIC = object$AIC,
       BIC = object$BIC,
-      deviance = stats::deviance(object),
+      deviance = stats::deviance(object),   # unscaled; see ?deviance.simplex_fast
       nobs = object$nobs,
       convergence = object$convergence,
       message = object$message,

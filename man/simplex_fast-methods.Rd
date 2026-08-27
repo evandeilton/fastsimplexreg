@@ -27,9 +27,9 @@
 
 \method{fitted}{simplex_fast}(object, model = c("mean", "dispersion"), ...)
 
-\method{residuals}{simplex_fast}(object, type = c("response", "pearson", "deviance"), ...)
+\method{residuals}{simplex_fast}(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
-\method{deviance}{simplex_fast}(object, ...)
+\method{deviance}{simplex_fast}(object, type = c("unscaled", "scaled"), ...)
 
 \method{model.matrix}{simplex_fast}(object, model = c("mean", "dispersion"), ...)
 
@@ -52,8 +52,10 @@ named \code{object}, \code{x} or \code{formula} to match the corresponding gener
 
 \item{...}{Additional arguments, currently ignored.}
 
-\item{type}{For \code{residuals}, one of \code{"response"}, \code{"pearson"} or
-\code{"deviance"}.}
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomized
+quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+standard normal under a correct model), \code{"response"}, \code{"pearson"} or
+\code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
 
 \item{formula.}{For \code{update}, a change to the model formula, following the
 conventions of \code{\link[stats:update.formula]{stats::update.formula()}}; the two-part mean/dispersion
@@ -102,9 +104,13 @@ simplex unit deviance
 \item{\code{confint}}{Returns Wald confidence intervals
 \eqn{\hat\theta \pm z_{1-\alpha/2}\,\mathrm{SE}(\hat\theta)}, using the
 covariance matrix from \code{vcov}.}
-\item{\code{deviance}}{Returns the scaled deviance
-\eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, equal to the sum of squared
-deviance residuals.}
+\item{\code{deviance}}{Returns the unscaled deviance
+\eqn{\sum_i d(y_i;\hat\mu_i)}. \code{type = "scaled"} gives
+\eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, the sum of squared deviance
+residuals -- but note that this is identically \code{nobs(object)} whenever
+the dispersion submodel contains an intercept, since that is what the
+score equation for \eqn{\gamma} forces, so it cannot distinguish two
+models.}
 \item{\code{model.matrix}}{Returns the mean (\code{model = "mean"}) or dispersion
 (\code{model = "dispersion"}) design matrix. Requires the fit to have stored
 the design (\code{x = TRUE}) or the model frame (\code{model = TRUE}).}

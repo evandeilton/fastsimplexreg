@@ -151,7 +151,7 @@ fitted.simplex_fast_mixed <- function(object, model = c("mean", "dispersion"), .
 
 #' @rdname simplex_fast_mixed-methods
 #' @export
-residuals.simplex_fast_mixed <- function(object, type = c("response", "pearson", "deviance"), ...) {
+residuals.simplex_fast_mixed <- function(object, type = c("quantile", "response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
   .simplex_pad(object, .simplex_resid_raw(object, type))
 }
@@ -351,7 +351,7 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
 #' @seealso [fastsimplexregmixed()], [plot.simplex_fast()]
 #' @export
 plot.simplex_fast_mixed <- function(x, which = 1:4,
-                                    type = c("deviance", "pearson", "response"),
+                                    type = c("quantile", "deviance", "pearson", "response"),
                                     smooth = TRUE, ...) {
   .simplex_diag_plot(x, which = which, type = match.arg(type), smooth = smooth)
 }
