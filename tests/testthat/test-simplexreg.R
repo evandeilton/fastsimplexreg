@@ -208,3 +208,57 @@ test_that("subset selects the rows the fit is actually computed on", {
   expect_equal(coef(sub), coef(manual))
   expect_equal(nobs(sub), sum(dat$grp == "a"))
 })
+
+
+# Badly scaled designs. Until 0.2.4 the first trial step was 1.0 in the units of
+# the RAW gradient, whose magnitude is set by the units of the design. With a
+# covariate scaled by 1e5 the gradient norm reaches ~1e8, a unit step overshoots
+# by eight orders of magnitude, and the 40 available halvings bottom out at
+# 2^-40 without reaching a decrease -- so the fit stopped at iteration 1 with
+# code 2 and a log-likelihood 155.5 units below the optimum that nlminb()
+# reaches on the identical objective.
+test_that("a badly scaled design converges to the same optimum as nlminb", {
+  mk <- function(scale, seed = 1L) {
+    set.seed(seed)
+    n <- 400L
+    x <- rnorm(n) * scale
+    d <- data.frame(x1 = x)
+    d$y <- rsimplex(n, simplex_linkinv(0.3 + (0.5 / scale) * x, "logit"), 1)
+    d
+  }
+  for (scale in c(1e2, 1e4, 1e5, 1e6, 1e8)) {
+    d <- mk(scale)
+    fit <- fastsimplexreg(y ~ x1, data = d, n_threads = 1L, inference = FALSE)
+    X <- cbind(1, d$x1)
+    Z <- matrix(1, nrow(d), 1L)
+    obj <- function(th) fastsimplexreg:::simplex_eval_cpp(th, d$y, X, Z, 1L, 1L)$value
+    gr <- function(th) fastsimplexreg:::simplex_eval_cpp(th, d$y, X, Z, 1L, 1L)$gradient
+    ref <- stats::nlminb(c(0, 0, 0), obj, gr,
+                         control = list(rel.tol = 1e-14, iter.max = 1000L))
+
+    expect_identical(fit$convergence, 0L, info = format(scale))
+    expect_equal(fit$logLik, -ref$objective, tolerance = 1e-6,
+                 info = format(scale))
+  }
+})
+
+test_that("scaling the first step does not cost evaluations on ordinary fits", {
+  # The scaling is restricted to the state where H is still the identity.
+  # Applying it on every iteration would be a serious regression; restricted, it
+  # is cheaper, because the very first step no longer wastes halvings.
+  total <- 0L
+  for (s in 1:10) {
+    set.seed(s)
+    n <- 500L
+    d <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1L, 0.4), z1 = rnorm(n))
+    d$y <- rsimplex(n, simplex_linkinv(0.2 + 0.7 * d$x1 - 0.4 * d$x2, "logit"),
+                    exp(-0.5 + 0.4 * d$z1))
+    f <- fastsimplexreg(y ~ x1 + x2 | z1, data = d, n_threads = 1L,
+                        inference = FALSE)
+    expect_identical(f$convergence, 0L)
+    total <- total + f$function_evaluations
+  }
+  # Measured at 1379 evaluations before the change and 1073 after, over 20 fits;
+  # this half of the grid must stay comfortably under the old budget.
+  expect_lt(total, 900L)
+})
