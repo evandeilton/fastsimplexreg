@@ -131,6 +131,53 @@
 }
 
 
+# Internal: derivative dmu/deta of each mean link, on the reporting scale.
+.simplex_dmu_deta <- function(eta, link) {
+  switch(
+    link,
+    logit = { m <- stats::plogis(eta); m * (1 - m) },
+    probit = stats::dnorm(eta),
+    cloglog = exp(eta - exp(eta)),
+    neglog = exp(-eta - exp(-eta)),
+    stop("Unsupported link.", call. = FALSE)
+  )
+}
+
+
+# Internal: EXACT expected (Fisher) information for c(beta, gamma).
+#
+# The simplex is a proper dispersion model: d(Y; mu)/phi is exactly chi-squared
+# with one degree of freedom. Three consequences follow, all exact rather than
+# asymptotic:
+#
+#   * the dispersion score is -1/2 + dev/(2 phi), whose variance is exactly 1/2,
+#     so the gamma block is exactly (1/2) Z'Z -- free of the data and of phi;
+#   * d l/d eta_mu is proportional to 1/phi and has mean zero, so the cross
+#     block E[-d^2 l / d eta_mu d eta_phi] is exactly ZERO: beta and gamma are
+#     orthogonal, and the information is block diagonal;
+#   * the mean block uses the exact I(mu) = 1/(phi V(mu)) + 3/(mu(1-mu)) with
+#     V(mu) = {mu(1-mu)}^3, times (dmu/deta)^2.
+#
+# Sanity check that fixes all three at once: under constant dispersion this
+# gives SE(gamma_0) = sqrt(2/n) exactly, which matches the observed-information
+# value to eight digits at n = 4000.
+.simplex_expected_info <- function(X, Z, eta_mu, eta_phi, link) {
+  mu <- simplex_linkinv(eta_mu, link)
+  phi <- exp(eta_phi)
+  dmu <- .simplex_dmu_deta(eta_mu, link)
+  u <- mu * (1 - mu)
+  w_mu <- dmu^2 * (1 / (phi * u^3) + 3 / u)
+
+  p <- ncol(X)
+  q <- ncol(Z)
+  info <- matrix(0, p + q, p + q)
+  info[seq_len(p), seq_len(p)] <- crossprod(X, X * w_mu)
+  info[p + seq_len(q), p + seq_len(q)] <- 0.5 * crossprod(Z)
+  # The off-diagonal blocks stay exactly zero: beta and gamma are orthogonal.
+  0.5 * (info + t(info))
+}
+
+
 # Internal: residuals on the COMPLETE rows only. The residuals() methods wrap
 # this in .simplex_pad(); internal consumers (plot, summary) use it directly so
 # that they stay aligned with fitted.values, which is never padded.

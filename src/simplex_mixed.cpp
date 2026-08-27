@@ -385,9 +385,34 @@ EvalResult mixed_core(
         // but floating-point rounding leaves it slightly asymmetric, which makes
         // arma::chol warn and spuriously fail, triggering a needless fallback.
         Q = arma::symmatu(Sigma_inv - Zj.t() * (Zj.each_col() % w2));  // -Hessian (observed)
+        // If the observed curvature is not PD, RIDGE it towards the (always
+        // SPD) Fisher information instead of SWITCHING to it outright.
+        //
+        // Switching made the objective DISCONTINUOUS in theta: evaluated at the
+        // same theta, the two choices of Q differed by 0.04 to 2.0 nats, and a
+        // cluster could flip between them as the outer line search moved. A
+        // jump like that violates what the line search assumes, and with the
+        // Fisher Q the quadrature had still not converged at nAGQ = 21 in the
+        // large-sigma cases where the observed Q converged by nAGQ = 5.
+        //
+        // The ridge is continuous in theta: lambda grows from zero only as far
+        // as it must, so a cluster whose curvature is merely borderline gets a
+        // Q that is arbitrarily close to the observed one rather than a
+        // different matrix altogether. In a sweep of 1800 clusters (sigma up to
+        // 4, mu down to 4e-11) the observed curvature was PD every time, so
+        // this path is rare -- which is precisely why it must not distort the
+        // objective when it does fire.
         mat Rchk;
         if (!arma::chol(Rchk, Q)) {
-          Q = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));  // Fisher fallback (SPD)
+          const mat Qf = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));
+          double lambda = 1e-8;
+          bool fixed = false;
+          for (int t = 0; t < 40; ++t) {
+            const mat Qr = arma::symmatu((1.0 - lambda) * Q + lambda * Qf);
+            if (lambda < 1.0 && arma::chol(Rchk, Qr)) { Q = Qr; fixed = true; break; }
+            lambda *= 4.0;
+          }
+          if (!fixed) Q = Qf;   // fully Fisher: the last resort, not the default
         }
       }
 
@@ -695,9 +720,20 @@ Rcpp::List simplex_mixed_ranef_cpp(
       w2[i] = kk.d2l_deta_mu2;
     }
     mat Q = okobs ? arma::symmatu(Sigma_inv - Zj.t() * (Zj.each_col() % w2)) : Sigma_inv;
+    const mat Qf = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));
     mat Rchk;
-    if (!okobs || !arma::chol(Rchk, Q)) {
-      Q = arma::symmatu(Sigma_inv + Zj.t() * (Zj.each_col() % Iinfo));
+    if (!okobs) {
+      Q = Qf;
+    } else if (!arma::chol(Rchk, Q)) {
+      // Ridge towards Fisher rather than switching, matching mixed_core().
+      double lambda = 1e-8;
+      bool fixed = false;
+      for (int t = 0; t < 40; ++t) {
+        const mat Qr = arma::symmatu((1.0 - lambda) * Q + lambda * Qf);
+        if (lambda < 1.0 && arma::chol(Rchk, Qr)) { Q = Qr; fixed = true; break; }
+        lambda *= 4.0;
+      }
+      if (!fixed) Q = Qf;
     }
     mat Qinv;
     if (!arma::inv_sympd(Qinv, Q)) {

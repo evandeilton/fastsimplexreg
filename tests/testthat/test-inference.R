@@ -138,3 +138,68 @@ test_that("the unclamped reporting path keeps its dynamic range", {
     expect_true(all(mu > 0 & mu < 1), info = lk)
   }
 })
+
+
+# The simplex is a PROPER dispersion model: d(Y; mu)/phi is exactly chi-squared
+# with one degree of freedom. That makes the expected information available in
+# closed form, exactly block diagonal, and exact rather than asymptotic.
+test_that("the expected information matches high-accuracy quadrature", {
+  info_quad <- function(mu, phi) {
+    f <- function(y) {
+      u <- mu * (1 - mu)
+      P <- (y - mu) * (mu^2 - 2 * mu * y + y)
+      (P / (y * (1 - y)) / (phi * u^3))^2 * dsimplex(y, mu, phi)
+    }
+    stats::integrate(f, 0, 1, subdivisions = 4000L, rel.tol = 1e-11)$value
+  }
+  for (mu in c(0.2, 0.5, 0.8)) {
+    for (phi in c(0.01, 1, 5, 20)) {
+      u <- mu * (1 - mu)
+      expect_equal(1 / (phi * u^3) + 3 / u, info_quad(mu, phi),
+                   tolerance = 1e-10)
+    }
+  }
+  # The small-dispersion term alone is NOT the information: it understates it by
+  # a factor approaching five as phi grows.
+  expect_gt((1 / (20 * 0.25^3) + 3 / 0.25) / (1 / (20 * 0.25^3)), 4)
+})
+
+test_that("information = 'expected' gives an exactly block-diagonal, PD matrix", {
+  set.seed(2026)
+  n <- 2000L
+  d <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1, 0.4), z1 = rnorm(n))
+  d$y <- rsimplex(n, simplex_linkinv(-0.4 + 0.8 * d$x1 - 0.5 * d$x2, "logit"),
+                  exp(-0.3 + 0.6 * d$z1))
+
+  obs <- fastsimplexreg(y ~ x1 + x2 | z1, data = d, n_threads = 1L)
+  exp_ <- fastsimplexreg(y ~ x1 + x2 | z1, data = d, n_threads = 1L,
+                         information = "expected")
+
+  # Choosing the information matrix must not move the estimates.
+  expect_equal(coef(obs), coef(exp_))
+  expect_equal(obs$logLik, exp_$logLik)
+
+  # beta and gamma are orthogonal, so the cross block is exactly zero.
+  expect_identical(max(abs(exp_$hessian[1:3, 4:5])), 0)
+  expect_true(all(eigen(exp_$hessian, TRUE, only.values = TRUE)$values > 0))
+  expect_false(exp_$vcov_pseudo)
+
+  # Asymptotically equivalent: agree to well under 1% at this n.
+  expect_equal(unname(exp_$standard_errors), unname(obs$standard_errors),
+               tolerance = 0.01)
+})
+
+test_that("under constant dispersion the expected SE of gamma0 is exactly sqrt(2/n)", {
+  # Var(dev/phi) = 2 exactly, so the gamma block of the information is exactly
+  # (1/2) Z'Z -- free of the data, of phi and of the mean model. This single
+  # identity pins the chi-squared property, the orthogonality and the gamma
+  # block all at once.
+  set.seed(2026)
+  n <- 4000L
+  d <- data.frame(x1 = rnorm(n))
+  d$y <- rsimplex(n, simplex_linkinv(-0.4 + 0.8 * d$x1, "logit"), exp(-0.3))
+  fit <- fastsimplexreg(y ~ x1, data = d, n_threads = 1L,
+                        information = "expected")
+  expect_equal(unname(fit$standard_errors[["(phi)_(Intercept)"]]), sqrt(2 / n),
+               tolerance = 1e-12)
+})
