@@ -72,8 +72,11 @@ plot.simplex_fast <- function(x,
   }
   which <- sort(unique(which))
 
+  # Unpadded throughout: fitted.values, x$residuals and .simplex_resid_raw()
+  # are all over the COMPLETE rows. Calling residuals() here would return the
+  # na.exclude-padded vector and the lengths would no longer match.
   mu <- x$fitted.values
-  res <- residuals(x, type = type)
+  res <- .simplex_resid_raw(x, type)
   y <- mu + x$residuals
   n <- length(res)
   res_label <- paste0(

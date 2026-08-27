@@ -223,6 +223,26 @@
 }
 
 
+# Internal: detect columns of a design matrix that are aliased (linearly
+# dependent on earlier columns), using the same pivoted QR that lm() uses.
+#
+# Without this the optimiser happily converges on a rank-deficient design and
+# reports a finite estimate for EVERY column, splitting one identified effect
+# arbitrarily across the collinear group. With x2 = 2 * x1 it returned
+# x1 = 0.105 and x2 = 0.210, two numbers that mean nothing individually --
+# only x1 + 2*x2 = 0.524 is identified, which is exactly the coefficient the
+# reduced model gives. lm()/glm() report NA for the aliased column instead.
+#
+# Returns a logical vector over the columns, TRUE where aliased.
+.simplex_aliased <- function(M) {
+  if (ncol(M) == 0L) return(logical(0))
+  qrM <- qr(M, tol = 1e-7, LAPACK = FALSE)
+  aliased <- rep(TRUE, ncol(M))
+  if (qrM$rank > 0L) aliased[qrM$pivot[seq_len(qrM$rank)]] <- FALSE
+  aliased
+}
+
+
 # Internal helper: stable, link-specific starting values c(beta, gamma).
 .simplex_start <- function(y, X, Z, link) {
   p <- ncol(X)
@@ -384,6 +404,29 @@ fastsimplexreg <- function(
   response <- design$y
   X <- design$X
   Z <- design$Z
+
+  # Drop aliased columns before fitting and put NA back afterwards, as lm()
+  # does. Fitting on the full rank-deficient design would return an arbitrary
+  # split of one identified effect across the collinear group.
+  alias_x <- .simplex_aliased(X)
+  alias_z <- .simplex_aliased(Z)
+  if (any(alias_x) || any(alias_z)) {
+    warning("Design is rank deficient: ",
+            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
+                  collapse = ", "),
+            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
+            " a linear combination of the other columns and cannot be ",
+            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
+  }
+  X_full <- X
+  Z_full <- Z
+  X <- X[, !alias_x, drop = FALSE]
+  Z <- Z[, !alias_z, drop = FALSE]
+  if (ncol(X) == 0L || ncol(Z) == 0L) {
+    stop("Every column of the ", if (ncol(X) == 0L) "mean" else "dispersion",
+         " design is aliased; the model has no estimable parameters.",
+         call. = FALSE)
+  }
   p <- ncol(X)
   q <- ncol(Z)
   # numeric(0) is the backend's "no offset" sentinel.
@@ -427,7 +470,7 @@ fastsimplexreg <- function(
   pred <- simplex_predict_cpp(theta, X, Z, mean_link = link_spec$id,
                               off_mu_ = off_mu, off_phi_ = off_phi)
   logLik_value <- -as.numeric(opt$value)
-  k <- length(theta)
+  k <- length(theta)          # estimable parameters only (aliased ones dropped)
   n <- length(response)
 
   converged <- as.integer(opt$convergence) == 0L
@@ -474,9 +517,35 @@ fastsimplexreg <- function(
   # Saturation of the mean link is reported, not applied silently.
   .warn_saturated(opt$n_saturated, n, what = "fastsimplexreg()")
 
+  # Observation labels, so fitted()/residuals()/predict() can be aligned back to
+  # the source rows without assuming row order; and the na.action object, so
+  # na.exclude() can actually do what it promises (see .simplex_pad()).
+  obs_names <- rownames(design$model)
+  na_act <- attr(design$model, "na.action")
+
+  # Re-expand to the FULL design: aliased coefficients are reported as NA, like
+  # lm(), never as an arbitrary share of an identified effect. vcov/hessian stay
+  # over the ESTIMABLE parameters only -- there is no curvature in an aliased
+  # direction to report.
+  aliased <- c(alias_x, alias_z)
+  names(aliased) <- .simplex_par_names(colnames(X_full), colnames(Z_full))
+  if (any(aliased)) {
+    theta_full <- stats::setNames(rep(NA_real_, length(aliased)), names(aliased))
+    theta_full[!aliased] <- theta
+    se_full <- stats::setNames(rep(NA_real_, length(aliased)), names(aliased))
+    se_full[!aliased] <- se
+    theta_est <- theta
+    theta <- theta_full
+    se <- se_full
+  } else {
+    theta_est <- theta
+  }
+  p_full <- ncol(X_full)
+  q_full <- ncol(Z_full)
+
   coefficients <- list(
-    mean = stats::setNames(theta[seq_len(p)], colnames(X)),
-    dispersion = stats::setNames(theta[p + seq_len(q)], colnames(Z))
+    mean = stats::setNames(theta[seq_len(p_full)], colnames(X_full)),
+    dispersion = stats::setNames(theta[p_full + seq_len(q_full)], colnames(Z_full))
   )
 
   out <- list(
@@ -485,6 +554,7 @@ fastsimplexreg <- function(
     link = list(mean = link_spec$name, dispersion = "log"),
     coefficients = coefficients,
     par = theta,
+    aliased = aliased,
     standard_errors = stats::setNames(se, names(theta)),
     vcov = vc,
     vcov_rank = vcov_rank,
@@ -493,13 +563,14 @@ fastsimplexreg <- function(
     vcov_condition = vcov_condition,
     n_saturated = as.integer(opt$n_saturated),
     hessian = hessian,
-    fitted.values = as.numeric(pred$mu),
-    dispersion.values = as.numeric(pred$phi),
+    na.action = na_act,
+    fitted.values = stats::setNames(as.numeric(pred$mu), obs_names),
+    dispersion.values = stats::setNames(as.numeric(pred$phi), obs_names),
     linear.predictors = list(
-      mean = as.numeric(pred$eta_mu),
-      dispersion = as.numeric(pred$eta_phi)
+      mean = stats::setNames(as.numeric(pred$eta_mu), obs_names),
+      dispersion = stats::setNames(as.numeric(pred$eta_phi), obs_names)
     ),
-    residuals = response - as.numeric(pred$mu),
+    residuals = stats::setNames(response - as.numeric(pred$mu), obs_names),
     logLik = logLik_value,
     AIC = -2 * logLik_value + 2 * k,
     BIC = -2 * logLik_value + log(n) * k,
@@ -526,7 +597,7 @@ fastsimplexreg <- function(
   )
 
   if (isTRUE(model)) out$model <- design$model
-  if (isTRUE(x)) out$x <- list(mean = X, dispersion = Z)
+  if (isTRUE(x)) out$x <- list(mean = X_full, dispersion = Z_full)
   if (isTRUE(y)) out$y <- response
 
   structure(out, class = "simplex_fast")

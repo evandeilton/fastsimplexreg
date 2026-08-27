@@ -1,37 +1,66 @@
 # Inference must never present a missing standard error as a confident one.
 # These tests pin the fail-safe behaviour introduced in 0.2.3 (see R/inference.R).
 
-test_that("a rank-deficient Hessian yields NA standard errors, not zeros", {
+test_that("an exactly collinear column is dropped and reported as NA", {
   set.seed(3L)
   n <- 300L
   dat <- data.frame(x1 = rnorm(n))
-  # Exactly duplicated, so the degeneracy is exact in every arithmetic and the
-  # verdict cannot depend on which BLAS computed the Hessian. (A near-collinear
-  # design with sd = 1e-7 puts the degenerate eigenvalue around 1e-13, which is
-  # still five orders below the cut-off, but an exact duplicate leaves nothing
-  # to chance.)
-  dat$x2 <- dat$x1
+  dat$x2 <- dat$x1                       # exact duplicate
   dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
 
-  # Whether the degenerate direction lands just below zero ("not positive
-  # definite") or just above it ("rank deficient") is a rounding accident; both
-  # must warn and both must withhold the standard error.
+  # From 0.2.4 the rank deficiency is caught in the DESIGN, before fitting, by
+  # the same pivoted QR lm() uses -- rather than being left to surface as a
+  # singular Hessian afterwards. Fitting the full design returned a finite
+  # estimate for both columns, an arbitrary split of the one identified effect.
   expect_warning(fit <- fastsimplexreg(y ~ x1 + x2, data = dat, n_threads = 1L),
-                 "not positive definite|rank deficient")
+                 "rank deficient")
   expect_identical(fit$convergence, 0L)
-  expect_true(fit$vcov_pseudo)
-  expect_lt(fit$vcov_rank, length(fit$par))
+  expect_true(fit$aliased[["x2"]])
+  expect_false(fit$aliased[["x1"]])
 
-  se <- fit$standard_errors
-  # The collinear pair is unidentified: NA, never 0.
-  expect_true(all(is.na(se[c("x1", "x2")])))
-  expect_false(any(se %in% 0))
-  # The identified parameters keep usable standard errors.
-  expect_true(is.finite(se[["(Intercept)"]]))
+  # The aliased column is NA in every user-facing place, never 0 and never a
+  # share of the identified effect.
+  expect_true(is.na(coef(fit)[["x2"]]))
+  expect_true(is.na(fit$standard_errors[["x2"]]))
+  expect_true(all(is.na(confint(fit)["x2", ])))
+  expect_true(all(is.na(summary(fit)$coefficients$mean["x2", ])))
 
-  tab <- summary(fit)$coefficients$mean
-  expect_true(all(is.na(tab[c("x1", "x2"), "Pr(>|z|)"])))
-  expect_true(all(is.na(confint(fit)["x1", ])))
+  # The surviving column carries the WHOLE identified effect, and now has a
+  # usable standard error because the design it was fitted on is full rank.
+  reduced <- fastsimplexreg(y ~ x1, data = dat, n_threads = 1L)
+  expect_equal(coef(fit)[["x1"]], coef(reduced)[["x1"]], tolerance = 1e-6)
+  expect_equal(fit$logLik, reduced$logLik, tolerance = 1e-8)
+  expect_true(is.finite(fit$standard_errors[["x1"]]))
+  expect_false(any(fit$standard_errors %in% 0))
+
+  # Downstream methods survive the NA.
+  expect_length(fitted(fit), n)
+  expect_equal(unname(predict(fit, newdata = dat[1:5, ])),
+               unname(predict(fit)[1:5]))
+})
+
+test_that(".simplex_vcov withholds the standard error of a singular direction", {
+  # The design-level guard above means a singular observed information no longer
+  # arises from exact collinearity -- but the fail-safe inversion must still
+  # never turn a missing standard error into a confident one, so it is exercised
+  # directly here.
+  H <- matrix(c(4, 2, 2, 1), 2, 2)        # exactly singular: rank 1 of 2
+  inf <- suppressWarnings(
+    fastsimplexreg:::.simplex_vcov(H, c("a", "b"), what = "test"))
+  expect_lt(inf$rank, 2L)
+  expect_true(inf$pseudo)
+  expect_true(all(is.na(inf$se)))
+  expect_false(any(inf$se %in% 0))
+  expect_warning(fastsimplexreg:::.simplex_vcov(H, c("a", "b"), what = "test"),
+                 "rank deficient")
+
+  # A direction of NEGATIVE curvature is not a variance either.
+  Hneg <- matrix(c(4, 0, 0, -1), 2, 2)
+  inf2 <- suppressWarnings(
+    fastsimplexreg:::.simplex_vcov(Hneg, c("a", "b"), what = "test"))
+  expect_true(is.na(inf2$se[["b"]]))
+  expect_warning(fastsimplexreg:::.simplex_vcov(Hneg, c("a", "b"), what = "test"),
+                 "not positive definite")
 })
 
 test_that("weak identification gives large standard errors, not NA", {

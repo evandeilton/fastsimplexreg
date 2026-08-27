@@ -131,6 +131,45 @@
 }
 
 
+# Internal: residuals on the COMPLETE rows only. The residuals() methods wrap
+# this in .simplex_pad(); internal consumers (plot, summary) use it directly so
+# that they stay aligned with fitted.values, which is never padded.
+.simplex_resid_raw <- function(object, type) {
+  mu <- object$fitted.values
+  y <- .simplex_response(object)
+  phi <- object$dispersion.values
+  switch(
+    type,
+    response = y - mu,
+    # Pearson residuals use the simplex unit variance function
+    # V(mu) = {mu (1 - mu)}^3 scaled by the dispersion phi, i.e. the first-order
+    # dispersion-model approximation Var(Y) ~ phi * V(mu).
+    pearson = (y - mu) / sqrt(phi * (mu * (1 - mu))^3),
+    # Signed deviance residuals from the simplex unit deviance
+    # d(y; mu) = (y - mu)^2 / {y (1 - y) mu^2 (1 - mu)^2}.
+    deviance = {
+      d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
+      sign(y - mu) * sqrt(d / phi)
+    }
+  )
+}
+
+
+# Internal: re-expand a per-observation vector over the rows that na.action
+# removed, so that na.exclude() means what stats says it means.
+#
+# `na.action = na.exclude` was accepted and had no effect: fitted() and
+# residuals() came back with the number of COMPLETE rows, not the number of
+# rows in the data, so nothing could be aligned back to the source without
+# knowing which rows had been dropped. stats::naresid()/napredict() do the
+# padding; they are no-ops under na.omit, which keeps the default unchanged.
+.simplex_pad <- function(object, values) {
+  na_act <- object$na.action
+  if (is.null(na_act)) return(values)
+  stats::naresid(na_act, values)
+}
+
+
 # Internal: names for the FULL parameter vector. The dispersion block is
 # prefixed so that a coefficient appearing in both submodels (typically
 # "(Intercept)") is addressable unambiguously by name in coef(), vcov(),

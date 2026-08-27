@@ -144,26 +144,18 @@ nobs.simplex_fast_mixed <- function(object, ...) object$nobs
 #' @export
 fitted.simplex_fast_mixed <- function(object, model = c("mean", "dispersion"), ...) {
   model <- match.arg(model)
-  if (model == "mean") object$fitted.values else object$dispersion.values
+  .simplex_pad(object,
+               if (model == "mean") object$fitted.values
+               else object$dispersion.values)
 }
 
 #' @rdname simplex_fast_mixed-methods
 #' @export
 residuals.simplex_fast_mixed <- function(object, type = c("response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
-  mu <- object$fitted.values
-  y <- .simplex_response(object)
-  phi <- object$dispersion.values
-  switch(
-    type,
-    response = y - mu,
-    pearson = (y - mu) / sqrt(phi * (mu * (1 - mu))^3),
-    deviance = {
-      d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-      sign(y - mu) * sqrt(d / phi)
-    }
-  )
+  .simplex_pad(object, .simplex_resid_raw(object, type))
 }
+
 
 #' @rdname simplex_fast_mixed-methods
 #' @importFrom nlme ranef
@@ -422,7 +414,7 @@ summary.simplex_fast_mixed <- function(object, ...) {
       link = object$link,
       coefficients = list(mean = mean_tab, dispersion = disp_tab),
       varcorr = VarCorr.simplex_fast_mixed(object),
-      pearson.residuals = stats::residuals(object, type = "pearson"),
+      pearson.residuals = .simplex_resid_raw(object, "pearson"),
       logLik = object$logLik, AIC = object$AIC, BIC = object$BIC,
       nobs = object$nobs, ngrps = object$ngrps, nAGQ = object$nAGQ,
       convergence = object$convergence, message = object$message,

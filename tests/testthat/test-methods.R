@@ -170,7 +170,7 @@ test_that("predict keeps the length of newdata when rows carry NA", {
   p <- predict(fit, newdata = nd, type = "response")
   # A shorter, unaligned vector was the old behaviour; predict.lm keeps length.
   expect_length(p, 3L)
-  expect_equal(which(is.na(p)), c(2L, 3L))
+  expect_equal(unname(which(is.na(p))), c(2L, 3L))
 
   both <- predict(fit, newdata = nd, type = "both")
   expect_equal(nrow(both), 3L)
@@ -187,4 +187,59 @@ test_that("simulate carries the row names of the model frame", {
   fit <- fastsimplexreg(y ~ x1, data = d, n_threads = 1L, model = TRUE)
   s <- simulate(fit, nsim = 2L, seed = 1L)
   expect_identical(rownames(s), rownames(d))
+})
+
+
+# na.action = na.exclude was accepted and had no effect: fitted() and
+# residuals() came back with the number of COMPLETE rows, so nothing could be
+# aligned back to the source data without knowing which rows had been dropped.
+test_that("na.exclude pads fitted, residuals and predict back to nrow(data)", {
+  set.seed(11)
+  n <- 300L
+  dat <- data.frame(x1 = rnorm(n), z1 = rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.8 * dat$x1, "logit"),
+                    exp(-0.6 + 0.4 * dat$z1))
+  dat$x1[c(3L, 7L, 10L)] <- NA
+
+  omit <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L,
+                         na.action = stats::na.omit)
+  excl <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L,
+                         na.action = stats::na.exclude)
+
+  expect_equal(nobs(omit), nobs(excl))
+  # na.omit is unchanged: complete rows only.
+  expect_length(fitted(omit), 297L)
+  expect_length(residuals(omit), 297L)
+  # na.exclude pads, exactly as glm does.
+  expect_length(fitted(excl), n)
+  expect_length(residuals(excl), n)
+  expect_length(predict(excl), n)
+  expect_equal(unname(which(is.na(fitted(excl)))), c(3L, 7L, 10L))
+  expect_equal(unname(which(is.na(residuals(excl, "deviance")))), c(3L, 7L, 10L))
+  expect_equal(length(fitted(excl)),
+               length(stats::fitted(stats::glm(stats::qlogis(y) ~ x1, data = dat,
+                                               na.action = stats::na.exclude))))
+
+  # The padded and unpadded values agree on the complete rows.
+  expect_equal(unname(fitted(excl)[-c(3L, 7L, 10L)]), unname(fitted(omit)))
+
+  # Internal consumers must stay on the UNPADDED vectors or their lengths would
+  # no longer match fitted.values.
+  expect_silent(invisible(summary(excl)))
+  skip_if_not_installed("ggplot2")
+  expect_s3_class(plot(excl, which = 1L), "ggplot")
+})
+
+test_that("fitted, residuals and predict carry the observation labels", {
+  set.seed(4)
+  n <- 40L
+  dat <- data.frame(x1 = rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.6 * dat$x1, "logit"), 1)
+  rownames(dat) <- paste0("obs", seq_len(n))
+
+  fit <- fastsimplexreg(y ~ x1, data = dat, n_threads = 1L)
+  expect_identical(names(fitted(fit)), rownames(dat))
+  expect_identical(names(residuals(fit)), rownames(dat))
+  expect_identical(names(predict(fit, newdata = dat[5:8, ])),
+                   rownames(dat)[5:8])
 })

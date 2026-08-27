@@ -500,6 +500,9 @@ fastsimplexregmixed <- function(
 
   .warn_saturated(opt$n_saturated, n, what = "fastsimplexregmixed()")
 
+  obs_names <- rownames(design$model)
+  na_act <- attr(design$model, "na.action")
+
   out <- list(
     call = match.call(),
     formula = design$formula,
@@ -523,10 +526,12 @@ fastsimplexregmixed <- function(
     vcov_condition = vcov_condition,
     n_saturated = as.integer(opt$n_saturated),
     hessian = hessian,
-    fitted.values = mu,
-    dispersion.values = phi,
-    linear.predictors = list(mean = eta_mu, dispersion = eta_phi),
-    residuals = response - mu,
+    na.action = na_act,
+    fitted.values = stats::setNames(mu, obs_names),
+    dispersion.values = stats::setNames(phi, obs_names),
+    linear.predictors = list(mean = stats::setNames(eta_mu, obs_names),
+                             dispersion = stats::setNames(eta_phi, obs_names)),
+    residuals = stats::setNames(response - mu, obs_names),
     logLik = logLik_value,
     AIC = -2 * logLik_value + 2 * k,
     BIC = -2 * logLik_value + log(n) * k,

@@ -133,7 +133,9 @@ nobs.simplex_fast <- function(object, ...) object$nobs
 #' @export
 fitted.simplex_fast <- function(object, model = c("mean", "dispersion"), ...) {
   model <- match.arg(model)
-  if (model == "mean") object$fitted.values else object$dispersion.values
+  .simplex_pad(object,
+               if (model == "mean") object$fitted.values
+               else object$dispersion.values)
 }
 
 
@@ -141,24 +143,9 @@ fitted.simplex_fast <- function(object, model = c("mean", "dispersion"), ...) {
 #' @export
 residuals.simplex_fast <- function(object, type = c("response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
-  mu <- object$fitted.values
-  y <- .simplex_response(object)
-  phi <- object$dispersion.values
-  switch(
-    type,
-    response = y - mu,
-    # Pearson residuals use the simplex unit variance function
-    # V(mu) = {mu (1 - mu)}^3 scaled by the dispersion phi, i.e. the first-order
-    # dispersion-model approximation Var(Y) ~ phi * V(mu).
-    pearson = (y - mu) / sqrt(phi * (mu * (1 - mu))^3),
-    # Signed deviance residuals from the simplex unit deviance
-    # d(y; mu) = (y - mu)^2 / {y (1 - y) mu^2 (1 - mu)^2}.
-    deviance = {
-      d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-      sign(y - mu) * sqrt(d / phi)
-    }
-  )
+  .simplex_pad(object, .simplex_resid_raw(object, type))
 }
+
 
 
 #' @rdname simplex_fast-methods
@@ -317,10 +304,12 @@ predict.simplex_fast <- function(
   type <- match.arg(type)
 
   if (is.null(newdata)) {
-    mu <- object$fitted.values
-    phi <- object$dispersion.values
-    eta_mu <- object$linear.predictors$mean
-    eta_phi <- object$linear.predictors$dispersion
+    # In-sample predictions follow the na.action contract: under na.exclude the
+    # dropped rows come back as NA so the result aligns with the source data.
+    mu <- .simplex_pad(object, object$fitted.values)
+    phi <- .simplex_pad(object, object$dispersion.values)
+    eta_mu <- .simplex_pad(object, object$linear.predictors$mean)
+    eta_phi <- .simplex_pad(object, object$linear.predictors$dispersion)
   } else {
     has_disp <- isTRUE(object$design$has_dispersion_formula)
     # Built in one call: `contrasts_list[[2]] <- NULL` would DELETE the element
@@ -358,8 +347,20 @@ predict.simplex_fast <- function(
         .simplex_offset(object$design$terms_dispersion, nd_keep), nrow(X), "dispersion")
     } else NULL
 
+    # Aliased columns were never estimated, so they must be dropped from the
+    # prediction design too -- object$par carries NA in those positions.
+    al <- object$aliased
+    if (!is.null(al) && any(al)) {
+      pf <- ncol(X)
+      X <- X[, !al[seq_len(pf)], drop = FALSE]
+      Z <- Z[, !al[pf + seq_len(ncol(Z))], drop = FALSE]
+      theta_est <- object$par[!al]
+    } else {
+      theta_est <- object$par
+    }
+
     pred <- simplex_predict_cpp(
-      object$par,
+      theta_est,
       X,
       Z,
       mean_link = unname(.simplex_links[[object$link$mean]]),
@@ -368,10 +369,11 @@ predict.simplex_fast <- function(
     )
     # Rows dropped for missingness come back as NA, so the result always has
     # length nrow(newdata) and stays aligned with it.
-    mu <- .simplex_expand(as.numeric(pred$mu), des$keep)
-    phi <- .simplex_expand(as.numeric(pred$phi), des$keep)
-    eta_mu <- .simplex_expand(as.numeric(pred$eta_mu), des$keep)
-    eta_phi <- .simplex_expand(as.numeric(pred$eta_phi), des$keep)
+    nms <- rownames(newdata)
+    mu <- stats::setNames(.simplex_expand(as.numeric(pred$mu), des$keep), nms)
+    phi <- stats::setNames(.simplex_expand(as.numeric(pred$phi), des$keep), nms)
+    eta_mu <- stats::setNames(.simplex_expand(as.numeric(pred$eta_mu), des$keep), nms)
+    eta_phi <- stats::setNames(.simplex_expand(as.numeric(pred$eta_phi), des$keep), nms)
   }
 
   switch(
@@ -485,7 +487,7 @@ summary.simplex_fast <- function(object, ...) {
       # A list with separate mean and dispersion coefficient tables, matching
       # the layout used by other simplex/beta regression packages.
       coefficients = list(mean = mean_tab, dispersion = disp_tab),
-      pearson.residuals = stats::residuals(object, type = "pearson"),
+      pearson.residuals = .simplex_resid_raw(object, "pearson"),
       logLik = object$logLik,
       AIC = object$AIC,
       BIC = object$BIC,
