@@ -329,3 +329,76 @@ test_that("a genuine optimiser failure is still reported as one", {
   expect_match(fit$message, "Line search failed")
   expect_true(all(is.na(fit$standard_errors)))
 })
+
+
+# Adaptive Gauss-Hermite node pruning. Until 0.2.4 build_tensor() dropped nodes
+# whose product weight logW sat below a floor -- but the adaptive transformation
+# undoes the e^{-t^2} factor, so a node's real multiplier is logW + t2. Pruning
+# on logW alone discarded 48.7% of the effective quadrature mass at nAGQ = 21,
+# and the AGHQ sequence stopped converging: raising nAGQ moved the marginal
+# log-likelihood AWAY from its limit.
+test_that("the AGHQ sequence converges as nAGQ grows (q = 2)", {
+  set.seed(77)
+  J <- 25L; nj <- 3L; n <- J * nj
+  g <- rep(seq_len(J), each = nj)
+  X <- cbind(1, stats::rnorm(n)); Z <- X; W <- matrix(1, n, 1L)
+  B <- matrix(stats::rnorm(J * 2L), J, 2L) %*% diag(c(2, 1.5))
+  mu <- simplex_linkinv(X %*% c(0.3, -0.5) + rowSums(Z * B[g, ]), "logit")
+  y <- rsimplex(n, as.numeric(mu), rep(1, n))
+  starts <- as.integer(c(0L, cumsum(rep(nj, J))))
+  th <- c(0.3, -0.5, 0, log(2), 0, log(1.5))
+
+  ll <- vapply(c(11L, 15L, 21L, 25L), function(m) {
+    -fastsimplexreg:::simplex_mixed_eval_cpp(th, y, X, Z, W, starts, 2L, 1L, m,
+                                             1L, 50L, 1e-8)$value
+  }, numeric(1))
+
+  # Successive increments must shrink towards zero. With the old pruning they
+  # grew instead, reaching ~1e-3 in this regime.
+  steps <- abs(diff(ll))
+  expect_lt(steps[length(steps)], 1e-6)
+  expect_true(all(diff(steps) < 0))
+})
+
+test_that("nAGQ below 5 warns that the standard errors are unreliable", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+  expect_warning(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 1L,
+                        n_threads = 1L, inference = FALSE),
+    "below the supported minimum")
+  # nAGQ = 2.7 trips BOTH guards: it is truncated to 2, and 2 is below 5.
+  w <- testthat::capture_warnings(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 2.7,
+                        n_threads = 1L, inference = FALSE))
+  expect_match(w, "truncated", all = FALSE)
+  expect_match(w, "below the supported minimum", all = FALSE)
+})
+
+test_that("inner_maxit below 10 is refused", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+  # With inner_maxit in 1..3 the inner solver need not reach the posterior mode,
+  # so the AGHQ expansion is taken around the wrong point and the marginal
+  # likelihood is grossly wrong -- previously with no diagnostic at all.
+  expect_error(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                        inner_maxit = 3L, n_threads = 1L),
+    "at least 10")
+})
+
+test_that("degenerate cluster structures are refused or flagged", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+
+  one_level <- dat
+  one_level$g <- factor(rep("a", nrow(dat)))
+  expect_error(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = one_level, nAGQ = 7L,
+                        n_threads = 1L),
+    "at least 2 sampled levels")
+
+  singletons <- dat
+  singletons$g <- factor(seq_len(nrow(dat)))
+  expect_warning(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = singletons, nAGQ = 7L,
+                        n_threads = 1L, inference = FALSE),
+    "single observation")
+})

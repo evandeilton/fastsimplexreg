@@ -369,11 +369,24 @@ predict.simplex_fast <- function(
              dimnames = list(rownames(X), "(Intercept)"))
     }
 
+    # Offsets are part of the linear predictor, so they must be rebuilt from
+    # newdata exactly as the design matrices are; dropping them here would make
+    # predict() disagree with fitted() on the very data the model was fitted to.
+    nd_keep <- newdata[des$keep, , drop = FALSE]
+    off_mu <- .simplex_check_offset(
+      .simplex_offset(object$design$terms_mean, nd_keep), nrow(X), "mean")
+    off_phi <- if (has_disp) {
+      .simplex_check_offset(
+        .simplex_offset(object$design$terms_dispersion, nd_keep), nrow(X), "dispersion")
+    } else NULL
+
     pred <- simplex_predict_cpp(
       object$par,
       X,
       Z,
-      mean_link = unname(.simplex_links[[object$link$mean]])
+      mean_link = unname(.simplex_links[[object$link$mean]]),
+      off_mu_ = off_mu,
+      off_phi_ = off_phi
     )
     # Rows dropped for missingness come back as NA, so the result always has
     # length nrow(newdata) and stays aligned with it.

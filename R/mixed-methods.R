@@ -237,6 +237,10 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
       gamma <- object$coefficients$dispersion
       eta_mu <- as.numeric(X %*% beta)
       eta_phi <- as.numeric(W %*% gamma)
+      if (!is.null(object$offset$mean)) eta_mu <- eta_mu + object$offset$mean
+      if (!is.null(object$offset$dispersion)) {
+        eta_phi <- eta_phi + object$offset$dispersion
+      }
       mu <- simplex_linkinv(eta_mu, object$link$mean)
       phi <- exp(eta_phi)
     } else {
@@ -267,6 +271,15 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
     gamma <- object$coefficients$dispersion
     eta_mu <- as.numeric(X %*% beta)
     eta_phi <- as.numeric(W %*% gamma)
+
+    # Offsets belong to the linear predictor and must be rebuilt from newdata.
+    nd_keep <- newdata[des$keep, , drop = FALSE]
+    off_mu <- .simplex_check_offset(.simplex_offset(d$terms_mean, nd_keep),
+                                    nrow(X), "mean")
+    off_phi <- .simplex_check_offset(.simplex_offset(d$terms_dispersion, nd_keep),
+                                     nrow(W), "dispersion")
+    if (!is.null(off_mu)) eta_mu <- eta_mu + off_mu
+    if (!is.null(off_phi)) eta_phi <- eta_phi + off_phi
 
     if (!population) {
       # Add random effects for groups present in the fit; zero for unseen groups.

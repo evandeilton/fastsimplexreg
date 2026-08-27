@@ -1,3 +1,74 @@
+# Internal: resolve the `subset` argument the way stats::lm/glm do -- as an
+# EXPRESSION evaluated inside `data` first and only then in the caller.
+#
+# Until 0.2.4 `subset` was documented like glm's ("a vector specifying a subset
+# of observations") but implemented as a plain index vector: `data[subset, ]`.
+# The difference is silent and dangerous. `subset = x1 > 0` errored loudly when
+# no `x1` existed in the caller -- but when an unrelated object of that name did
+# exist, which is the common case inside a function, the fit used THAT vector
+# and quietly estimated the model on the wrong rows.
+#
+# `expr` is the result of substitute(subset) in the calling fitter; `envir` is
+# its parent.frame(). Every call form that worked before still works: a plain
+# index/logical/character vector evaluates to itself.
+.simplex_eval_subset <- function(expr, data, envir) {
+  if (is.null(expr)) return(NULL)
+  r <- eval(expr, data, envir)
+  if (is.null(r)) return(NULL)
+  if (is.logical(r)) {
+    if (length(r) != nrow(data)) {
+      stop("A logical 'subset' must have length nrow(data) (", nrow(data),
+           "), not ", length(r), ".", call. = FALSE)
+    }
+    # Match stats::model.frame: an NA in a logical subset drops the row.
+    return(r & !is.na(r))
+  }
+  r
+}
+
+
+# Internal: evaluate the offset(s) of ONE model part.
+#
+# stats::model.offset() cannot be used here: with a multi-part Formula it sums
+# the offsets of every part, so `y ~ x + offset(a) | z + offset(b)` would give
+# a + b for both the mean and the dispersion. Each part's own `terms` object
+# carries an "offset" attribute indexing into its "variables", which is what
+# keeps the two apart.
+#
+# Works from either a model frame (where the offset already exists as a column
+# named e.g. "offset(a)") or a raw `newdata` (where the expression is
+# evaluated). Returns NULL when the part has no offset, else a numeric vector.
+.simplex_offset <- function(tt, data) {
+  idx <- attr(tt, "offset")
+  if (is.null(idx) || !length(idx)) return(NULL)
+  vars <- attr(tt, "variables")
+  env <- environment(tt)
+  if (is.null(env)) env <- parent.frame()
+  vals <- lapply(idx, function(i) {
+    call_i <- vars[[i + 1L]]
+    nm <- deparse(call_i, width.cutoff = 500L)
+    v <- if (!is.null(data[[nm]])) data[[nm]] else eval(call_i, data, env)
+    as.numeric(v)
+  })
+  Reduce(`+`, vals)
+}
+
+
+# Internal: validate an offset against the number of rows it must align with.
+.simplex_check_offset <- function(off, n, what) {
+  if (is.null(off)) return(NULL)
+  if (length(off) == 1L) off <- rep(off, n)
+  if (length(off) != n) {
+    stop("The ", what, " offset has length ", length(off), " but the model has ",
+         n, " observation(s).", call. = FALSE)
+  }
+  if (any(!is.finite(off))) {
+    stop("The ", what, " offset contains non-finite values.", call. = FALSE)
+  }
+  off
+}
+
+
 # Internal helper: build one shared model frame so that subset handling, NA
 # handling, factors and contrasts are perfectly aligned across the mean and
 # dispersion components. Uses the Formula package for multi-part formulas.
@@ -19,10 +90,12 @@
     stop("Use one or two RHS components: y ~ mean_terms | dispersion_terms.", call. = FALSE)
   }
 
-  # Apply the observation subset explicitly. Forwarding 'subset' straight to
-  # model.frame() would trigger its non-standard evaluation, which resolves the
-  # bare symbol in the formula's environment (picking up base::subset) instead
-  # of using the value supplied here. 'subset' is documented as an index vector.
+  # `subset` arrives here ALREADY RESOLVED to a plain index/logical vector by
+  # .simplex_eval_subset(), which the fitter calls with substitute(subset) so
+  # that an expression like `x1 > 0` is evaluated inside `data`. It is applied
+  # here rather than forwarded to model.frame(), whose own non-standard
+  # evaluation would resolve the bare symbol in the formula's environment
+  # (picking up base::subset) instead of using the value supplied here.
   if (!is.null(subset)) {
     data <- data[subset, , drop = FALSE]
   }
@@ -63,12 +136,19 @@
 
   terms_mean <- stats::terms(F, rhs = 1L)
 
+  n_obs <- nrow(X)
+  offset_mu <- .simplex_check_offset(.simplex_offset(terms_mean, mf), n_obs, "mean")
+  offset_phi <- .simplex_check_offset(.simplex_offset(terms_dispersion, mf),
+                                      n_obs, "dispersion")
+
   list(
     formula = F,
     model = mf,
     y = response,
     X = X,
     Z = Z,
+    offset_mu = offset_mu,
+    offset_phi = offset_phi,
     terms_mean = terms_mean,
     terms_dispersion = terms_dispersion,
     xlevels_mean = stats::.getXlevels(terms_mean, mf),
@@ -212,7 +292,10 @@
 #' @param hessian_rel_step Numeric; the initial relative step for the Hessian,
 #'   obtained by central differences of the analytic gradient.
 #' @param trace Logical; if `TRUE`, prints optimiser progress.
-#' @param subset Optional vector specifying a subset of observations.
+#' @param subset Optional expression selecting a subset of observations,
+#'   evaluated inside `data` as in [stats::lm()] -- for example
+#'   `subset = x1 > 0`. A plain index, logical or row-name vector also
+#'   works. An `NA` in a logical subset drops that row.
 #' @param na.action A function indicating how to handle missing values.
 #' @param model Logical; if `TRUE`, stores the model frame in the fitted object.
 #' @param x Logical; if `TRUE`, stores the design matrices `X` and `Z`.
@@ -288,10 +371,13 @@ fastsimplexreg <- function(
     y = TRUE) {
 
   link_spec <- .normalize_simplex_link(link)
+  # `subset` is non-standard-evaluated, like lm()/glm(): resolved inside `data`
+  # first, then in the caller. See .simplex_eval_subset().
+  subset_idx <- .simplex_eval_subset(substitute(subset), data, parent.frame())
   design <- .build_simplex_matrices(
     formula = formula,
     data = data,
-    subset = subset,
+    subset = subset_idx,
     na.action = na.action
   )
 
@@ -300,6 +386,9 @@ fastsimplexreg <- function(
   Z <- design$Z
   p <- ncol(X)
   q <- ncol(Z)
+  # numeric(0) is the backend's "no offset" sentinel.
+  off_mu <- if (is.null(design$offset_mu)) numeric(0) else design$offset_mu
+  off_phi <- if (is.null(design$offset_phi)) numeric(0) else design$offset_phi
 
   if (is.null(start)) {
     start <- .simplex_start(response, X, Z, link = link_spec$name)
@@ -320,7 +409,9 @@ fastsimplexreg <- function(
     rel_tol = as.numeric(rel_tol),
     grad_tol = as.numeric(grad_tol),
     n_threads = as.integer(n_threads),
-    trace = isTRUE(trace)
+    trace = isTRUE(trace),
+    off_mu_ = off_mu,
+    off_phi_ = off_phi
   )
 
   theta <- as.numeric(opt$par)
@@ -330,7 +421,8 @@ fastsimplexreg <- function(
   # the dispersion coefficients) rather than by a name prefix.
   names(theta) <- c(colnames(X), colnames(Z))
 
-  pred <- simplex_predict_cpp(theta, X, Z, mean_link = link_spec$id)
+  pred <- simplex_predict_cpp(theta, X, Z, mean_link = link_spec$id,
+                              off_mu_ = off_mu, off_phi_ = off_phi)
   logLik_value <- -as.numeric(opt$value)
   k <- length(theta)
   n <- length(response)
@@ -359,7 +451,9 @@ fastsimplexreg <- function(
       Z = Z,
       mean_link = link_spec$id,
       rel_step = as.numeric(hessian_rel_step),
-      n_threads = as.integer(n_threads)
+      n_threads = as.integer(n_threads),
+      off_mu_ = off_mu,
+      off_phi_ = off_phi
     )
     dimnames(hessian) <- list(names(theta), names(theta))
 
@@ -414,6 +508,7 @@ fastsimplexreg <- function(
     function_evaluations = as.integer(opt$function_evaluations),
     gradient_evaluations = as.integer(opt$gradient_evaluations),
     gradient = as.numeric(opt$gradient),
+    offset = list(mean = design$offset_mu, dispersion = design$offset_phi),
     terms = list(mean = design$terms_mean, dispersion = design$terms_dispersion),
     design = design[c(
       "terms_mean",

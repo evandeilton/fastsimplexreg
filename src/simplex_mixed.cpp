@@ -119,21 +119,25 @@ inline void build_tensor(const int nAGQ, const int q,
     }
   }
 
-  // Weight pruning for q >= 2: the corners of the tensor grid carry product
-  // weights many orders of magnitude below the peak and contribute nothing to
-  // the log-sum-exp. Dropping them shrinks the per-cluster node loop (the
-  // dominant cost at q >= 2) with no measurable loss of accuracy. Not applied
-  // for q = 1, where every node matters.
-  if (q >= 2) {
-    const double log_tol = std::log(1e-10);          // relative weight floor
-    const double lw_max = logW.max();
-    const arma::uvec keep = arma::find(logW - lw_max >= log_tol);
-    if (keep.n_elem > 0 && keep.n_elem < K) {
-      T = T.rows(keep);
-      logW = logW.elem(keep);
-      t2 = t2.elem(keep);
-    }
-  }
+  // NO node pruning. The previous version dropped nodes whose product
+  // Gauss-Hermite weight logW sat below a relative floor, on the reasoning that
+  // the corners of the tensor grid "contribute nothing". That reasoning is
+  // wrong for ADAPTIVE Gauss-Hermite and was measurably harmful.
+  //
+  // The adaptive transformation undoes the e^{-t^2} factor, so what a node k
+  // actually multiplies into the log-sum-exp below is logW[k] + t2[k], not
+  // logW[k]. Outer nodes carry a tiny weight and an enormous e^{t^2} and the
+  // two very nearly cancel: across the WHOLE tensor grid the effective
+  // multiplier spans a factor of only 1.6 (nAGQ = 5), 2.4 (11), 3.5 (21) and
+  // 5.2 (41). There is no negligible tail to drop -- every node matters to
+  // within a factor of five.
+  //
+  // Pruning on logW alone therefore discarded nodes carrying 5.7% of the
+  // effective quadrature mass at nAGQ = 11, 48.7% at nAGQ = 21 and 66.3% at
+  // nAGQ = 31, which made the AGHQ sequence stop converging: raising nAGQ
+  // moved the marginal log-likelihood monotonically AWAY from the unpruned
+  // value instead of towards it. The node-count guard that pruning was meant
+  // to relieve lives in R (fastsimplexregmixed() rejects nAGQ^q > 1e5).
 }
 
 // Log-sum-exp of a vector.
@@ -168,9 +172,17 @@ EvalResult mixed_core(
     const uvec& starts, const int q, const int mean_link,
     const mat& T, const vec& logW, const vec& t2,
     const int n_threads, const int inner_maxit, const double inner_tol,
-    const bool need_grad, mat& Bhat) {
+    const bool need_grad, mat& Bhat,
+    const vec& off_mu = vec(), const vec& off_phi = vec()) {
 
   check_starts(starts, y.n_elem);
+  // Length 0 means "no offset"; anything else must match N.
+  if ((off_mu.n_elem != 0 && off_mu.n_elem != y.n_elem) ||
+      (off_phi.n_elem != 0 && off_phi.n_elem != y.n_elem)) {
+    Rcpp::stop("Offset length does not match the number of observations.");
+  }
+  const bool use_off_mu = (off_mu.n_elem == y.n_elem);
+  const bool use_off_phi = (off_phi.n_elem == y.n_elem);
   const uword p = X.n_cols;
   const uword r = W.n_cols;
   const uword m = static_cast<uword>(q) * (q + 1) / 2;
@@ -249,8 +261,10 @@ EvalResult mixed_core(
       const auto Wj = W.rows(a, bb - 1);
       const auto yj = y.subvec(a, bb - 1);
 
-      const vec eta_mu_fixed = Xj * beta;
-      const vec eta_phi = Wj * gamma;
+      vec eta_mu_fixed = Xj * beta;
+      vec eta_phi = Wj * gamma;
+      if (use_off_mu)  eta_mu_fixed += off_mu.subvec(a, bb - 1);
+      if (use_off_phi) eta_phi      += off_phi.subvec(a, bb - 1);
       vec phi(nj);
       for (uword i = 0; i < nj; ++i) phi[i] = safe_exp(eta_phi[i]);
 
@@ -487,7 +501,14 @@ Rcpp::List simplex_mixed_eval_cpp(
     const arma::uvec& starts, const int q,
     const int mean_link = 1, const int nAGQ = 11,
     const int n_threads = 1, const int inner_maxit = 50,
-    const double inner_tol = 1e-8) {
+    const double inner_tol = 1e-8,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   mat T; vec logW, t2;
   simplex_fast::check_starts(starts, y.n_elem);
@@ -495,7 +516,7 @@ Rcpp::List simplex_mixed_eval_cpp(
   mat Bhat(starts.n_elem - 1, q, arma::fill::zeros);
   const auto res = simplex_fast::mixed_core(theta, y, X, Z, W, starts, q, mean_link,
                                             T, logW, t2, n_threads, inner_maxit,
-                                            inner_tol, true, Bhat);
+                                            inner_tol, true, Bhat, off_mu, off_phi);
   return List::create(Named("value") = res.nll,
                       Named("gradient") = res.grad,
                       Named("valid") = res.valid,
@@ -514,7 +535,14 @@ Rcpp::List simplex_mixed_bfgs_cpp(
     const int maxit = 300, const double rel_tol = 1e-9,
     const double grad_tol = 1e-6, const int n_threads = 1,
     const int inner_maxit = 50, const double inner_tol = 1e-8,
-    const bool trace = false) {
+    const bool trace = false,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   mat T; vec logW, t2;
   simplex_fast::check_starts(starts, y.n_elem);
@@ -524,7 +552,7 @@ Rcpp::List simplex_mixed_bfgs_cpp(
   auto objective = [&](const arma::vec& th) {
     return simplex_fast::mixed_core(th, y, X, Z, W, starts, q, mean_link,
                                     T, logW, t2, n_threads, inner_maxit,
-                                    inner_tol, true, Bhat);
+                                    inner_tol, true, Bhat, off_mu, off_phi);
   };
   return simplex_fast::bfgs_minimize(start, objective, maxit, rel_tol, grad_tol, trace);
 }
@@ -538,7 +566,14 @@ arma::mat simplex_mixed_hessian_fd_cpp(
     const arma::uvec& starts, const int q,
     const int mean_link = 1, const int nAGQ = 11,
     const double rel_step = 1e-5, const int n_threads = 1,
-    const int inner_maxit = 50, const double inner_tol = 1e-8) {
+    const int inner_maxit = 50, const double inner_tol = 1e-8,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   mat T; vec logW, t2;
   simplex_fast::check_starts(starts, y.n_elem);
@@ -549,7 +584,7 @@ arma::mat simplex_mixed_hessian_fd_cpp(
   auto grad_at = [&](const arma::vec& th, bool& ok) {
     const auto res = simplex_fast::mixed_core(th, y, X, Z, W, starts, q, mean_link,
                                               T, logW, t2, n_threads, inner_maxit,
-                                              inner_tol, true, Bhat);
+                                              inner_tol, true, Bhat, off_mu, off_phi);
     ok = res.valid;
     return res.grad;
   };
@@ -588,7 +623,14 @@ Rcpp::List simplex_mixed_ranef_cpp(
     const arma::mat& X, const arma::mat& Z, const arma::mat& W,
     const arma::uvec& starts, const int q,
     const int mean_link = 1, const int n_threads = 1,
-    const int inner_maxit = 50, const double inner_tol = 1e-8) {
+    const int inner_maxit = 50, const double inner_tol = 1e-8,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   simplex_fast::check_starts(starts, y.n_elem);
   // One AGHQ node reproduces the mode-finding path; then read the modes back.
@@ -598,7 +640,7 @@ Rcpp::List simplex_mixed_ranef_cpp(
   mat Bhat(J, q, arma::fill::zeros);
   const auto res = simplex_fast::mixed_core(theta, y, X, Z, W, starts, q, mean_link,
                                             T, logW, t2, n_threads, inner_maxit,
-                                            inner_tol, false, Bhat);
+                                            inner_tol, false, Bhat, off_mu, off_phi);
   if (!res.valid) Rcpp::stop("Random-effects prediction produced a non-finite value.");
 
   // Posterior covariances: recompute Q_j^{-1} at the modes.
@@ -617,9 +659,11 @@ Rcpp::List simplex_mixed_ranef_cpp(
     const mat Zj = Z.rows(a, bb - 1);
     const mat Wj = W.rows(a, bb - 1);
     const vec yj = y.subvec(a, bb - 1);
-    const vec eta_phi = Wj * gamma;
+    vec eta_phi = Wj * gamma;
     const vec bmode = Bhat.row(j).t();
-    const vec eta = Xj * beta + Zj * bmode;
+    vec eta = Xj * beta + Zj * bmode;
+    if (off_mu.n_elem == y.n_elem)  eta     += off_mu.subvec(a, bb - 1);
+    if (off_phi.n_elem == y.n_elem) eta_phi += off_phi.subvec(a, bb - 1);
     // Both buffers are zero-filled: arma::vec(n) leaves its memory
     // uninitialised, and the Fisher fallback below consumes Iinfo even on the
     // path where the observed loop breaks early.
@@ -675,10 +719,21 @@ Rcpp::List simplex_mixed_predict_cpp(
     const arma::mat& X, const arma::mat& Z, const arma::mat& W,
     const arma::uvec& starts, const int q,
     const arma::mat& b,
-    const int mean_link = 1, const bool include_re = true) {
+    const int mean_link = 1, const bool include_re = true,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   const uword p = X.n_cols, r = W.n_cols, N = X.n_rows;
   simplex_fast::check_starts(starts, N);
+  if ((off_mu.n_elem != 0 && off_mu.n_elem != N) ||
+      (off_phi.n_elem != 0 && off_phi.n_elem != N)) {
+    Rcpp::stop("Offset length does not match the number of rows.");
+  }
   const uword J = starts.n_elem - 1;
   const vec beta = theta.head(p);
   const vec gamma = theta.subvec(p, p + r - 1);
@@ -690,7 +745,9 @@ Rcpp::List simplex_mixed_predict_cpp(
       if (bb > a) eta_mu.subvec(a, bb - 1) += Z.rows(a, bb - 1) * b.row(j).t();
     }
   }
-  const vec eta_phi = W * gamma;
+  vec eta_phi = W * gamma;
+  if (off_mu.n_elem == N)  eta_mu  += off_mu;
+  if (off_phi.n_elem == N) eta_phi += off_phi;
 
   vec mu(N), phi(N);
   for (uword i = 0; i < N; ++i) {

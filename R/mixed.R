@@ -51,7 +51,10 @@
 
   re <- .parse_random(random)
 
-  # Apply the subset explicitly (the NSE-safe way; never forward to model.frame).
+  # `subset` arrives here ALREADY RESOLVED to a plain index/logical vector by
+  # .simplex_eval_subset(); see R/simplexreg.R. Applied here rather than
+  # forwarded to model.frame(), whose own NSE would resolve the bare symbol in
+  # the formula's environment instead of using the value supplied here.
   if (!is.null(subset)) {
     data <- data[subset, , drop = FALSE]
   }
@@ -86,6 +89,12 @@
   storage.mode(W) <- "double"
   storage.mode(Z) <- "double"
 
+  n_obs <- nrow(X)
+  tm <- stats::terms(Fc, rhs = 1L)
+  td <- stats::terms(Fc, rhs = 2L)
+  offset_mu <- .simplex_check_offset(.simplex_offset(tm, mf), n_obs, "mean")
+  offset_phi <- .simplex_check_offset(.simplex_offset(td, mf), n_obs, "dispersion")
+
   group <- droplevels(as.factor(grp))
 
   list(
@@ -95,6 +104,8 @@
     model = mf,
     y = response,
     X = X, W = W, Z = Z,
+    offset_mu = offset_mu,
+    offset_phi = offset_phi,
     group = group,
     group_name = re$group,
     terms_mean = stats::terms(Fc, rhs = 1L),
@@ -155,7 +166,12 @@
 #'
 #' @details
 #' The marginal likelihood integrates the cluster random effects out with AGHQ
-#' (`nAGQ` points per dimension; `nAGQ = 1` gives the Laplace approximation).
+#' (`nAGQ` points per dimension). `nAGQ = 1` is the Laplace approximation and
+#' is accepted only with a warning: the analytic score is the score of the
+#' exact marginal likelihood, not of the `nAGQ`-point quadrature, so at
+#' `nAGQ = 1` the two disagree by about 66% and the resulting Wald intervals
+#' cover 57% rather than 95%. Use `nAGQ >= 5`, and `nAGQ >= 11` when
+#' reporting inference.
 #' The per-cluster inner mode-finding, the quadrature and the analytic score are
 #' implemented in C++ (RcppArmadillo, BLAS) and parallelised over clusters with
 #' OpenMP, so the fit scales to large nested data sets. The random-effect
@@ -175,7 +191,9 @@
 #' @param link Mean link: one of `"logit"`, `"probit"`, `"cloglog"` or
 #'   `"neglog"`. The dispersion uses a log link.
 #' @param nAGQ Number of adaptive Gauss-Hermite quadrature points per random-
-#'   effect dimension. `nAGQ = 1` is the Laplace approximation.
+#'   effect dimension. Values below 5 are accepted but warn: the standard
+#'   errors are then unreliable (see Details). `nAGQ = 1` is the Laplace
+#'   approximation.
 #' @param start Optional starting vector `c(beta, gamma, omega)`. When `NULL`,
 #'   fast link-specific values are used.
 #' @param maxit Maximum number of BFGS iterations.
@@ -191,9 +209,13 @@
 #'   errors.
 #' @param hessian_rel_step Relative step for the finite-difference Hessian.
 #' @param inner_maxit Maximum iterations of the per-cluster inner solver.
+#'   Must be at least 10: the AGHQ expansion is taken at the posterior mode,
+#'   so a truncated inner solve expands around the wrong point.
 #' @param inner_tol Convergence tolerance of the inner solver.
 #' @param trace Logical; print optimiser progress.
-#' @param subset Optional index vector selecting observations.
+#' @param subset Optional expression selecting a subset of observations,
+#'   evaluated inside `data` as in [stats::lm()] -- for example
+#'   `subset = x1 > 0`. A plain index, logical or row-name vector also works.
 #' @param na.action Missing-data handler.
 #' @param model,x,y Logical; store the model frame, the design matrices, and the
 #'   response in the fitted object.
@@ -260,14 +282,56 @@ fastsimplexregmixed <- function(
   if (missing(random)) {
     stop("'random' must be supplied, e.g. random = ~ 1 | group.", call. = FALSE)
   }
+  nAGQ_in <- nAGQ
   nAGQ <- as.integer(nAGQ)
   if (length(nAGQ) != 1L || is.na(nAGQ) || nAGQ < 1L) {
     stop("'nAGQ' must be a single positive integer.", call. = FALSE)
   }
+  if (length(nAGQ_in) == 1L && is.numeric(nAGQ_in) && !is.na(nAGQ_in) &&
+      nAGQ_in != nAGQ) {
+    warning("'nAGQ' was truncated from ", format(nAGQ_in), " to ", nAGQ, ".",
+            call. = FALSE)
+  }
+  # Guard against a small nAGQ. The analytic gradient is the score of the TRUE
+  # marginal likelihood (Fisher's identity), not of its nAGQ-point quadrature
+  # approximation, so the two only agree as nAGQ grows. Measured against
+  # numDeriv on the exported objective, the relative gradient error is 65.7% at
+  # nAGQ = 1, 5.5e-3 at 5, 5.0e-7 at 11 and 4.3e-9 at 21. At nAGQ = 1 that
+  # propagated into a 8.9% error in the standard errors, 32% non-convergence
+  # and 57.3% empirical coverage of a nominal 95% Wald interval (against 93.3%
+  # from nAGQ = 5 upward). nAGQ = 1 is therefore not a supported configuration
+  # for inference, only for a quick exploratory fit.
+  if (nAGQ < 5L) {
+    warning("nAGQ = ", nAGQ, " is below the supported minimum of 5. The ",
+            "analytic gradient approximates the score of the exact marginal ",
+            "likelihood, not of the ", nAGQ, "-point quadrature, so the ",
+            "optimiser may stop early and the standard errors are not ",
+            "reliable (measured coverage at nAGQ = 1 is 57%, not 95%). Use ",
+            "nAGQ >= 5, and nAGQ >= 11 when reporting inference.",
+            call. = FALSE)
+  }
+  inner_maxit <- as.integer(inner_maxit)
+  if (length(inner_maxit) != 1L || is.na(inner_maxit) || inner_maxit < 1L) {
+    stop("'inner_maxit' must be a single positive integer.", call. = FALSE)
+  }
+  # The per-cluster inner solver must be allowed to actually reach the
+  # posterior mode: the AGHQ expansion is taken AT that mode, so a truncated
+  # inner solve silently expands around the wrong point. Measured on a stress
+  # design, the marginal negative log-likelihood came out as 5442.85, 3048.23
+  # and 487.01 for inner_maxit 1, 2 and 3 against a correct value of -260.00,
+  # with a singular Hessian in all three cases -- and no diagnostic.
+  if (inner_maxit < 10L) {
+    stop("'inner_maxit' must be at least 10. With fewer iterations the inner ",
+         "solver need not reach the posterior mode, and the AGHQ expansion is ",
+         "then taken around the wrong point, silently returning a wrong ",
+         "marginal likelihood.", call. = FALSE)
+  }
 
   link_spec <- .normalize_simplex_link(link)
+  # `subset` is non-standard-evaluated, like lm()/glm(). See .simplex_eval_subset().
+  subset_idx <- .simplex_eval_subset(substitute(subset), data, parent.frame())
   design <- .build_simplex_mixed_matrices(formula, random, data,
-                                          subset = subset, na.action = na.action)
+                                          subset = subset_idx, na.action = na.action)
 
   response <- design$y
   X <- design$X
@@ -292,6 +356,29 @@ fastsimplexregmixed <- function(
             call. = FALSE)
   }
 
+  # Degenerate cluster structures. Without these guards a single-level grouping
+  # factor, or a design in which every cluster is a singleton, fits happily and
+  # reports convergence = 0 while the variance component collapses to ~1e-8
+  # with a standard error in the thousands. lme4::glmer refuses both.
+  if (J < 2L) {
+    stop("The grouping factor '", design$group_name, "' has ", J,
+         " level(s). A random effect needs at least 2 sampled levels.",
+         call. = FALSE)
+  }
+  grp_sizes <- tabulate(as.integer(group), nbins = J)
+  if (all(grp_sizes <= 1L)) {
+    warning("Every cluster of '", design$group_name, "' contains a single ",
+            "observation, so the random effect is not separable from the ",
+            "residual variation. The variance component will collapse towards ",
+            "zero and its standard error is meaningless.", call. = FALSE)
+  } else if (min(grp_sizes) < q) {
+    warning(sum(grp_sizes < q), " of ", J, " cluster(s) of '",
+            design$group_name, "' have fewer than q = ", q, " observations, ",
+            "so their random effects are not identified by their own data ",
+            "alone and rest entirely on the shrinkage towards Sigma.",
+            call. = FALSE)
+  }
+
   # Group-contiguous ordering + CSR offsets.
   gi <- as.integer(group)
   ord <- order(gi)
@@ -299,6 +386,10 @@ fastsimplexregmixed <- function(
   starts <- as.integer(c(0L, cumsum(tabulate(gi, nbins = J))))
 
   y_ord <- response[ord]
+  # Offsets are per-observation, so they follow the group-contiguous reordering
+  # exactly as y and the design matrices do.
+  off_mu_ord <- if (is.null(design$offset_mu)) NULL else design$offset_mu[ord]
+  off_phi_ord <- if (is.null(design$offset_phi)) NULL else design$offset_phi[ord]
   X_ord <- X[ord, , drop = FALSE]
   W_ord <- W[ord, , drop = FALSE]
   Z_ord <- Z[ord, , drop = FALSE]
@@ -319,8 +410,8 @@ fastsimplexregmixed <- function(
     starts = starts, q = as.integer(q), mean_link = link_spec$id,
     nAGQ = nAGQ, maxit = as.integer(maxit), rel_tol = as.numeric(rel_tol),
     grad_tol = as.numeric(grad_tol), n_threads = as.integer(n_threads),
-    inner_maxit = as.integer(inner_maxit), inner_tol = as.numeric(inner_tol),
-    trace = isTRUE(trace)
+    inner_maxit = inner_maxit, inner_tol = as.numeric(inner_tol),
+    trace = isTRUE(trace), off_mu_ = off_mu_ord, off_phi_ = off_phi_ord
   )
 
   theta <- as.numeric(opt$par)
@@ -338,13 +429,15 @@ fastsimplexregmixed <- function(
   # Random-effect predictions (empirical Bayes modes + posterior covariances).
   re <- simplex_mixed_ranef_cpp(theta, y_ord, X_ord, Z_ord, W_ord, starts,
                                 as.integer(q), link_spec$id, as.integer(n_threads),
-                                as.integer(inner_maxit), as.numeric(inner_tol))
+                                inner_maxit, as.numeric(inner_tol),
+                                off_mu_ = off_mu_ord, off_phi_ = off_phi_ord)
   ranef_mat <- re$b
   dimnames(ranef_mat) <- list(levels(group), re_names)
 
   # Conditional fitted values (include random effects), mapped to original order.
   pred <- simplex_mixed_predict_cpp(theta, X_ord, Z_ord, W_ord, starts,
-                                    as.integer(q), re$b, link_spec$id, TRUE)
+                                    as.integer(q), re$b, link_spec$id, TRUE,
+                                    off_mu_ = off_mu_ord, off_phi_ = off_phi_ord)
   mu_ord <- as.numeric(pred$mu)
   phi_ord <- as.numeric(pred$phi)
   eta_mu_ord <- as.numeric(pred$eta_mu)
@@ -381,7 +474,8 @@ fastsimplexregmixed <- function(
       theta = theta, y = y_ord, X = X_ord, Z = Z_ord, W = W_ord,
       starts = starts, q = as.integer(q), mean_link = link_spec$id, nAGQ = nAGQ,
       rel_step = as.numeric(hessian_rel_step), n_threads = as.integer(n_threads),
-      inner_maxit = as.integer(inner_maxit), inner_tol = as.numeric(inner_tol)
+      inner_maxit = inner_maxit, inner_tol = as.numeric(inner_tol),
+      off_mu_ = off_mu_ord, off_phi_ = off_phi_ord
     )
     dimnames(hessian) <- list(par_names, par_names)
 
@@ -441,6 +535,7 @@ fastsimplexregmixed <- function(
     function_evaluations = as.integer(opt$function_evaluations),
     gradient_evaluations = as.integer(opt$gradient_evaluations),
     gradient = as.numeric(opt$gradient),
+    offset = list(mean = design$offset_mu, dispersion = design$offset_phi),
     terms = list(mean = design$terms_mean, dispersion = design$terms_dispersion,
                  random = design$terms_random),
     design = design[c(

@@ -75,3 +75,52 @@ test_that("fastsimplexreg rejects a start vector of the wrong length", {
     "length ncol"
   )
 })
+
+
+# `subset` is non-standard-evaluated, as in stats::lm/glm. Until 0.2.4 it was a
+# plain index vector: `subset = x1 > 0` silently used an unrelated `x1` from the
+# caller when one existed, fitting the wrong rows with no symptom at all.
+test_that("subset is evaluated inside data, not in the caller", {
+  set.seed(1)
+  n <- 200L
+  dat <- data.frame(x1 = stats::rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.7 * dat$x1, "logit"), 1)
+  # A DIFFERENT vector of the same name in the calling frame. The old code used
+  # this one; the correct behaviour is to prefer the data column.
+  x1 <- stats::rnorm(n)
+  stopifnot(sum(dat$x1 > 0) != sum(x1 > 0))   # the two must actually differ
+
+  fit <- fastsimplexreg(y ~ x1, data = dat, subset = x1 > 0, n_threads = 1L)
+  expect_equal(nobs(fit), sum(dat$x1 > 0))
+  expect_equal(nobs(fit), nobs(stats::glm(stats::qlogis(y) ~ x1, data = dat,
+                                          subset = x1 > 0)))
+})
+
+test_that("every pre-0.2.4 subset form still works", {
+  set.seed(1)
+  n <- 200L
+  dat <- data.frame(x1 = stats::rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.7 * dat$x1, "logit"), 1)
+  f <- function(s) nobs(fastsimplexreg(y ~ x1, data = dat, subset = s,
+                                       n_threads = 1L))
+
+  expect_equal(f(1:50), 50L)                       # numeric index
+  expect_equal(f(-(1:20)), 180L)                   # negative index
+  expect_equal(f(dat$x1 > 0), sum(dat$x1 > 0))     # logical
+  expect_equal(nobs(fastsimplexreg(y ~ x1, data = dat, n_threads = 1L)), n)
+
+  lg <- dat$x1 > 0
+  lg[1:5] <- NA                                    # NA drops the row, as in glm
+  expect_equal(f(lg), nobs(stats::glm(stats::qlogis(y) ~ x1, data = dat,
+                                      subset = lg)))
+})
+
+test_that("a logical subset of the wrong length is refused", {
+  set.seed(1)
+  n <- 50L
+  dat <- data.frame(x1 = stats::rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 * dat$x1, "logit"), 1)
+  expect_error(fastsimplexreg(y ~ x1, data = dat, subset = c(TRUE, FALSE),
+                              n_threads = 1L),
+               "length nrow\\(data\\)")
+})

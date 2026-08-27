@@ -72,8 +72,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // simplex_eval_cpp
-Rcpp::List simplex_eval_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const int n_threads);
-RcppExport SEXP _fastsimplexreg_simplex_eval_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP n_threadsSEXP) {
+Rcpp::List simplex_eval_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const int n_threads, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_eval_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP n_threadsSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -83,13 +83,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::mat& >::type Z(ZSEXP);
     Rcpp::traits::input_parameter< const int >::type mean_link(mean_linkSEXP);
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_eval_cpp(theta, y, X, Z, mean_link, n_threads));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_eval_cpp(theta, y, X, Z, mean_link, n_threads, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_bfgs_cpp
-Rcpp::List simplex_bfgs_cpp(const arma::vec& start, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const int maxit, const double rel_tol, const double grad_tol, const int n_threads, const bool trace);
-RcppExport SEXP _fastsimplexreg_simplex_bfgs_cpp(SEXP startSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP maxitSEXP, SEXP rel_tolSEXP, SEXP grad_tolSEXP, SEXP n_threadsSEXP, SEXP traceSEXP) {
+Rcpp::List simplex_bfgs_cpp(const arma::vec& start, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const int maxit, const double rel_tol, const double grad_tol, const int n_threads, const bool trace, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_bfgs_cpp(SEXP startSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP maxitSEXP, SEXP rel_tolSEXP, SEXP grad_tolSEXP, SEXP n_threadsSEXP, SEXP traceSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -103,13 +105,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type grad_tol(grad_tolSEXP);
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< const bool >::type trace(traceSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_bfgs_cpp(start, y, X, Z, mean_link, maxit, rel_tol, grad_tol, n_threads, trace));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_bfgs_cpp(start, y, X, Z, mean_link, maxit, rel_tol, grad_tol, n_threads, trace, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_hessian_fd_cpp
-arma::mat simplex_hessian_fd_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const double rel_step, const int n_threads);
-RcppExport SEXP _fastsimplexreg_simplex_hessian_fd_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP rel_stepSEXP, SEXP n_threadsSEXP) {
+arma::mat simplex_hessian_fd_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const int mean_link, const double rel_step, const int n_threads, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_hessian_fd_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP rel_stepSEXP, SEXP n_threadsSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -120,13 +124,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type mean_link(mean_linkSEXP);
     Rcpp::traits::input_parameter< const double >::type rel_step(rel_stepSEXP);
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_hessian_fd_cpp(theta, y, X, Z, mean_link, rel_step, n_threads));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_hessian_fd_cpp(theta, y, X, Z, mean_link, rel_step, n_threads, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_predict_cpp
-Rcpp::List simplex_predict_cpp(const arma::vec& theta, const arma::mat& X, const arma::mat& Z, const int mean_link);
-RcppExport SEXP _fastsimplexreg_simplex_predict_cpp(SEXP thetaSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP) {
+Rcpp::List simplex_predict_cpp(const arma::vec& theta, const arma::mat& X, const arma::mat& Z, const int mean_link, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_predict_cpp(SEXP thetaSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP mean_linkSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -134,7 +140,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type Z(ZSEXP);
     Rcpp::traits::input_parameter< const int >::type mean_link(mean_linkSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_predict_cpp(theta, X, Z, mean_link));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_predict_cpp(theta, X, Z, mean_link, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -151,8 +159,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // simplex_mixed_eval_cpp
-Rcpp::List simplex_mixed_eval_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const int n_threads, const int inner_maxit, const double inner_tol);
-RcppExport SEXP _fastsimplexreg_simplex_mixed_eval_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP) {
+Rcpp::List simplex_mixed_eval_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const int n_threads, const int inner_maxit, const double inner_tol, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_mixed_eval_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -168,13 +176,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< const int >::type inner_maxit(inner_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type inner_tol(inner_tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_mixed_eval_cpp(theta, y, X, Z, W, starts, q, mean_link, nAGQ, n_threads, inner_maxit, inner_tol));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_mixed_eval_cpp(theta, y, X, Z, W, starts, q, mean_link, nAGQ, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_mixed_bfgs_cpp
-Rcpp::List simplex_mixed_bfgs_cpp(const arma::vec& start, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const int maxit, const double rel_tol, const double grad_tol, const int n_threads, const int inner_maxit, const double inner_tol, const bool trace);
-RcppExport SEXP _fastsimplexreg_simplex_mixed_bfgs_cpp(SEXP startSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP maxitSEXP, SEXP rel_tolSEXP, SEXP grad_tolSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP, SEXP traceSEXP) {
+Rcpp::List simplex_mixed_bfgs_cpp(const arma::vec& start, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const int maxit, const double rel_tol, const double grad_tol, const int n_threads, const int inner_maxit, const double inner_tol, const bool trace, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_mixed_bfgs_cpp(SEXP startSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP maxitSEXP, SEXP rel_tolSEXP, SEXP grad_tolSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP, SEXP traceSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -194,13 +204,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type inner_maxit(inner_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type inner_tol(inner_tolSEXP);
     Rcpp::traits::input_parameter< const bool >::type trace(traceSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_mixed_bfgs_cpp(start, y, X, Z, W, starts, q, mean_link, nAGQ, maxit, rel_tol, grad_tol, n_threads, inner_maxit, inner_tol, trace));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_mixed_bfgs_cpp(start, y, X, Z, W, starts, q, mean_link, nAGQ, maxit, rel_tol, grad_tol, n_threads, inner_maxit, inner_tol, trace, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_mixed_hessian_fd_cpp
-arma::mat simplex_mixed_hessian_fd_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const double rel_step, const int n_threads, const int inner_maxit, const double inner_tol);
-RcppExport SEXP _fastsimplexreg_simplex_mixed_hessian_fd_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP rel_stepSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP) {
+arma::mat simplex_mixed_hessian_fd_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int nAGQ, const double rel_step, const int n_threads, const int inner_maxit, const double inner_tol, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_mixed_hessian_fd_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP nAGQSEXP, SEXP rel_stepSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -217,13 +229,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< const int >::type inner_maxit(inner_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type inner_tol(inner_tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_mixed_hessian_fd_cpp(theta, y, X, Z, W, starts, q, mean_link, nAGQ, rel_step, n_threads, inner_maxit, inner_tol));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_mixed_hessian_fd_cpp(theta, y, X, Z, W, starts, q, mean_link, nAGQ, rel_step, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_mixed_ranef_cpp
-Rcpp::List simplex_mixed_ranef_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int n_threads, const int inner_maxit, const double inner_tol);
-RcppExport SEXP _fastsimplexreg_simplex_mixed_ranef_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP) {
+Rcpp::List simplex_mixed_ranef_cpp(const arma::vec& theta, const arma::vec& y, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const int mean_link, const int n_threads, const int inner_maxit, const double inner_tol, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_mixed_ranef_cpp(SEXP thetaSEXP, SEXP ySEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP mean_linkSEXP, SEXP n_threadsSEXP, SEXP inner_maxitSEXP, SEXP inner_tolSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -238,13 +252,15 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
     Rcpp::traits::input_parameter< const int >::type inner_maxit(inner_maxitSEXP);
     Rcpp::traits::input_parameter< const double >::type inner_tol(inner_tolSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_mixed_ranef_cpp(theta, y, X, Z, W, starts, q, mean_link, n_threads, inner_maxit, inner_tol));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_mixed_ranef_cpp(theta, y, X, Z, W, starts, q, mean_link, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
 // simplex_mixed_predict_cpp
-Rcpp::List simplex_mixed_predict_cpp(const arma::vec& theta, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const arma::mat& b, const int mean_link, const bool include_re);
-RcppExport SEXP _fastsimplexreg_simplex_mixed_predict_cpp(SEXP thetaSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP bSEXP, SEXP mean_linkSEXP, SEXP include_reSEXP) {
+Rcpp::List simplex_mixed_predict_cpp(const arma::vec& theta, const arma::mat& X, const arma::mat& Z, const arma::mat& W, const arma::uvec& starts, const int q, const arma::mat& b, const int mean_link, const bool include_re, Rcpp::Nullable<Rcpp::NumericVector> off_mu_, Rcpp::Nullable<Rcpp::NumericVector> off_phi_);
+RcppExport SEXP _fastsimplexreg_simplex_mixed_predict_cpp(SEXP thetaSEXP, SEXP XSEXP, SEXP ZSEXP, SEXP WSEXP, SEXP startsSEXP, SEXP qSEXP, SEXP bSEXP, SEXP mean_linkSEXP, SEXP include_reSEXP, SEXP off_mu_SEXP, SEXP off_phi_SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -257,7 +273,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const arma::mat& >::type b(bSEXP);
     Rcpp::traits::input_parameter< const int >::type mean_link(mean_linkSEXP);
     Rcpp::traits::input_parameter< const bool >::type include_re(include_reSEXP);
-    rcpp_result_gen = Rcpp::wrap(simplex_mixed_predict_cpp(theta, X, Z, W, starts, q, b, mean_link, include_re));
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_mu_(off_mu_SEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<Rcpp::NumericVector> >::type off_phi_(off_phi_SEXP);
+    rcpp_result_gen = Rcpp::wrap(simplex_mixed_predict_cpp(theta, X, Z, W, starts, q, b, mean_link, include_re, off_mu_, off_phi_));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -290,16 +308,16 @@ static const R_CallMethodDef CallEntries[] = {
     {"_fastsimplexreg_psimplex_cpp", (DL_FUNC) &_fastsimplexreg_psimplex_cpp, 6},
     {"_fastsimplexreg_qsimplex_cpp", (DL_FUNC) &_fastsimplexreg_qsimplex_cpp, 6},
     {"_fastsimplexreg_rsimplex_cpp", (DL_FUNC) &_fastsimplexreg_rsimplex_cpp, 3},
-    {"_fastsimplexreg_simplex_eval_cpp", (DL_FUNC) &_fastsimplexreg_simplex_eval_cpp, 6},
-    {"_fastsimplexreg_simplex_bfgs_cpp", (DL_FUNC) &_fastsimplexreg_simplex_bfgs_cpp, 10},
-    {"_fastsimplexreg_simplex_hessian_fd_cpp", (DL_FUNC) &_fastsimplexreg_simplex_hessian_fd_cpp, 7},
-    {"_fastsimplexreg_simplex_predict_cpp", (DL_FUNC) &_fastsimplexreg_simplex_predict_cpp, 4},
+    {"_fastsimplexreg_simplex_eval_cpp", (DL_FUNC) &_fastsimplexreg_simplex_eval_cpp, 8},
+    {"_fastsimplexreg_simplex_bfgs_cpp", (DL_FUNC) &_fastsimplexreg_simplex_bfgs_cpp, 12},
+    {"_fastsimplexreg_simplex_hessian_fd_cpp", (DL_FUNC) &_fastsimplexreg_simplex_hessian_fd_cpp, 9},
+    {"_fastsimplexreg_simplex_predict_cpp", (DL_FUNC) &_fastsimplexreg_simplex_predict_cpp, 6},
     {"_fastsimplexreg_simplex_linkinv_cpp", (DL_FUNC) &_fastsimplexreg_simplex_linkinv_cpp, 2},
-    {"_fastsimplexreg_simplex_mixed_eval_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_eval_cpp, 12},
-    {"_fastsimplexreg_simplex_mixed_bfgs_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_bfgs_cpp, 16},
-    {"_fastsimplexreg_simplex_mixed_hessian_fd_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_hessian_fd_cpp, 13},
-    {"_fastsimplexreg_simplex_mixed_ranef_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_ranef_cpp, 11},
-    {"_fastsimplexreg_simplex_mixed_predict_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_predict_cpp, 9},
+    {"_fastsimplexreg_simplex_mixed_eval_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_eval_cpp, 14},
+    {"_fastsimplexreg_simplex_mixed_bfgs_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_bfgs_cpp, 18},
+    {"_fastsimplexreg_simplex_mixed_hessian_fd_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_hessian_fd_cpp, 15},
+    {"_fastsimplexreg_simplex_mixed_ranef_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_ranef_cpp, 13},
+    {"_fastsimplexreg_simplex_mixed_predict_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_predict_cpp, 11},
     {"_fastsimplexreg_simplex_mixed_D_from_omega_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_D_from_omega_cpp, 2},
     {"_fastsimplexreg_simplex_mixed_omega_from_D_cpp", (DL_FUNC) &_fastsimplexreg_simplex_mixed_omega_from_D_cpp, 1},
     {NULL, NULL, 0}

@@ -59,6 +59,8 @@ EvalResult evaluate_impl(
     const vec& y,
     const mat& X,
     const mat& Z,
+    const vec& off_mu,
+    const vec& off_phi,
     const int mean_link,
     const int n_threads,
     const bool need_grad = true) {
@@ -68,16 +70,23 @@ EvalResult evaluate_impl(
   const uword q = Z.n_cols;
   const uword d = p + q;
 
-  if (theta.n_elem != d || X.n_rows != n || Z.n_rows != n) {
+  // An offset of length 0 means "no offset"; anything else must match n.
+  if (theta.n_elem != d || X.n_rows != n || Z.n_rows != n ||
+      (off_mu.n_elem != 0 && off_mu.n_elem != n) ||
+      (off_phi.n_elem != 0 && off_phi.n_elem != n)) {
     return {std::numeric_limits<double>::infinity(), vec(d, arma::fill::zeros), false};
   }
 
   const vec beta = theta.head(p);
   const vec gamma = theta.tail(q);
 
-  // BLAS-backed matrix-vector products for the two linear predictors.
-  const vec eta_mu = X * beta;
-  const vec eta_phi = Z * gamma;
+  // BLAS-backed matrix-vector products for the two linear predictors. An offset
+  // shifts eta by a known constant; it carries no parameter, so the score is
+  // unchanged in form -- d log L / d beta_j is still (d log L / d eta) * x_ij.
+  vec eta_mu = X * beta;
+  vec eta_phi = Z * gamma;
+  if (off_mu.n_elem == n) eta_mu += off_mu;
+  if (off_phi.n_elem == n) eta_phi += off_phi;
 
   int threads = 1;
 #ifdef _OPENMP
@@ -573,9 +582,17 @@ Rcpp::List simplex_eval_cpp(
     const arma::mat& X,
     const arma::mat& Z,
     const int mean_link = 1,
-    const int n_threads = 1) {
+    const int n_threads = 1,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
 
-  const auto res = simplex_fast::evaluate_impl(theta, y, X, Z, mean_link, n_threads, true);
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
+
+  const auto res = simplex_fast::evaluate_impl(theta, y, X, Z, off_mu, off_phi,
+                                               mean_link, n_threads, true);
   return List::create(
     Named("value") = res.nll,
     Named("gradient") = res.grad,
@@ -609,13 +626,21 @@ Rcpp::List simplex_bfgs_cpp(
     const double rel_tol = 1e-9,
     const double grad_tol = 1e-6,
     const int n_threads = 1,
-    const bool trace = false) {
+    const bool trace = false,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   // Delegate to the shared native BFGS driver, wrapping the fixed-effects
   // evaluator as the objective. The optimizer logic is identical to before;
   // it now lives once in simplex_common.h and is reused by the mixed backend.
   auto objective = [&](const arma::vec& th) {
-    return simplex_fast::evaluate_impl(th, y, X, Z, mean_link, n_threads, true);
+    return simplex_fast::evaluate_impl(th, y, X, Z, off_mu, off_phi,
+                                       mean_link, n_threads, true);
   };
   return simplex_fast::bfgs_minimize(start, objective, maxit, rel_tol, grad_tol, trace);
 }
@@ -634,7 +659,14 @@ arma::mat simplex_hessian_fd_cpp(
     const arma::mat& Z,
     const int mean_link = 1,
     const double rel_step = 1e-5,
-    const int n_threads = 1) {
+    const int n_threads = 1,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   const uword d = theta.n_elem;
   mat H(d, d, arma::fill::zeros);
@@ -649,8 +681,10 @@ arma::mat simplex_hessian_fd_cpp(
       plus[j] += h;
       minus[j] -= h;
 
-      const auto gp = simplex_fast::evaluate_impl(plus, y, X, Z, mean_link, n_threads, true);
-      const auto gm = simplex_fast::evaluate_impl(minus, y, X, Z, mean_link, n_threads, true);
+      const auto gp = simplex_fast::evaluate_impl(plus, y, X, Z, off_mu, off_phi,
+                                                 mean_link, n_threads, true);
+      const auto gm = simplex_fast::evaluate_impl(minus, y, X, Z, off_mu, off_phi,
+                                                 mean_link, n_threads, true);
 
       if (gp.valid && gm.valid && std::isfinite(gp.nll) && std::isfinite(gm.nll)) {
         H.col(j) = (gp.grad - gm.grad) / (2.0 * h);
@@ -678,16 +712,30 @@ Rcpp::List simplex_predict_cpp(
     const arma::vec& theta,
     const arma::mat& X,
     const arma::mat& Z,
-    const int mean_link = 1) {
+    const int mean_link = 1,
+    Rcpp::Nullable<Rcpp::NumericVector> off_mu_ = R_NilValue,
+    Rcpp::Nullable<Rcpp::NumericVector> off_phi_ = R_NilValue) {
+
+  const arma::vec off_mu = off_mu_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_mu_.get()) : arma::vec();
+  const arma::vec off_phi = off_phi_.isNotNull()
+    ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
   const uword p = X.n_cols;
   const uword q = Z.n_cols;
+  const uword n = X.n_rows;
   if (theta.n_elem != p + q || X.n_rows != Z.n_rows) {
     Rcpp::stop("Non-conformable parameter vector and design matrices.");
   }
+  if ((off_mu.n_elem != 0 && off_mu.n_elem != n) ||
+      (off_phi.n_elem != 0 && off_phi.n_elem != n)) {
+    Rcpp::stop("Offset length does not match the number of rows.");
+  }
 
-  const vec eta_mu = X * theta.head(p);
-  const vec eta_phi = Z * theta.tail(q);
+  vec eta_mu = X * theta.head(p);
+  vec eta_phi = Z * theta.tail(q);
+  if (off_mu.n_elem == n) eta_mu += off_mu;
+  if (off_phi.n_elem == n) eta_phi += off_phi;
   vec mu(eta_mu.n_elem);
   vec phi(eta_phi.n_elem);
 
