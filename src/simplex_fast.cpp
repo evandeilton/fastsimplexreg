@@ -54,6 +54,18 @@ namespace simplex_fast {
 // The observation loop is optionally parallelized with OpenMP. Only pure C++
 // arithmetic runs inside the parallel region (no R API calls); each thread
 // accumulates into its own private buffers which are reduced afterwards.
+// Precompute log(y) + log(1-y), the part of the simplex log-density that
+// depends only on the data. Entries for y outside the open support are left at
+// zero; evaluate_impl() rejects those observations before ever reading them.
+inline vec make_log_yv(const vec& y) {
+  vec out(y.n_elem, arma::fill::zeros);
+  for (uword i = 0; i < y.n_elem; ++i) {
+    const double yi = y[i];
+    if (yi > 0.0 && yi < 1.0) out[i] = std::log(yi) + std::log(1.0 - yi);
+  }
+  return out;
+}
+
 EvalResult evaluate_impl(
     const vec& theta,
     const vec& y,
@@ -61,6 +73,7 @@ EvalResult evaluate_impl(
     const mat& Z,
     const vec& off_mu,
     const vec& off_phi,
+    const vec& log_yv,
     const int mean_link,
     const int n_threads,
     const bool need_grad = true) {
@@ -80,13 +93,22 @@ EvalResult evaluate_impl(
   const vec beta = theta.head(p);
   const vec gamma = theta.tail(q);
 
-  // BLAS-backed matrix-vector products for the two linear predictors. An offset
+  // The two linear predictors are computed INSIDE the parallel region below,
+  // one row at a time, rather than by two BLAS gemv calls here. An offset
   // shifts eta by a known constant; it carries no parameter, so the score is
   // unchanged in form -- d log L / d beta_j is still (d log L / d eta) * x_ij.
-  vec eta_mu = X * beta;
-  vec eta_phi = Z * gamma;
-  if (off_mu.n_elem == n) eta_mu += off_mu;
-  if (off_phi.n_elem == n) eta_phi += off_phi;
+  //
+  // Why not BLAS: these gemvs are memory-bound, and a threaded BLAS makes them
+  // slower, not faster. Measured on a 1e6 x 2 matvec, OpenBLAS took 14.9 ms
+  // across 24 threads against 5.4 ms pinned to one -- 2.8x slower FOR being
+  // parallelised. Worse, the gemvs ran serially with respect to our own OpenMP
+  // region, so they became an Amdahl ceiling: at n = 2e6 they were 24% of an
+  // evaluation on one thread but 71% on sixteen, capping total speedup near 2x
+  // while the observation loop itself scaled 7.5x. Folding them into the loop
+  // removes both problems and leaves the package independent of how the user's
+  // BLAS is configured.
+  const bool use_off_mu = (off_mu.n_elem == n);
+  const bool use_off_phi = (off_phi.n_elem == n);
 
   int threads = 1;
 #ifdef _OPENMP
@@ -131,17 +153,27 @@ EvalResult evaluate_impl(
         continue;
       }
 
+      // eta_i = x_i' beta and eta_phi_i = z_i' gamma, accumulated in the same
+      // column order a column-major gemv uses, so the result is bit-identical
+      // to the BLAS call this replaces (verified across n, p and link).
+      double eta_mu_i = 0.0;
+      for (uword j = 0; j < p; ++j) eta_mu_i += X(i, j) * beta[j];
+      if (use_off_mu) eta_mu_i += off_mu[i];
+      double eta_phi_i = 0.0;
+      for (uword j = 0; j < q; ++j) eta_phi_i += Z(i, j) * gamma[j];
+      if (use_off_phi) eta_phi_i += off_phi[i];
+
       double mu = 0.0;
       double dmu_deta = 0.0;
       bool sat = false;
-      if (!mean_from_eta(eta_mu[i], mean_link, mu, dmu_deta, &sat)) {
+      if (!mean_from_eta(eta_mu_i, mean_link, mu, dmu_deta, &sat)) {
         invalid = 1;
         continue;
       }
       if (sat) ++local_sat;
 
       // Dispersion link is log, so phi = exp(eta_phi) is strictly positive.
-      const double phi = safe_exp(eta_phi[i]);
+      const double phi = safe_exp(eta_phi_i);
       if (!(phi > 0.0) || !std::isfinite(phi)) {
         invalid = 1;
         continue;
@@ -156,8 +188,14 @@ EvalResult evaluate_impl(
       // Unit deviance dev = (y-mu)^2 / [y(1-y) (mu(1-mu))^2].
       const double dev = diff * diff * inv_yvar / qmu2;
 
+      // log(y_i) + log(1-y_i) depends only on the DATA, so it is computed once
+      // per call site rather than on every one of the ~76 objective evaluations
+      // a fit makes. A profile attributed ~20% of a single-threaded fixed-effects
+      // fit to libm's log, and two of the three log calls per observation were
+      // this constant. The arithmetic is unchanged term for term, so the result
+      // is bit-identical -- only the transcendental calls move.
       const double loglik_i = -0.5 * (LOG_2PI + std::log(phi))
-                            -1.5 * (std::log(yi) + std::log(one_y))
+                            -1.5 * log_yv[i]
                             -0.5 * dev / phi;
 
       if (!std::isfinite(loglik_i)) {
@@ -227,52 +265,6 @@ inline double inv_gaussian_one(const double mean, const double tau) {
     x = mean * mean / x;
   }
   return x;
-}
-
-// Integrate the simplex density over [a, b] using an adaptive Gauss-Legendre
-// rule seeded with knots placed at multiples of the first-order standard
-// deviation around the mean. Seeding matters: for small phi the density is a
-// narrow spike, and a naive adaptive rule started on the whole interval can
-// bisect into two panels that both miss the spike, converge on a near-zero
-// estimate and stop. The knots guarantee the peak is always resolved.
-//
-// The CDF no longer uses this -- simplex_logcdf_raw() is a closed form -- but
-// it is retained as an INDEPENDENT reference: tests/testthat cross-checks the
-// closed form against it, and having two unrelated routes to the same number
-// is what caught the naive-quadrature failure at mu = 0.05, phi = 1e-4 (where
-// stats::integrate() returns 6.2e-163 for a probability of 1).
-inline double simplex_integrate(const double a, const double b,
-                                const double mu, const double phi,
-                                const arma::vec& gln, const arma::vec& glw) {
-  if (!(b > a)) return 0.0;
-  const double u = mu * (1.0 - mu);
-  double sd = std::sqrt(phi * u * u * u);          // Var(Y) ~ phi * V(mu)
-  if (!(sd > 0.0) || !std::isfinite(sd)) sd = 0.1;
-
-  static const double mult[] = {-12.0, -8.0, -6.0, -4.0, -3.0, -2.0, -1.5, -1.0,
-                                -0.5, -0.25, 0.0, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0,
-                                4.0, 6.0, 8.0, 12.0};
-  std::vector<double> knots;
-  knots.reserve(24);
-  knots.push_back(a);
-  for (const double m : mult) {
-    const double k = mu + m * sd;
-    if (k > a && k < b) knots.push_back(k);
-  }
-  knots.push_back(b);
-  std::sort(knots.begin(), knots.end());
-  knots.erase(std::unique(knots.begin(), knots.end()), knots.end());
-
-  const auto integrand = [&](const double t) { 
-    return std::exp(simplex_logpdf(t, mu, phi));
-  };
-
-  double total = 0.0;
-  for (std::size_t k = 0; k + 1 < knots.size(); ++k) {
-    total += integrate_adaptive(integrand, knots[k], knots[k + 1], gln, glw,
-                                1e-15, 1e-12, 40);
-  }
-  return total;
 }
 
 // log F(y) for the simplex, in CLOSED FORM.
@@ -426,10 +418,21 @@ Rcpp::NumericVector dsimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     const double yi = y[i % ny];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -450,6 +453,7 @@ Rcpp::NumericVector dsimplex_cpp(
     }
     const double ld = simplex_fast::simplex_logpdf(yi, mui, phii);
     out[i] = log ? ld : std::exp(ld);
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -458,10 +462,10 @@ Rcpp::NumericVector dsimplex_cpp(
 
 
 // Simplex distribution function in C++.
-// There is no closed form, so the density is integrated numerically with an
-// adaptive Gauss-Legendre rule whose panels are seeded around the mean (see
-// simplex_integrate). Argument conventions follow base R's p*(): `lower_tail`
-// and `log_p` are honoured, NA/NaN propagate, and invalid parameters give NaN.
+// Evaluated from the closed form in simplex_logcdf_raw(); log_p is computed on
+// the log scale throughout rather than as log() of a linear value. Argument
+// conventions follow base R's p*(): `lower_tail` and `log_p` are honoured,
+// NA/NaN propagate, and invalid parameters give NaN.
 // [[Rcpp::export]]
 Rcpp::NumericVector psimplex_cpp(
     const Rcpp::NumericVector& q,
@@ -485,10 +489,21 @@ Rcpp::NumericVector psimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     const double qi = q[i % nq];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -510,6 +525,7 @@ Rcpp::NumericVector psimplex_cpp(
     simplex_fast::simplex_logcdf_one(qi, mui, phii, logF, logS);
     const double lv = lower_tail ? logF : logS;
     out[i] = log_p ? lv : std::min(1.0, std::max(0.0, std::exp(lv)));
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -545,10 +561,21 @@ Rcpp::NumericVector qsimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     double pi_ = p[i % npr];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -571,6 +598,7 @@ Rcpp::NumericVector qsimplex_cpp(
     if (pi_ < 0.0 || pi_ > 1.0) { out[i] = R_NaN; ++n_bad; continue; }
 
     out[i] = simplex_fast::simplex_quantile_one(pi_, mui, phii);
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -649,8 +677,9 @@ Rcpp::List simplex_eval_cpp(
   const arma::vec off_phi = off_phi_.isNotNull()
     ? Rcpp::as<arma::vec>(off_phi_.get()) : arma::vec();
 
+  const arma::vec log_yv = simplex_fast::make_log_yv(y);
   const auto res = simplex_fast::evaluate_impl(theta, y, X, Z, off_mu, off_phi,
-                                               mean_link, n_threads, true);
+                                               log_yv, mean_link, n_threads, true);
   return List::create(
     Named("value") = res.nll,
     Named("gradient") = res.grad,
@@ -696,8 +725,9 @@ Rcpp::List simplex_bfgs_cpp(
   // Delegate to the shared native BFGS driver, wrapping the fixed-effects
   // evaluator as the objective. The optimizer logic is identical to before;
   // it now lives once in simplex_common.h and is reused by the mixed backend.
+  const arma::vec log_yv = simplex_fast::make_log_yv(y);
   auto objective = [&](const arma::vec& th) {
-    return simplex_fast::evaluate_impl(th, y, X, Z, off_mu, off_phi,
+    return simplex_fast::evaluate_impl(th, y, X, Z, off_mu, off_phi, log_yv,
                                        mean_link, n_threads, true);
   };
   return simplex_fast::bfgs_minimize(start, objective, maxit, rel_tol, grad_tol, trace);
@@ -728,8 +758,12 @@ arma::mat simplex_hessian_fd_cpp(
 
   const uword d = theta.n_elem;
   mat H(d, d, arma::fill::zeros);
+  const arma::vec log_yv = simplex_fast::make_log_yv(y);
 
   for (uword j = 0; j < d; ++j) {
+    // Serial loop of 2d objective evaluations; a meaningful share of a long
+    // fit, and previously unreachable by Ctrl-C.
+    Rcpp::checkUserInterrupt();
     double h = rel_step * std::max(1.0, std::abs(theta[j]));
     bool success = false;
 
@@ -740,9 +774,9 @@ arma::mat simplex_hessian_fd_cpp(
       minus[j] -= h;
 
       const auto gp = simplex_fast::evaluate_impl(plus, y, X, Z, off_mu, off_phi,
-                                                 mean_link, n_threads, true);
+                                                 log_yv, mean_link, n_threads, true);
       const auto gm = simplex_fast::evaluate_impl(minus, y, X, Z, off_mu, off_phi,
-                                                 mean_link, n_threads, true);
+                                                 log_yv, mean_link, n_threads, true);
 
       if (gp.valid && gm.valid && std::isfinite(gp.nll) && std::isfinite(gm.nll)) {
         H.col(j) = (gp.grad - gm.grad) / (2.0 * h);

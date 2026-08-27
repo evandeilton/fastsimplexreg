@@ -237,13 +237,15 @@ test_that("non-convergence is signalled and standard errors are withheld", {
   # sensible region cannot take a single step, which is the case the stopping
   # rule must still refuse to call convergence.
   dat <- sim_mixed(J = 40L, nj = 6L, seed = 7L)
-  # Such a start also saturates the mean link, which warns on its own; that is
-  # correct but incidental here.
+  # The stall is driven through the dispersion: exp(-700) underflows, so the
+  # objective is non-finite along every direction and no step size rescues it.
+  # (A saturated MEAN start is no longer a stall -- from 0.2.4 the scaled first
+  # trial step escapes it -- so it can no longer serve as this test's fixture.)
   expect_warning(
     fit <- withCallingHandlers(
       fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
                           nAGQ = 5L, n_threads = 1L, maxit = 1L,
-                          start = c(-80, 0, 0, 0, 0)),
+                          start = c(0, 0, -700, 0, 0)),
       warning = function(w) if (grepl("saturated", conditionMessage(w)))
         invokeRestart("muffleWarning")),
     "did not converge")
@@ -317,17 +319,60 @@ test_that("a modest nAGQ converges instead of reporting a spurious failure", {
 
 test_that("a genuine optimiser failure is still reported as one", {
   # Softening the stopping rule must not turn every stall into a success: a run
-  # that cannot take a single step keeps code 2.
+  # that genuinely cannot take a single step keeps code 2. The stall is driven
+  # through the DISPERSION here: exp(-700) underflows, so the objective is
+  # non-finite along every direction and no step size can rescue it.
   set.seed(2L)
   n <- 200L
   dat <- data.frame(x1 = rnorm(n))
   dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
   fit <- suppressWarnings(
-    fastsimplexreg(y ~ x1, data = dat, start = c(-80, 0, 0), maxit = 1L,
+    fastsimplexreg(y ~ x1, data = dat, start = c(0, 0, -700), maxit = 1L,
                    n_threads = 1L))
   expect_identical(fit$convergence, 2L)
   expect_match(fit$message, "Line search failed")
   expect_true(all(is.na(fit$standard_errors)))
+})
+
+test_that("a saturated start is escapable, and reported while it lasts", {
+  # From 0.2.4 the first trial step is scaled while H is still the identity, so
+  # a start deep inside the saturated region -- where the raw gradient is
+  # enormous and a unit step overshoots by orders of magnitude -- is no longer
+  # a dead end. Before, start = c(-80, 0, 0) failed the line search outright and
+  # returned code 2 at iteration 1.
+  set.seed(2L)
+  n <- 200L
+  dat <- data.frame(x1 = rnorm(n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"), 1)
+
+  one_step <- suppressWarnings(
+    fastsimplexreg(y ~ x1, data = dat, start = c(-80, 0, 0), maxit = 1L,
+                   n_threads = 1L, inference = FALSE))
+  # It MOVED: the stop is the iteration budget, not a failed line search.
+  expect_identical(one_step$convergence, 1L)
+  expect_match(one_step$message, "Maximum number of iterations")
+
+  # Escaping is only partial, and the package says so. The MEAN coefficients
+  # cannot move at all from there -- their gradient is identically zero once
+  # every observation is clamped -- so the run optimises the dispersion around a
+  # frozen, absurd mean and lands on a genuine stationary point of the CLAMPED
+  # objective, far below the real optimum. What matters is that none of that is
+  # reported as a trustworthy fit.
+  w <- character(0)
+  from_bad <- withCallingHandlers(
+    fastsimplexreg(y ~ x1, data = dat, start = c(-80, 0, 0), n_threads = 1L),
+    warning = function(x) { w <<- c(w, conditionMessage(x)); invokeRestart("muffleWarning") })
+
+  expect_identical(unname(coef(from_bad)[1:2]), c(-80, 0))   # never moved
+  expect_lt(from_bad$logLik,
+            fastsimplexreg(y ~ x1, data = dat, n_threads = 1L,
+                           inference = FALSE)$logLik)
+  # Every mean coefficient is unidentified: NA, never a confident number.
+  expect_true(all(is.na(from_bad$standard_errors[1:2])))
+  expect_true(from_bad$vcov_pseudo)
+  expect_identical(from_bad$n_saturated, nobs(from_bad))
+  expect_match(w, "rank deficient", all = FALSE)
+  expect_match(w, "saturated", all = FALSE)
 })
 
 

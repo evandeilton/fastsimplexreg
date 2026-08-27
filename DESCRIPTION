@@ -42,6 +42,7 @@ Suggests:
     numDeriv,
     betareg,
     microbenchmark,
+    RhpcBLASctl,
     lme4,
     MASS,
     scales,

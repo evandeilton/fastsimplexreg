@@ -81,6 +81,55 @@ below carries a measured proof in `tests/testthat`.
   rank, pseudo-inverse use, ill-conditioning, saturated observations, aliased
   coefficients, and whether inference was computed at all.
 
+## Parallelism and the C++ backend (audit of the OpenMP layer)
+
+* **The linear predictors are no longer computed through BLAS.** `X %*% beta`
+  and `Z %*% gamma` were two `gemv` calls, serial with respect to the package's
+  own OpenMP region, and a threaded BLAS made them *slower*: a 1e6 x 2 matvec
+  took 14.9 ms across 24 OpenBLAS threads against 5.4 ms pinned to one. They
+  were also an Amdahl ceiling -- 24% of an evaluation on one thread but 71% on
+  sixteen. `eta` is now accumulated inside the existing parallel loop, in the
+  same column order a column-major `gemv` uses, and the single-threaded result
+  is **bit-identical** to the BLAS version across every `p` and link tested.
+  End-to-end speed-ups on a 24-core machine:
+
+  | problem | 2 threads | 4 | 8 | 16 |
+  |---|---|---|---|---|
+  | n = 1e5, p = 5 | 1.4x | 2.2x | 2.1x | 2.2x |
+  | n = 1e6, p = 10 | 1.9x | 3.2x | 5.0x | 5.2x |
+  | n = 5e6, p = 10 | 1.1x | 3.3x | 5.1x | 5.1x |
+
+  The same n = 1e5 case was previously a *loss* at every thread count under
+  default BLAS settings (0.22x at 16 threads).
+* **Long calls can be interrupted.** There was no interrupt check anywhere in
+  the C++ backend, so `Ctrl-C` was dead for the whole of a `.Call` -- measured
+  at 154 s for a single-threaded fit at n = 2e6. `Rcpp::checkUserInterrupt()`
+  (which throws, so destructors unwind, rather than `R_CheckUserInterrupt()`
+  which longjmps) now runs at the top of each BFGS iteration, at the top of each
+  finite-difference Hessian column, and between 65536-element chunks of the
+  `d`/`p`/`q` loops.
+* **Exceptions can no longer escape a parallel region.** A throw crossing an
+  OpenMP structured block terminates the process rather than unwinding
+  (verified: SIGABRT, the outer `catch` never runs). One `arma::inv()` call in
+  the cluster loop used the throwing overload; it now uses the boolean form like
+  every other decomposition there. The cluster loop body, which performs about
+  twenty Armadillo allocations per cluster, is wrapped so that a `std::bad_alloc`
+  under memory pressure becomes a clean R error instead of an abort.
+* **A badly scaled design converges.** The first BFGS trial step was 1.0 in the
+  units of the raw gradient. With a covariate scaled by 1e5 that overshoots by
+  eight orders of magnitude and the 40 available halvings never reach a
+  decrease, so the fit stopped at iteration 1 with a log-likelihood 155.5 units
+  below what `nlminb()` reaches on the identical objective. The step is now
+  scaled while `H` is still the identity -- which is also 22% *cheaper* on
+  ordinary fits.
+* **`RhpcBLASctl` (Suggests) is used to pin the BLAS** for the duration of a
+  mixed fit and restore it afterwards, worth a further 34% at four threads.
+* Parallel behaviour is now tested (`tests/testthat/test-parallel.R`): the
+  distribution functions are bit-identical across thread counts, fits agree to
+  floating-point noise, and interruptibility has a regression test.
+* Removed the adaptive Gauss-Legendre quadrature, dead since the CDF became a
+  closed form.
+
 ## Packaging
 
 * `Depends: R (>= 4.0.0)` -- no R 4.1 feature is used.
