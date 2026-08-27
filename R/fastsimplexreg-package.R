@@ -40,3 +40,31 @@
 #' @importFrom stats deviance formula simulate update
 #' @importFrom rlang .data
 "_PACKAGE"
+
+
+# Register ngrps.simplex_fast_mixed with lme4's INDEPENDENT ngrps generic.
+#
+# lme4 defines its own ngrps generic (with an ngrps.default that stops), so
+# attaching lme4 after fastsimplexreg masked ours and ngrps(fit) failed with
+# "Cannot extract the number of groups from this object". Exporting the method
+# is not enough: UseMethod() consults the S3 registration table of the namespace
+# where the GENERIC is defined, which is lme4's, and that table cannot contain a
+# method we never registered into it. So we register it -- immediately if lme4
+# is already loaded, and through a load hook otherwise.
+#
+# ranef and VarCorr need none of this: lme4 re-exports the very same nlme
+# generic objects we import, so there is only ever one generic in play.
+.register_lme4_ngrps <- function() {
+  if (!isNamespaceLoaded("lme4")) return(invisible(FALSE))
+  try(registerS3method("ngrps", "simplex_fast_mixed",
+                       ngrps.simplex_fast_mixed,
+                       envir = asNamespace("lme4")), silent = TRUE)
+  invisible(TRUE)
+}
+
+.onLoad <- function(libname, pkgname) {
+  .register_lme4_ngrps()
+  setHook(packageEvent("lme4", "onLoad"),
+          function(...) .register_lme4_ngrps())
+  invisible()
+}

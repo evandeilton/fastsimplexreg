@@ -454,3 +454,58 @@ test_that("the packed omega diagonal is labelled as a Cholesky factor when q >= 
   expect_match(names(f1$omega)[1], "^logsd\\.")
   expect_equal(unname(exp(f1$omega[1])), unname(sqrt(f1$Sigma[1, 1])))
 })
+
+
+test_that("the mixed model fits with every mean link", {
+  dat <- sim_mixed(J = 25L, nj = 6L, seed = 12L)
+  for (lk in c("logit", "probit", "cloglog", "neglog")) {
+    fit <- suppressWarnings(
+      fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, link = lk,
+                          nAGQ = 7L, n_threads = 1L, inference = FALSE))
+    expect_s3_class(fit, "simplex_fast_mixed")
+    expect_true(is.finite(fit$logLik), info = lk)
+    expect_true(all(fitted(fit) > 0 & fitted(fit) < 1), info = lk)
+    expect_identical(fit$link$mean, lk)
+  }
+})
+
+test_that("mixed predict supports every type, and plot returns ggplots", {
+  dat <- sim_mixed(J = 25L, nj = 6L, seed = 13L)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                             n_threads = 1L, inference = FALSE)
+
+  expect_length(predict(fit, type = "mean"), nrow(dat))
+  expect_true(all(predict(fit, type = "dispersion") > 0))
+  lp <- predict(fit, type = "link")
+  expect_named(lp, c("mean", "dispersion"))
+  both <- predict(fit, type = "both")
+  expect_s3_class(both, "data.frame")
+  expect_named(both, c("mu", "phi"))
+  expect_equal(both$mu, unname(predict(fit, type = "response")))
+  expect_equal(unname(fitted(fit, model = "dispersion")),
+               unname(predict(fit, type = "dispersion")))
+
+  skip_if_not_installed("ggplot2")
+  p <- plot(fit, which = 1L)
+  expect_s3_class(p, "ggplot")
+  # Several panels give a patchwork object when patchwork is available and a
+  # named list of ggplots otherwise -- both are the documented contract.
+  multi <- plot(fit, which = 1:2)
+  if (requireNamespace("patchwork", quietly = TRUE)) {
+    expect_s3_class(multi, "patchwork")
+  } else {
+    expect_type(multi, "list")
+    expect_length(multi, 2L)
+    expect_s3_class(multi[[1L]], "ggplot")
+  }
+})
+
+test_that("ngrps survives lme4 being attached afterwards", {
+  skip_if_not_installed("lme4")
+  x <- structure(list(ngrps = 7L), class = "simplex_fast_mixed")
+  expect_identical(ngrps(x), 7L)
+  # lme4 defines an INDEPENDENT ngrps generic whose default stops. The method is
+  # registered into lme4's namespace by .onLoad(), so either generic finds it.
+  loadNamespace("lme4")
+  expect_identical(lme4::ngrps(x), 7L)
+})

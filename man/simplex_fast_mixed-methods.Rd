@@ -94,6 +94,21 @@ interval is defensible; on the variance scale it would not be, because
 the null lies on the boundary.}
 }
 }
+\examples{
+set.seed(1)
+J <- 40; nj <- 8; n <- J * nj
+dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+b <- rnorm(J, 0, 0.7)[dat$g]
+dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                           nAGQ = 7, n_threads = 1)
+
+coef(fit)
+VarCorr(fit)
+head(ranef(fit))
+confint(fit)
+ngrps(fit)
+}
 \seealso{
 \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}
 }

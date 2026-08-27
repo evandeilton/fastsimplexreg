@@ -1,3 +1,12 @@
+# NOTE ON DEPENDENCIES
+#
+# This script is shipped for reproducibility, not run by R CMD check. Besides
+# fastsimplexreg it needs 'betareg' and 'microbenchmark' (both in Suggests) and
+# 'simplexreg', which was ARCHIVED on CRAN and is therefore NOT declared as a
+# dependency -- install it from the archive if you want the accuracy
+# comparison. Every optional package is guarded with requireNamespace(), so the
+# script degrades to whatever is available.
+
 #!/usr/bin/env Rscript
 ## =====================================================================
 ## run_benchmark.R

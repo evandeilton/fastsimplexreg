@@ -156,3 +156,55 @@ test_that("all four mean links fit and converge", {
 
 
 
+
+
+# The suite otherwise checks INTERNAL coherence -- that deviance matches the
+# residuals, that AIC matches logLik. Nothing anchored the estimates outside the
+# package. This test maximises an independently written pure-R likelihood with
+# stats::optim and requires the two to agree.
+test_that("the MLE matches an independent pure-R likelihood, for every link", {
+  linkinvs <- list(
+    logit = stats::plogis,
+    probit = stats::pnorm,
+    cloglog = function(e) -expm1(-exp(e)),
+    neglog = function(e) exp(-exp(-e))
+  )
+  nll_R <- function(th, y, X, Z, linkinv) {
+    p <- ncol(X)
+    mu <- linkinv(drop(X %*% th[seq_len(p)]))
+    ph <- exp(drop(Z %*% th[-seq_len(p)]))
+    d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
+    -sum(-0.5 * (log(2 * pi) + log(ph)) - 1.5 * (log(y) + log(1 - y)) - 0.5 * d / ph)
+  }
+
+  set.seed(42)
+  n <- 600L
+  dat <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1L, 0.5), z1 = rnorm(n))
+  for (lk in names(linkinvs)) {
+    mu <- linkinvs[[lk]](0.2 + 0.6 * dat$x1 - 0.3 * dat$x2)
+    dat$y <- rsimplex(n, mu, exp(-0.4 + 0.5 * dat$z1))
+    fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = dat, link = lk, n_threads = 1L)
+
+    X <- cbind(1, dat$x1, dat$x2)
+    Z <- cbind(1, dat$z1)
+    opt <- stats::optim(coef(fit), nll_R, y = dat$y, X = X, Z = Z,
+                        linkinv = linkinvs[[lk]], method = "BFGS",
+                        control = list(reltol = 1e-14, maxit = 2000L))
+    expect_equal(fit$logLik, -opt$value, tolerance = 1e-8,
+                 info = paste("link:", lk))
+    expect_equal(unname(coef(fit)), unname(opt$par), tolerance = 1e-5,
+                 info = paste("link:", lk))
+  }
+})
+
+test_that("subset selects the rows the fit is actually computed on", {
+  set.seed(8)
+  n <- 300L
+  dat <- data.frame(x1 = rnorm(n), grp = rep(c("a", "b"), length.out = n))
+  dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.7 * dat$x1, "logit"), 1)
+
+  sub <- fastsimplexreg(y ~ x1, data = dat, subset = grp == "a", n_threads = 1L)
+  manual <- fastsimplexreg(y ~ x1, data = dat[dat$grp == "a", ], n_threads = 1L)
+  expect_equal(coef(sub), coef(manual))
+  expect_equal(nobs(sub), sum(dat$grp == "a"))
+})

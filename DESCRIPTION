@@ -1,7 +1,7 @@
 Package: fastsimplexreg
 Type: Package
 Title: Fast Simplex Regression with Variable Dispersion
-Version: 0.2.3
+Version: 0.2.4
 Authors@R:
     person(given = "José Evandeilton",
            family = "Lopes",
@@ -23,7 +23,7 @@ Description: High-performance maximum-likelihood estimation of simplex
 License: MIT + file LICENSE
 Encoding: UTF-8
 Depends:
-    R (>= 4.1.0)
+    R (>= 4.0.0)
 Imports:
     Rcpp,
     Formula,
@@ -41,13 +41,16 @@ Suggests:
     patchwork,
     numDeriv,
     betareg,
+    microbenchmark,
+    lme4,
+    MASS,
     scales,
     dplyr,
     tidyr
 VignetteBuilder: knitr
-SystemRequirements: C++17
 URL: https://github.com/evandeilton/fastsimplexreg, https://evandeilton.github.io/fastsimplexreg/
 BugReports: https://github.com/evandeilton/fastsimplexreg/issues
+Language: en-GB
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown
 Roxygen: list(markdown = TRUE)

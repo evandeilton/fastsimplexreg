@@ -80,8 +80,8 @@
     stop("'formula' must be a formula such as y ~ x1 + x2 | z1 + z2.", call. = FALSE)
   }
 
-  F <- Formula::Formula(formula)
-  dims <- length(F)
+  fml <- Formula::Formula(formula)
+  dims <- length(fml)
 
   if (dims[1L] != 1L) {
     stop("The model must contain exactly one response component.", call. = FALSE)
@@ -101,18 +101,18 @@
   }
 
   mf <- stats::model.frame(
-    F,
+    fml,
     data = data,
     na.action = na.action,
     drop.unused.levels = TRUE
   )
 
-  response <- Formula::model.part(F, data = mf, lhs = 1L, drop = TRUE)
-  X <- stats::model.matrix(F, data = mf, rhs = 1L)
+  response <- Formula::model.part(fml, data = mf, lhs = 1L, drop = TRUE)
+  X <- stats::model.matrix(fml, data = mf, rhs = 1L)
 
   if (dims[2L] == 2L) {
-    Z <- stats::model.matrix(F, data = mf, rhs = 2L)
-    terms_dispersion <- stats::terms(F, rhs = 2L)
+    Z <- stats::model.matrix(fml, data = mf, rhs = 2L)
+    terms_dispersion <- stats::terms(fml, rhs = 2L)
   } else {
     Z <- matrix(
       1.0,
@@ -134,7 +134,7 @@
   storage.mode(X) <- "double"
   storage.mode(Z) <- "double"
 
-  terms_mean <- stats::terms(F, rhs = 1L)
+  terms_mean <- stats::terms(fml, rhs = 1L)
 
   n_obs <- nrow(X)
   offset_mu <- .simplex_check_offset(.simplex_offset(terms_mean, mf), n_obs, "mean")
@@ -142,7 +142,7 @@
                                       n_obs, "dispersion")
 
   list(
-    formula = F,
+    formula = fml,
     model = mf,
     y = response,
     X = X,

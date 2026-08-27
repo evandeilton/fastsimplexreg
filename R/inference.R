@@ -242,6 +242,34 @@
 }
 
 
+# Diagnostics the fit object has always stored but never showed. A user who
+# saves a fit, restarts, and prints the summary would otherwise see a clean
+# table with no hint that a pseudo-inverse was used or that the mean
+# saturated -- the warnings fire only once, at fitting time.
+.simplex_print_diagnostics <- function(x) {
+  if (isTRUE(x$no_inference)) {
+    cat("\nStandard errors: not computed (fitted with inference = FALSE).\n")
+  } else if (!is.null(x$aliased) && any(x$aliased)) {
+    cat("\nAliased (not estimable): ",
+        paste(names(x$aliased)[x$aliased], collapse = ", "), "\n", sep = "")
+  }
+  if (isTRUE(x$vcov_pseudo)) {
+    cat("Observed information: rank ", x$vcov_rank, " of ", x$npar,
+        " (Moore-Penrose pseudo-inverse used).\n", sep = "")
+  } else if (is.finite(x$vcov_condition) &&
+             x$vcov_condition > 1 / sqrt(.Machine$double.eps)) {
+    cat("Information matrix ill-conditioned (condition ",
+        format(x$vcov_condition, digits = 3), " on the correlation scale).\n",
+        sep = "")
+  }
+  if (!is.na(x$n_saturated) && x$n_saturated > 0L) {
+    cat("Saturated observations: ", x$n_saturated, " of ", x$nobs,
+        " hit the numerical boundary of the mean link.\n", sep = "")
+  }
+  invisible(NULL)
+}
+
+
 # Internal: shared Wald-interval builder for both fit classes.
 #
 # Selection is BY POSITION throughout. That matters because `parm` may name a

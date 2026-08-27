@@ -459,7 +459,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 #' @return An object of class `"summary.simplex_fast"`, a list whose main
 #'   component `coefficients` is itself a list with the `mean` and `dispersion`
 #'   coefficient tables (each with columns `Estimate`, `Std. Error`, `z value`
-#'   and `Pr(>|z|)`), together with the Pearson residuals, the links, fit
+#'   and `Pr(>|z|)`), together with the quantile residuals, the links, fit
 #'   statistics (log-likelihood, AIC, BIC, deviance) and optimiser diagnostics.
 #'   The `print` method returns its argument invisibly.
 #'
@@ -502,12 +502,23 @@ summary.simplex_fast <- function(object, ...) {
       # A list with separate mean and dispersion coefficient tables, matching
       # the layout used by other simplex/beta regression packages.
       coefficients = list(mean = mean_tab, dispersion = disp_tab),
-      pearson.residuals = .simplex_resid_raw(object, "pearson"),
+      # Quantile residuals, not Pearson: Pearson residuals rejected up to
+      # 100% of CORRECT models in a Shapiro-Wilk check, because
+      # Var(Y) = phi V(mu) only holds to first order (the measured ratio
+      # falls to 0.437 at phi = 10).
+      quantile.residuals = .simplex_resid_raw(object, "quantile"),
       logLik = object$logLik,
       AIC = object$AIC,
       BIC = object$BIC,
       deviance = stats::deviance(object),   # unscaled; see ?deviance.simplex_fast
       nobs = object$nobs,
+      vcov_rank = object$vcov_rank,
+      vcov_pseudo = object$vcov_pseudo,
+      vcov_condition = object$vcov_condition,
+      n_saturated = object$n_saturated,
+      aliased = object$aliased,
+      npar = length(object$par),
+      no_inference = is.null(object$vcov),
       convergence = object$convergence,
       message = object$message,
       iterations = object$iterations,
@@ -530,8 +541,8 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
         ") -- results below are UNRELIABLE. ***\n", sep = "")
   }
 
-  cat("\nPearson residuals:\n")
-  res_q <- stats::quantile(x$pearson.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
+  cat("\nQuantile residuals:\n")
+  res_q <- stats::quantile(x$quantile.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
   names(res_q) <- c("Min", "1Q", "Median", "3Q", "Max")
   print(round(res_q, digits + 1L))
 
@@ -546,6 +557,7 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
   cat(" | BIC:", formatC(x$BIC, digits = digits, format = "fg"), "\n")
   cat("Deviance:", formatC(x$deviance, digits = digits, format = "fg"))
   cat(" | Observations:", x$nobs, "| Iterations:", x$iterations, "\n")
+  .simplex_print_diagnostics(x)
   cat("Convergence:", x$convergence, "-", x$message, "\n")
   invisible(x)
 }

@@ -22,11 +22,29 @@ nlme::VarCorr
 #' @param object A fitted model object.
 #' @param ... Additional arguments, currently ignored.
 #' @return An integer, the number of groups.
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#' ngrps(fit)
 #' @export
 ngrps <- function(object, ...) UseMethod("ngrps")
 
 #' @rdname ngrps
 #' @export
+#' @rawNamespace export(ngrps.simplex_fast_mixed)
+# The METHOD is exported, not only registered. `lme4` defines its own,
+# independent `ngrps` generic, and its UseMethod() searches lme4's registration
+# table -- which cannot contain ours. Attaching lme4 after fastsimplexreg
+# therefore masked our generic and `ngrps(fit)` failed with "Cannot extract the
+# number of groups from this object". With the method on the search path either
+# generic finds it. (`ranef` and `VarCorr` were never affected: lme4 re-exports
+# the same nlme generic objects, so there is only one generic in play.)
 ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 
 
@@ -85,6 +103,21 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'
 #' @seealso [fastsimplexregmixed()]
 #'
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#'
+#' coef(fit)
+#' VarCorr(fit)
+#' head(ranef(fit))
+#' confint(fit)
+#' ngrps(fit)
 #' @name simplex_fast_mixed-methods
 #' @rdname simplex_fast_mixed-methods
 #' @export
@@ -219,6 +252,17 @@ print.VarCorr.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
 #' @return A numeric vector, list or `data.frame`, depending on `type`.
 #'
 #' @seealso [fastsimplexregmixed()]
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#' head(predict(fit))
+#' head(predict(fit, re.form = NA))
 #' @export
 predict.simplex_fast_mixed <- function(object, newdata = NULL,
                                        type = c("response", "mean", "dispersion", "link", "both"),
@@ -349,6 +393,16 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
 #'
 #' @return Invisibly, a `ggplot`/\pkg{patchwork} object or a list of `ggplot`s.
 #' @seealso [fastsimplexregmixed()], [plot.simplex_fast()]
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#' if (requireNamespace("ggplot2", quietly = TRUE)) p <- plot(fit, which = 1:2)
 #' @export
 plot.simplex_fast_mixed <- function(x, which = 1:4,
                                     type = c("quantile", "deviance", "pearson", "response"),
@@ -364,6 +418,16 @@ plot.simplex_fast_mixed <- function(x, which = 1:4,
 #' @param ... Additional arguments, currently ignored.
 #' @return The object `x`, invisibly.
 #' @seealso [fastsimplexregmixed()], [summary.simplex_fast_mixed()]
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#' print(fit)
 #' @export
 print.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   cat("\nFast simplex mixed model with variable dispersion\n")
@@ -393,6 +457,16 @@ print.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3
 #' @param ... Additional arguments, currently ignored.
 #' @return An object of class `"summary.simplex_fast_mixed"`.
 #' @seealso [fastsimplexregmixed()]
+#'
+#' @examples
+#' set.seed(1)
+#' J <- 40; nj <- 8; n <- J * nj
+#' dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+#' b <- rnorm(J, 0, 0.7)[dat$g]
+#' dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+#' fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+#'                            nAGQ = 7, n_threads = 1)
+#' summary(fit)
 #' @export
 summary.simplex_fast_mixed <- function(object, ...) {
   p <- length(object$coefficients$mean)
@@ -414,9 +488,20 @@ summary.simplex_fast_mixed <- function(object, ...) {
       link = object$link,
       coefficients = list(mean = mean_tab, dispersion = disp_tab),
       varcorr = VarCorr.simplex_fast_mixed(object),
-      pearson.residuals = .simplex_resid_raw(object, "pearson"),
+      # Quantile residuals, not Pearson: Pearson residuals rejected up to
+      # 100% of CORRECT models in a Shapiro-Wilk check, because
+      # Var(Y) = phi V(mu) only holds to first order (the measured ratio
+      # falls to 0.437 at phi = 10).
+      quantile.residuals = .simplex_resid_raw(object, "quantile"),
       logLik = object$logLik, AIC = object$AIC, BIC = object$BIC,
       nobs = object$nobs, ngrps = object$ngrps, nAGQ = object$nAGQ,
+      vcov_rank = object$vcov_rank,
+      vcov_pseudo = object$vcov_pseudo,
+      vcov_condition = object$vcov_condition,
+      n_saturated = object$n_saturated,
+      aliased = object$aliased,
+      npar = length(object$par),
+      no_inference = is.null(object$vcov),
       convergence = object$convergence, message = object$message,
       iterations = object$iterations
     ),
@@ -434,8 +519,8 @@ print.summary.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
         ") -- results below are UNRELIABLE. ***\n", sep = "")
   }
 
-  cat("\nPearson residuals:\n")
-  rq <- stats::quantile(x$pearson.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
+  cat("\nQuantile residuals:\n")
+  rq <- stats::quantile(x$quantile.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
   names(rq) <- c("Min", "1Q", "Median", "3Q", "Max")
   print(round(rq, digits + 1L))
 
@@ -452,6 +537,7 @@ print.summary.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
       "| BIC:", formatC(x$BIC, digits = digits, format = "fg"), "\n")
   cat("Observations:", x$nobs, "| Groups:", x$ngrps, "| nAGQ:", x$nAGQ,
       "| Iterations:", x$iterations, "\n")
+  .simplex_print_diagnostics(x)
   cat("Convergence:", x$convergence, "-", x$message, "\n")
   invisible(x)
 }
