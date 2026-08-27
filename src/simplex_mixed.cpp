@@ -281,6 +281,25 @@ EvalResult mixed_core(
       vec phi(nj);
       for (uword i = 0; i < nj; ++i) phi[i] = safe_exp(eta_phi[i]);
 
+      // Constants of the inner objective, hoisted out of hval().
+      //
+      // log(phi_i), log(y_i) and log(1-y_i) do not depend on b, yet hval()
+      // recomputed all three on EVERY call -- and hval() is called twice for the
+      // warm-start guard and then once plus up to thirty step-halvings per inner
+      // Newton iteration, so a cluster paid hundreds of redundant log() calls.
+      // A profile attributed 27% of a single-threaded mixed fit to libm's
+      // log/exp, the single largest category. The node loop below already
+      // hoisted exactly these into `cst`; the inner solver did not, which was an
+      // inconsistency rather than a decision.
+      //
+      // The per-observation arithmetic is unchanged term for term, so the
+      // objective is bit-identical -- only the transcendental calls move.
+      vec log_phi(nj), log_yv(nj);
+      for (uword i = 0; i < nj; ++i) {
+        log_phi[i] = std::log(phi[i]);
+        log_yv[i] = std::log(yj[i]) + std::log(1.0 - yj[i]);
+      }
+
       // ---- inner Newton (Fisher scoring) for the posterior mode ----
       vec b = Bhat.row(j).t();
 
@@ -295,8 +314,8 @@ EvalResult mixed_core(
           const double u = mu * (1.0 - mu);
           const double diff = yj[i] - mu;
           const double dev = diff * diff / (yj[i] * one_y * u * u);
-          const double lf = -0.5 * (LOG_2PI + std::log(phi[i]))
-                            - 1.5 * (std::log(yj[i]) + std::log(one_y))
+          const double lf = -0.5 * (LOG_2PI + log_phi[i])
+                            - 1.5 * log_yv[i]
                             - 0.5 * dev / phi[i];
           if (!std::isfinite(lf)) { ok = false; return 0.0; }
           s += lf;
@@ -458,8 +477,7 @@ EvalResult mixed_core(
         inv_phi[i] = 1.0 / phi[i];
         const double one_y = 1.0 - yj[i];
         inv_yv[i] = 1.0 / (yj[i] * one_y);
-        cst += -0.5 * (LOG_2PI + std::log(phi[i]))
-               - 1.5 * (std::log(yj[i]) + std::log(one_y));
+        cst += -0.5 * (LOG_2PI + log_phi[i]) - 1.5 * log_yv[i];
       }
 
       // ---- Single AGHQ pass: build the unnormalized log-weights a_k and, when
