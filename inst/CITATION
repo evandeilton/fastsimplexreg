@@ -1,0 +1,21 @@
+bibentry(
+  bibtype  = "Manual",
+  title    = "{fastsimplexreg}: Fast Simplex Regression with Variable Dispersion",
+  author   = person("Jose Evandeilton", "Lopes"),
+  year     = sub("-.*", "", meta$Date %||% format(Sys.Date(), "%Y")),
+  note     = sprintf("R package version %s", meta$Version),
+  url      = "https://github.com/evandeilton/fastsimplexreg",
+  header   = "To cite fastsimplexreg in publications, please cite both the package and the underlying model:"
+)
+
+bibentry(
+  bibtype = "Article",
+  title   = "Some parametric models on the simplex",
+  author  = c(person("Ole E.", "Barndorff-Nielsen"), person("Bent", "Jorgensen")),
+  journal = "Journal of Multivariate Analysis",
+  year    = "1991",
+  volume  = "39",
+  number  = "1",
+  pages   = "106--116",
+  doi     = "10.1016/0047-259X(91)90008-P"
+)

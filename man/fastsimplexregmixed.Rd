@@ -42,7 +42,9 @@ random intercept; \code{~ 1 + x1 | group} a random intercept and slope.}
 \code{"neglog"}. The dispersion uses a log link.}
 
 \item{nAGQ}{Number of adaptive Gauss-Hermite quadrature points per random-
-effect dimension. \code{nAGQ = 1} is the Laplace approximation.}
+effect dimension. Values below 5 are accepted but warn: the standard
+errors are then unreliable (see Details). \code{nAGQ = 1} is the Laplace
+approximation.}
 
 \item{start}{Optional starting vector \code{c(beta, gamma, omega)}. When \code{NULL},
 fast link-specific values are used.}
@@ -65,13 +67,17 @@ errors.}
 
 \item{hessian_rel_step}{Relative step for the finite-difference Hessian.}
 
-\item{inner_maxit}{Maximum iterations of the per-cluster inner solver.}
+\item{inner_maxit}{Maximum iterations of the per-cluster inner solver.
+Must be at least 10: the AGHQ expansion is taken at the posterior mode,
+so a truncated inner solve expands around the wrong point.}
 
 \item{inner_tol}{Convergence tolerance of the inner solver.}
 
 \item{trace}{Logical; print optimiser progress.}
 
-\item{subset}{Optional index vector selecting observations.}
+\item{subset}{Optional expression selecting a subset of observations,
+evaluated inside \code{data} as in \code{\link[stats:lm]{stats::lm()}} -- for example
+\code{subset = x1 > 0}. A plain index, logical or row-name vector also works.}
 
 \item{na.action}{Missing-data handler.}
 
@@ -95,7 +101,12 @@ grouping factor are given through \code{random}.
 }
 \details{
 The marginal likelihood integrates the cluster random effects out with AGHQ
-(\code{nAGQ} points per dimension; \code{nAGQ = 1} gives the Laplace approximation).
+(\code{nAGQ} points per dimension). \code{nAGQ = 1} is the Laplace approximation and
+is accepted only with a warning: the analytic score is the score of the
+exact marginal likelihood, not of the \code{nAGQ}-point quadrature, so at
+\code{nAGQ = 1} the two disagree by about 66\% and the resulting Wald intervals
+cover 57\% rather than 95\%. Use \code{nAGQ >= 5}, and \code{nAGQ >= 11} when
+reporting inference.
 The per-cluster inner mode-finding, the quadrature and the analytic score are
 implemented in C++ (RcppArmadillo, BLAS) and parallelised over clusters with
 OpenMP, so the fit scales to large nested data sets. The random-effect

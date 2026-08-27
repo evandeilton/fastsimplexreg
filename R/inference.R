@@ -131,6 +131,178 @@
 }
 
 
+# Internal: derivative dmu/deta of each mean link, on the reporting scale.
+.simplex_dmu_deta <- function(eta, link) {
+  switch(
+    link,
+    logit = { m <- stats::plogis(eta); m * (1 - m) },
+    probit = stats::dnorm(eta),
+    cloglog = exp(eta - exp(eta)),
+    neglog = exp(-eta - exp(-eta)),
+    stop("Unsupported link.", call. = FALSE)
+  )
+}
+
+
+# Internal: EXACT expected (Fisher) information for c(beta, gamma).
+#
+# The simplex is a proper dispersion model: d(Y; mu)/phi is exactly chi-squared
+# with one degree of freedom. Three consequences follow, all exact rather than
+# asymptotic:
+#
+#   * the dispersion score is -1/2 + dev/(2 phi), whose variance is exactly 1/2,
+#     so the gamma block is exactly (1/2) Z'Z -- free of the data and of phi;
+#   * d l/d eta_mu is proportional to 1/phi and has mean zero, so the cross
+#     block E[-d^2 l / d eta_mu d eta_phi] is exactly ZERO: beta and gamma are
+#     orthogonal, and the information is block diagonal;
+#   * the mean block uses the exact I(mu) = 1/(phi V(mu)) + 3/(mu(1-mu)) with
+#     V(mu) = {mu(1-mu)}^3, times (dmu/deta)^2.
+#
+# Sanity check that fixes all three at once: under constant dispersion this
+# gives SE(gamma_0) = sqrt(2/n) exactly, which matches the observed-information
+# value to eight digits at n = 4000.
+.simplex_expected_info <- function(X, Z, eta_mu, eta_phi, link) {
+  mu <- simplex_linkinv(eta_mu, link)
+  phi <- exp(eta_phi)
+  dmu <- .simplex_dmu_deta(eta_mu, link)
+  u <- mu * (1 - mu)
+  w_mu <- dmu^2 * (1 / (phi * u^3) + 3 / u)
+
+  p <- ncol(X)
+  q <- ncol(Z)
+  info <- matrix(0, p + q, p + q)
+  info[seq_len(p), seq_len(p)] <- crossprod(X, X * w_mu)
+  info[p + seq_len(q), p + seq_len(q)] <- 0.5 * crossprod(Z)
+  # The off-diagonal blocks stay exactly zero: beta and gamma are orthogonal.
+  0.5 * (info + t(info))
+}
+
+
+# Internal: residuals on the COMPLETE rows only. The residuals() methods wrap
+# this in .simplex_pad(); internal consumers (plot, summary) use it directly so
+# that they stay aligned with fitted.values, which is never padded.
+.simplex_resid_raw <- function(object, type) {
+  mu <- object$fitted.values
+  y <- .simplex_response(object)
+  phi <- object$dispersion.values
+  switch(
+    type,
+    response = y - mu,
+    # Randomized quantile residuals (Dunn and Smyth, 1996). The simplex is
+    # continuous, so no randomization is needed and these are EXACTLY standard
+    # normal under a correct model -- which neither of the other two types is.
+    # Measured rejection rates of Shapiro-Wilk under a CORRECT model, 200
+    # replicates at n = 300: quantile 0.040-0.065 against a nominal 0.05, while
+    # Pearson reached 0.965, 0.975 and 1.000 as the fitted means moved away
+    # from 1/2. Deviance residuals hold their nominal rate in a Q-Q plot with a
+    # quartile reference line, but carry a systematic trend in mu: the spread
+    # of their mean across sextiles of mu-hat reached 0.52 at phi = 7.4,
+    # against 0.03 for these.
+    # setNames: psimplex() goes through C++ and returns an unnamed vector,
+    # which would silently drop the observation labels.
+    quantile = stats::setNames(
+      stats::qnorm(psimplex(y, mu, phi, log.p = TRUE), log.p = TRUE),
+      names(mu)),
+    # Pearson residuals use the simplex unit variance function
+    # V(mu) = {mu (1 - mu)}^3 scaled by the dispersion phi, i.e. the first-order
+    # dispersion-model approximation Var(Y) ~ phi * V(mu).
+    pearson = (y - mu) / sqrt(phi * (mu * (1 - mu))^3),
+    # Signed deviance residuals from the simplex unit deviance
+    # d(y; mu) = (y - mu)^2 / {y (1 - y) mu^2 (1 - mu)^2}.
+    deviance = {
+      d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
+      sign(y - mu) * sqrt(d / phi)
+    }
+  )
+}
+
+
+# Internal: re-expand a per-observation vector over the rows that na.action
+# removed, so that na.exclude() means what stats says it means.
+#
+# `na.action = na.exclude` was accepted and had no effect: fitted() and
+# residuals() came back with the number of COMPLETE rows, not the number of
+# rows in the data, so nothing could be aligned back to the source without
+# knowing which rows had been dropped. stats::naresid()/napredict() do the
+# padding; they are no-ops under na.omit, which keeps the default unchanged.
+.simplex_pad <- function(object, values) {
+  na_act <- object$na.action
+  if (is.null(na_act)) return(values)
+  stats::naresid(na_act, values)
+}
+
+
+# Internal: names for the FULL parameter vector. The dispersion block is
+# prefixed so that a coefficient appearing in both submodels (typically
+# "(Intercept)") is addressable unambiguously by name in coef(), vcov(),
+# confint() and every downstream tool that indexes by name. This follows
+# betareg, whose coef() reads "(Intercept)", "x1", "(phi)_(Intercept)".
+.simplex_par_names <- function(mean_names, disp_names) {
+  c(mean_names, paste0("(phi)_", disp_names))
+}
+
+
+# Diagnostics the fit object has always stored but never showed. A user who
+# saves a fit, restarts, and prints the summary would otherwise see a clean
+# table with no hint that a pseudo-inverse was used or that the mean
+# saturated -- the warnings fire only once, at fitting time.
+.simplex_print_diagnostics <- function(x) {
+  if (isTRUE(x$no_inference)) {
+    cat("\nStandard errors: not computed (fitted with inference = FALSE).\n")
+  } else if (!is.null(x$aliased) && any(x$aliased)) {
+    cat("\nAliased (not estimable): ",
+        paste(names(x$aliased)[x$aliased], collapse = ", "), "\n", sep = "")
+  }
+  if (isTRUE(x$vcov_pseudo)) {
+    cat("Observed information: rank ", x$vcov_rank, " of ", x$npar,
+        " (Moore-Penrose pseudo-inverse used).\n", sep = "")
+  } else if (is.finite(x$vcov_condition) &&
+             x$vcov_condition > 1 / sqrt(.Machine$double.eps)) {
+    cat("Information matrix ill-conditioned (condition ",
+        format(x$vcov_condition, digits = 3), " on the correlation scale).\n",
+        sep = "")
+  }
+  if (!is.na(x$n_saturated) && x$n_saturated > 0L) {
+    cat("Saturated observations: ", x$n_saturated, " of ", x$nobs,
+        " hit the numerical boundary of the mean link.\n", sep = "")
+  }
+  invisible(NULL)
+}
+
+
+# Internal: shared Wald-interval builder for both fit classes.
+#
+# Selection is BY POSITION throughout. That matters because `parm` may name a
+# coefficient that appears in more than one submodel; resolving such a name by
+# `%in%` returns every match, and letting stats::confint.default index vcov()
+# by name returns the FIRST match for all of them -- which is how a mixed fit
+# used to report the mean intercept's interval for the dispersion intercept.
+.simplex_confint <- function(est, se, parm, level, missing_parm) {
+  pnames <- names(est)
+  if (missing_parm || is.null(parm)) {
+    idx <- seq_along(est)
+  } else if (is.numeric(parm)) {
+    idx <- as.integer(parm)
+  } else {
+    idx <- which(pnames %in% parm)
+  }
+  idx <- idx[!is.na(idx) & idx >= 1L & idx <= length(est)]
+  if (!length(idx)) {
+    stop("No valid parameters selected in 'parm'.", call. = FALSE)
+  }
+  if (length(level) != 1L || !is.finite(level) || level <= 0 || level >= 1) {
+    stop("'level' must be a single number strictly between 0 and 1.", call. = FALSE)
+  }
+
+  a <- (1 - level) / 2
+  z <- stats::qnorm(1 - a)
+  ci <- cbind(est[idx] - z * se[idx], est[idx] + z * se[idx])
+  colnames(ci) <- paste0(format(100 * c(a, 1 - a), trim = TRUE, digits = 3), " %")
+  rownames(ci) <- pnames[idx]
+  ci
+}
+
+
 # Internal: report saturation of the mean link instead of applying it silently.
 # `n` counts the observations whose fitted mean hit the numerical floor of the
 # likelihood path, where the score contribution is exactly zero by construction.

@@ -53,9 +53,13 @@ reference:
       - fastsimplexreg
       - fastsimplexregmixed
   - title: "The simplex distribution"
-    desc: "Density, random generation and the mean link inverse."
+    desc: >
+      Density, distribution and quantile functions, random generation, and the
+      mean link inverse.
     contents:
       - dsimplex
+      - psimplex
+      - qsimplex
       - rsimplex
       - simplex_linkinv
   - title: "S3 methods: fixed-effects fits"

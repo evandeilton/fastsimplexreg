@@ -28,9 +28,13 @@
 #'   \item{`confint`}{Returns Wald confidence intervals
 #'     \eqn{\hat\theta \pm z_{1-\alpha/2}\,\mathrm{SE}(\hat\theta)}, using the
 #'     covariance matrix from `vcov`.}
-#'   \item{`deviance`}{Returns the scaled deviance
-#'     \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, equal to the sum of squared
-#'     deviance residuals.}
+#'   \item{`deviance`}{Returns the unscaled deviance
+#'     \eqn{\sum_i d(y_i;\hat\mu_i)}. `type = "scaled"` gives
+#'     \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}, the sum of squared deviance
+#'     residuals -- but note that this is identically `nobs(object)` whenever
+#'     the dispersion submodel contains an intercept, since that is what the
+#'     score equation for \eqn{\gamma} forces, so it cannot distinguish two
+#'     models.}
 #'   \item{`model.matrix`}{Returns the mean (`model = "mean"`) or dispersion
 #'     (`model = "dispersion"`) design matrix. Requires the fit to have stored
 #'     the design (`x = TRUE`) or the model frame (`model = TRUE`).}
@@ -54,8 +58,10 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"response"`, `"pearson"` or
-#'   `"deviance"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; randomized
+#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+#'   standard normal under a correct model), `"response"`, `"pearson"` or
+#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param parm For `confint`, a specification of which parameters to report,
 #'   either a vector of numeric indices or of names. Defaults to all.
 #' @param level For `confint`, the confidence level.
@@ -133,42 +139,38 @@ nobs.simplex_fast <- function(object, ...) object$nobs
 #' @export
 fitted.simplex_fast <- function(object, model = c("mean", "dispersion"), ...) {
   model <- match.arg(model)
-  if (model == "mean") object$fitted.values else object$dispersion.values
+  .simplex_pad(object,
+               if (model == "mean") object$fitted.values
+               else object$dispersion.values)
 }
 
 
 #' @rdname simplex_fast-methods
 #' @export
-residuals.simplex_fast <- function(object, type = c("response", "pearson", "deviance"), ...) {
+residuals.simplex_fast <- function(object, type = c("quantile", "response", "pearson", "deviance"), ...) {
+  type <- match.arg(type)
+  .simplex_pad(object, .simplex_resid_raw(object, type))
+}
+
+
+
+#' @rdname simplex_fast-methods
+#' @export
+deviance.simplex_fast <- function(object,
+                                  type = c("unscaled", "scaled"), ...) {
   type <- match.arg(type)
   mu <- object$fitted.values
   y <- .simplex_response(object)
-  phi <- object$dispersion.values
-  switch(
-    type,
-    response = y - mu,
-    # Pearson residuals use the simplex unit variance function
-    # V(mu) = {mu (1 - mu)}^3 scaled by the dispersion phi, i.e. the first-order
-    # dispersion-model approximation Var(Y) ~ phi * V(mu).
-    pearson = (y - mu) / sqrt(phi * (mu * (1 - mu))^3),
-    # Signed deviance residuals from the simplex unit deviance
-    # d(y; mu) = (y - mu)^2 / {y (1 - y) mu^2 (1 - mu)^2}.
-    deviance = {
-      d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-      sign(y - mu) * sqrt(d / phi)
-    }
-  )
-}
-
-
-#' @rdname simplex_fast-methods
-#' @export
-deviance.simplex_fast <- function(object, ...) {
-  mu <- object$fitted.values
-  y <- .simplex_response(object)
-  phi <- object$dispersion.values
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-  sum(d / phi)
+  # The SCALED deviance carries no information whenever the dispersion submodel
+  # has an intercept: the score equation for gamma is sum(-1/2 + dev/(2 phi)) = 0
+  # over the columns of Z, so an intercept forces sum(dev_i / phi_i) = nobs
+  # EXACTLY. Measured across five different specifications on the same data it
+  # returned 250.0000 every time while the log-likelihood ranged from 70.8 to
+  # 309.1. The default is therefore the UNSCALED deviance, which does respond to
+  # the mean submodel.
+  if (type == "scaled") return(sum(d / object$dispersion.values))
+  sum(d)
 }
 
 
@@ -272,30 +274,8 @@ confint.simplex_fast <- function(object, parm, level = 0.95, ...) {
   if (is.null(object$vcov)) {
     stop("Covariance matrix was not computed. Refit with inference = TRUE.", call. = FALSE)
   }
-  est <- object$par
-  se <- object$standard_errors
-  pnames <- names(est)
-
-  # Select parameters by position so that duplicated coefficient names (e.g. a
-  # "(Intercept)" in both the mean and dispersion submodels) are never confused.
-  if (missing(parm) || is.null(parm)) {
-    idx <- seq_along(est)
-  } else if (is.numeric(parm)) {
-    idx <- as.integer(parm)
-  } else {
-    idx <- which(pnames %in% parm)
-  }
-  idx <- idx[idx >= 1L & idx <= length(est)]
-  if (!length(idx)) {
-    stop("No valid parameters selected in 'parm'.", call. = FALSE)
-  }
-
-  a <- (1 - level) / 2
-  z <- stats::qnorm(1 - a)
-  ci <- cbind(est[idx] - z * se[idx], est[idx] + z * se[idx])
-  colnames(ci) <- paste0(format(100 * c(a, 1 - a), trim = TRUE, digits = 3), " %")
-  rownames(ci) <- pnames[idx]
-  ci
+  .simplex_confint(object$par, object$standard_errors, parm, level,
+                   missing(parm))
 }
 
 
@@ -339,10 +319,12 @@ predict.simplex_fast <- function(
   type <- match.arg(type)
 
   if (is.null(newdata)) {
-    mu <- object$fitted.values
-    phi <- object$dispersion.values
-    eta_mu <- object$linear.predictors$mean
-    eta_phi <- object$linear.predictors$dispersion
+    # In-sample predictions follow the na.action contract: under na.exclude the
+    # dropped rows come back as NA so the result aligns with the source data.
+    mu <- .simplex_pad(object, object$fitted.values)
+    phi <- .simplex_pad(object, object$dispersion.values)
+    eta_mu <- .simplex_pad(object, object$linear.predictors$mean)
+    eta_phi <- .simplex_pad(object, object$linear.predictors$dispersion)
   } else {
     has_disp <- isTRUE(object$design$has_dispersion_formula)
     # Built in one call: `contrasts_list[[2]] <- NULL` would DELETE the element
@@ -369,18 +351,44 @@ predict.simplex_fast <- function(
              dimnames = list(rownames(X), "(Intercept)"))
     }
 
+    # Offsets are part of the linear predictor, so they must be rebuilt from
+    # newdata exactly as the design matrices are; dropping them here would make
+    # predict() disagree with fitted() on the very data the model was fitted to.
+    nd_keep <- newdata[des$keep, , drop = FALSE]
+    off_mu <- .simplex_check_offset(
+      .simplex_offset(object$design$terms_mean, nd_keep), nrow(X), "mean")
+    off_phi <- if (has_disp) {
+      .simplex_check_offset(
+        .simplex_offset(object$design$terms_dispersion, nd_keep), nrow(X), "dispersion")
+    } else NULL
+
+    # Aliased columns were never estimated, so they must be dropped from the
+    # prediction design too -- object$par carries NA in those positions.
+    al <- object$aliased
+    if (!is.null(al) && any(al)) {
+      pf <- ncol(X)
+      X <- X[, !al[seq_len(pf)], drop = FALSE]
+      Z <- Z[, !al[pf + seq_len(ncol(Z))], drop = FALSE]
+      theta_est <- object$par[!al]
+    } else {
+      theta_est <- object$par
+    }
+
     pred <- simplex_predict_cpp(
-      object$par,
+      theta_est,
       X,
       Z,
-      mean_link = unname(.simplex_links[[object$link$mean]])
+      mean_link = unname(.simplex_links[[object$link$mean]]),
+      off_mu_ = off_mu,
+      off_phi_ = off_phi
     )
     # Rows dropped for missingness come back as NA, so the result always has
     # length nrow(newdata) and stays aligned with it.
-    mu <- .simplex_expand(as.numeric(pred$mu), des$keep)
-    phi <- .simplex_expand(as.numeric(pred$phi), des$keep)
-    eta_mu <- .simplex_expand(as.numeric(pred$eta_mu), des$keep)
-    eta_phi <- .simplex_expand(as.numeric(pred$eta_phi), des$keep)
+    nms <- rownames(newdata)
+    mu <- stats::setNames(.simplex_expand(as.numeric(pred$mu), des$keep), nms)
+    phi <- stats::setNames(.simplex_expand(as.numeric(pred$phi), des$keep), nms)
+    eta_mu <- stats::setNames(.simplex_expand(as.numeric(pred$eta_mu), des$keep), nms)
+    eta_phi <- stats::setNames(.simplex_expand(as.numeric(pred$eta_phi), des$keep), nms)
   }
 
   switch(
@@ -451,7 +459,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 #' @return An object of class `"summary.simplex_fast"`, a list whose main
 #'   component `coefficients` is itself a list with the `mean` and `dispersion`
 #'   coefficient tables (each with columns `Estimate`, `Std. Error`, `z value`
-#'   and `Pr(>|z|)`), together with the Pearson residuals, the links, fit
+#'   and `Pr(>|z|)`), together with the quantile residuals, the links, fit
 #'   statistics (log-likelihood, AIC, BIC, deviance) and optimiser diagnostics.
 #'   The `print` method returns its argument invisibly.
 #'
@@ -494,12 +502,23 @@ summary.simplex_fast <- function(object, ...) {
       # A list with separate mean and dispersion coefficient tables, matching
       # the layout used by other simplex/beta regression packages.
       coefficients = list(mean = mean_tab, dispersion = disp_tab),
-      pearson.residuals = stats::residuals(object, type = "pearson"),
+      # Quantile residuals, not Pearson: Pearson residuals rejected up to
+      # 100% of CORRECT models in a Shapiro-Wilk check, because
+      # Var(Y) = phi V(mu) only holds to first order (the measured ratio
+      # falls to 0.437 at phi = 10).
+      quantile.residuals = .simplex_resid_raw(object, "quantile"),
       logLik = object$logLik,
       AIC = object$AIC,
       BIC = object$BIC,
-      deviance = stats::deviance(object),
+      deviance = stats::deviance(object),   # unscaled; see ?deviance.simplex_fast
       nobs = object$nobs,
+      vcov_rank = object$vcov_rank,
+      vcov_pseudo = object$vcov_pseudo,
+      vcov_condition = object$vcov_condition,
+      n_saturated = object$n_saturated,
+      aliased = object$aliased,
+      npar = length(object$par),
+      no_inference = is.null(object$vcov),
       convergence = object$convergence,
       message = object$message,
       iterations = object$iterations,
@@ -522,8 +541,8 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
         ") -- results below are UNRELIABLE. ***\n", sep = "")
   }
 
-  cat("\nPearson residuals:\n")
-  res_q <- stats::quantile(x$pearson.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
+  cat("\nQuantile residuals:\n")
+  res_q <- stats::quantile(x$quantile.residuals, c(0, 0.25, 0.5, 0.75, 1), names = FALSE)
   names(res_q) <- c("Min", "1Q", "Median", "3Q", "Max")
   print(round(res_q, digits + 1L))
 
@@ -538,6 +557,7 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
   cat(" | BIC:", formatC(x$BIC, digits = digits, format = "fg"), "\n")
   cat("Deviance:", formatC(x$deviance, digits = digits, format = "fg"))
   cat(" | Observations:", x$nobs, "| Iterations:", x$iterations, "\n")
+  .simplex_print_diagnostics(x)
   cat("Convergence:", x$convergence, "-", x$message, "\n")
   invisible(x)
 }

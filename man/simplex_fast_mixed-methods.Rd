@@ -4,6 +4,7 @@
 \alias{simplex_fast_mixed-methods}
 \alias{coef.simplex_fast_mixed}
 \alias{vcov.simplex_fast_mixed}
+\alias{confint.simplex_fast_mixed}
 \alias{logLik.simplex_fast_mixed}
 \alias{nobs.simplex_fast_mixed}
 \alias{fitted.simplex_fast_mixed}
@@ -17,13 +18,15 @@
 
 \method{vcov}{simplex_fast_mixed}(object, ...)
 
+\method{confint}{simplex_fast_mixed}(object, parm, level = 0.95, ...)
+
 \method{logLik}{simplex_fast_mixed}(object, ...)
 
 \method{nobs}{simplex_fast_mixed}(object, ...)
 
 \method{fitted}{simplex_fast_mixed}(object, model = c("mean", "dispersion"), ...)
 
-\method{residuals}{simplex_fast_mixed}(object, type = c("response", "pearson", "deviance"), ...)
+\method{residuals}{simplex_fast_mixed}(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
 \method{ranef}{simplex_fast_mixed}(object, postVar = FALSE, ...)
 
@@ -38,6 +41,11 @@
 \code{fitted}, one of \code{"mean"} or \code{"dispersion"}.}
 
 \item{...}{Additional arguments, currently ignored.}
+
+\item{parm}{For \code{confint}, which parameters to report: numeric positions or
+names, over the full vector \code{c(beta, gamma, omega)}. Defaults to all.}
+
+\item{level}{For \code{confint}, the confidence level.}
 
 \item{type}{For \code{residuals}, one of \code{"response"}, \code{"pearson"} or
 \code{"deviance"}.}
@@ -79,7 +87,27 @@ matrix); with \code{postVar = TRUE}, the posterior covariances are attached as
 the \code{"postVar"} attribute.}
 \item{\code{VarCorr}}{The estimated random-effect covariance matrix
 \eqn{\Sigma}, with standard deviations and correlations.}
+\item{\code{confint}}{Wald confidence intervals over the full parameter vector
+\code{c(beta, gamma, omega)}. Note that the intervals for the variance
+components are on the unconstrained log-Cholesky scale, where a Wald
+interval is defensible; on the variance scale it would not be, because
+the null lies on the boundary.}
 }
+}
+\examples{
+set.seed(1)
+J <- 40; nj <- 8; n <- J * nj
+dat <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = rnorm(n))
+b <- rnorm(J, 0, 0.7)[dat$g]
+dat$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * dat$x1 + b, "logit"), 1)
+fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
+                           nAGQ = 7, n_threads = 1)
+
+coef(fit)
+VarCorr(fit)
+head(ranef(fit))
+confint(fit)
+ngrps(fit)
 }
 \seealso{
 \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}

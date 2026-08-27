@@ -17,44 +17,44 @@ rsimplex_cpp <- function(n, mu, phi) {
     .Call(`_fastsimplexreg_rsimplex_cpp`, n, mu, phi)
 }
 
-simplex_eval_cpp <- function(theta, y, X, Z, mean_link = 1L, n_threads = 1L) {
-    .Call(`_fastsimplexreg_simplex_eval_cpp`, theta, y, X, Z, mean_link, n_threads)
+simplex_eval_cpp <- function(theta, y, X, Z, mean_link = 1L, n_threads = 1L, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_eval_cpp`, theta, y, X, Z, mean_link, n_threads, off_mu_, off_phi_)
 }
 
-simplex_bfgs_cpp <- function(start, y, X, Z, mean_link = 1L, maxit = 300L, rel_tol = 1e-9, grad_tol = 1e-6, n_threads = 1L, trace = FALSE) {
-    .Call(`_fastsimplexreg_simplex_bfgs_cpp`, start, y, X, Z, mean_link, maxit, rel_tol, grad_tol, n_threads, trace)
+simplex_bfgs_cpp <- function(start, y, X, Z, mean_link = 1L, maxit = 300L, rel_tol = 1e-9, grad_tol = 1e-6, n_threads = 1L, trace = FALSE, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_bfgs_cpp`, start, y, X, Z, mean_link, maxit, rel_tol, grad_tol, n_threads, trace, off_mu_, off_phi_)
 }
 
-simplex_hessian_fd_cpp <- function(theta, y, X, Z, mean_link = 1L, rel_step = 1e-5, n_threads = 1L) {
-    .Call(`_fastsimplexreg_simplex_hessian_fd_cpp`, theta, y, X, Z, mean_link, rel_step, n_threads)
+simplex_hessian_fd_cpp <- function(theta, y, X, Z, mean_link = 1L, rel_step = 1e-5, n_threads = 1L, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_hessian_fd_cpp`, theta, y, X, Z, mean_link, rel_step, n_threads, off_mu_, off_phi_)
 }
 
-simplex_predict_cpp <- function(theta, X, Z, mean_link = 1L) {
-    .Call(`_fastsimplexreg_simplex_predict_cpp`, theta, X, Z, mean_link)
+simplex_predict_cpp <- function(theta, X, Z, mean_link = 1L, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_predict_cpp`, theta, X, Z, mean_link, off_mu_, off_phi_)
 }
 
 simplex_linkinv_cpp <- function(eta, mean_link = 1L) {
     .Call(`_fastsimplexreg_simplex_linkinv_cpp`, eta, mean_link)
 }
 
-simplex_mixed_eval_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8) {
-    .Call(`_fastsimplexreg_simplex_mixed_eval_cpp`, theta, y, X, Z, W, starts, q, mean_link, nAGQ, n_threads, inner_maxit, inner_tol)
+simplex_mixed_eval_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_mixed_eval_cpp`, theta, y, X, Z, W, starts, q, mean_link, nAGQ, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_)
 }
 
-simplex_mixed_bfgs_cpp <- function(start, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, maxit = 300L, rel_tol = 1e-9, grad_tol = 1e-6, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8, trace = FALSE) {
-    .Call(`_fastsimplexreg_simplex_mixed_bfgs_cpp`, start, y, X, Z, W, starts, q, mean_link, nAGQ, maxit, rel_tol, grad_tol, n_threads, inner_maxit, inner_tol, trace)
+simplex_mixed_bfgs_cpp <- function(start, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, maxit = 300L, rel_tol = 1e-9, grad_tol = 1e-6, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8, trace = FALSE, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_mixed_bfgs_cpp`, start, y, X, Z, W, starts, q, mean_link, nAGQ, maxit, rel_tol, grad_tol, n_threads, inner_maxit, inner_tol, trace, off_mu_, off_phi_)
 }
 
-simplex_mixed_hessian_fd_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, rel_step = 1e-5, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8) {
-    .Call(`_fastsimplexreg_simplex_mixed_hessian_fd_cpp`, theta, y, X, Z, W, starts, q, mean_link, nAGQ, rel_step, n_threads, inner_maxit, inner_tol)
+simplex_mixed_hessian_fd_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, nAGQ = 11L, rel_step = 1e-5, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_mixed_hessian_fd_cpp`, theta, y, X, Z, W, starts, q, mean_link, nAGQ, rel_step, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_)
 }
 
-simplex_mixed_ranef_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8) {
-    .Call(`_fastsimplexreg_simplex_mixed_ranef_cpp`, theta, y, X, Z, W, starts, q, mean_link, n_threads, inner_maxit, inner_tol)
+simplex_mixed_ranef_cpp <- function(theta, y, X, Z, W, starts, q, mean_link = 1L, n_threads = 1L, inner_maxit = 50L, inner_tol = 1e-8, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_mixed_ranef_cpp`, theta, y, X, Z, W, starts, q, mean_link, n_threads, inner_maxit, inner_tol, off_mu_, off_phi_)
 }
 
-simplex_mixed_predict_cpp <- function(theta, X, Z, W, starts, q, b, mean_link = 1L, include_re = TRUE) {
-    .Call(`_fastsimplexreg_simplex_mixed_predict_cpp`, theta, X, Z, W, starts, q, b, mean_link, include_re)
+simplex_mixed_predict_cpp <- function(theta, X, Z, W, starts, q, b, mean_link = 1L, include_re = TRUE, off_mu_ = NULL, off_phi_ = NULL) {
+    .Call(`_fastsimplexreg_simplex_mixed_predict_cpp`, theta, X, Z, W, starts, q, b, mean_link, include_re, off_mu_, off_phi_)
 }
 
 simplex_mixed_D_from_omega_cpp <- function(omega, q) {

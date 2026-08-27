@@ -7,7 +7,7 @@
 \method{plot}{simplex_fast}(
   x,
   which = 1:4,
-  type = c("deviance", "pearson", "response"),
+  type = c("quantile", "deviance", "pearson", "response"),
   smooth = TRUE,
   ...
 )

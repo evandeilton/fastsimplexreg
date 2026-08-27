@@ -1,3 +1,94 @@
+# fastsimplexreg 0.2.4
+
+Correctness release following a four-way consensus audit of 0.2.3
+(mathematical/statistical rigour, R API contracts, CRAN compliance). Every item
+below carries a measured proof in `tests/testthat`.
+
+## Silently wrong results (fixed)
+
+* **`confint()` on a mixed fit reported another parameter's interval.** There
+  was no `confint.simplex_fast_mixed`, so dispatch fell through to
+  `stats::confint.default`, which indexes `vcov()` by *name* -- and `coef()` of
+  a mixed fit repeated `"(Intercept)"` across the mean and dispersion
+  submodels. Both rows resolved to the first match: the dispersion intercept
+  was reported with the mean intercept's interval, one that need not even
+  contain its own estimate, while the variance components vanished from the
+  table. There is now a method, selecting by position over the full parameter
+  vector.
+* **`offset()` in the formula was silently dropped.** The `terms` object
+  recorded it, the design matrix omitted it, and nothing warned, so the fitted
+  model was not the model the user wrote. Offsets are now honoured in both
+  fitters, kept separate per submodel, and rebuilt from `newdata` in
+  `predict()`.
+* **`subset` was an index vector, not an expression.** The documentation
+  reproduced `glm`'s wording. `subset = x1 > 0` errored loudly when no `x1`
+  existed in the caller, but silently used *that* vector when one did --
+  fitting the wrong rows with no symptom. It is now evaluated inside `data`
+  first, as in `stats::lm()`. Every previously working call form still works.
+* **Adaptive quadrature discarded the mass that mattered.** The AGHQ node
+  pruning tested the product Gauss-Hermite weight, but the adaptive transform
+  undoes the `e^{-t^2}` factor, so a node's real multiplier is `logW + t2`.
+  Pruning discarded 5.7% of the effective quadrature mass at `nAGQ = 11` and
+  48.7% at `nAGQ = 21`, which made the AGHQ sequence *stop converging*: raising
+  `nAGQ` moved the marginal log-likelihood away from its limit. Pruning is
+  removed.
+* **Rank-deficient designs returned an arbitrary split.** With `x2 = 2 * x1`
+  the fit reported `x1 = 0.105` and `x2 = 0.210`, two numbers that mean nothing
+  individually. Aliased columns are now detected before fitting by the same
+  pivoted QR `lm()` uses, and reported as `NA`.
+* **`deviance()` was identically `nobs`.** The score equation for the
+  dispersion submodel forces `sum(dev_i/phi_i) = n` whenever it has an
+  intercept, so the reported "Deviance" was the same number for every model.
+  The default is now the unscaled deviance; `type = "scaled"` still gives the
+  old quantity, documented.
+
+## Statistical accuracy
+
+* **Exact Fisher information.** `I(mu) = 1/(phi mu^3 (1-mu)^3) + 3/(mu(1-mu))`;
+  the second term was missing, understating the information by up to 4.75x.
+  New `information = c("observed", "expected")` argument on `fastsimplexreg()`
+  offers the closed-form expected information, which is exactly block diagonal
+  in `(beta, gamma)` and positive definite by construction. The default stays
+  `"observed"`, following Efron and Hinkley (1978).
+* **`psimplex()` is a closed form.** The adaptive Gauss-Legendre quadrature is
+  replaced by an exact expression, agreeing with seeded numerical integration
+  to 1.8e-13. `log.p` is now computed on the log scale throughout:
+  `psimplex(0.15, 0.5, 0.01, log.p = TRUE)` returned `-Inf` where the true
+  value is `-773.216`.
+* **Randomized quantile residuals, and they are now the default.** Under a
+  correct model, Pearson residuals rejected up to 100% of fits in a
+  Shapiro-Wilk check -- and Pearson was what `summary()` printed as its
+  residual summary. Quantile residuals hold their nominal rate.
+* **The AGHQ scaling matrix is ridged, not switched.** Replacing the observed
+  curvature outright by the Fisher information made the objective
+  discontinuous in `theta`, by 0.04 to 2.0 nats.
+
+## Contracts and guards
+
+* `na.action = na.exclude` now pads `fitted()`, `residuals()` and `predict()`
+  back to `nrow(data)`, as `glm` does; it was accepted and ignored.
+* Dispersion coefficients are named `(phi)_*` in the full parameter vector, as
+  in **betareg**, so `vcov()` and `confint()` can be indexed by name
+  unambiguously. The per-submodel tables in `summary()` keep bare names.
+* The packed `omega` diagonal is labelled `logchol.*` for `q >= 2`: it is the
+  *conditional* standard deviation there, not the marginal one, and reading it
+  as an SD understated a random slope by a factor of 1.95.
+* `fitted()`, `residuals()` and `predict()` carry the observation labels.
+* `nAGQ < 5` warns; `inner_maxit < 10` is refused; a single-level grouping
+  factor is refused and an all-singleton design warns.
+* `ngrps()` no longer breaks when **lme4** is attached afterwards.
+* `summary()` now reports the diagnostics the fit object already stored: vcov
+  rank, pseudo-inverse use, ill-conditioning, saturated observations, aliased
+  coefficients, and whether inference was computed at all.
+
+## Packaging
+
+* `Depends: R (>= 4.0.0)` -- no R 4.1 feature is used.
+* `simplexreg`, `microbenchmark`, `parallel`, `utils` and `MASS` declared in
+  `Suggests`; the shipped benchmark script needs them.
+* Added `inst/CITATION` and a test-coverage workflow; dropped the redundant
+  `SystemRequirements: C++17`; fixed a 404 badge in the README.
+
 # fastsimplexreg 0.2.3
 
 Correctness release following a full surgical audit of `R/`, `src/`, `tests/`

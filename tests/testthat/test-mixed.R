@@ -329,3 +329,183 @@ test_that("a genuine optimiser failure is still reported as one", {
   expect_match(fit$message, "Line search failed")
   expect_true(all(is.na(fit$standard_errors)))
 })
+
+
+# Adaptive Gauss-Hermite node pruning. Until 0.2.4 build_tensor() dropped nodes
+# whose product weight logW sat below a floor -- but the adaptive transformation
+# undoes the e^{-t^2} factor, so a node's real multiplier is logW + t2. Pruning
+# on logW alone discarded 48.7% of the effective quadrature mass at nAGQ = 21,
+# and the AGHQ sequence stopped converging: raising nAGQ moved the marginal
+# log-likelihood AWAY from its limit.
+test_that("the AGHQ sequence converges as nAGQ grows (q = 2)", {
+  set.seed(77)
+  J <- 25L; nj <- 3L; n <- J * nj
+  g <- rep(seq_len(J), each = nj)
+  X <- cbind(1, stats::rnorm(n)); Z <- X; W <- matrix(1, n, 1L)
+  B <- matrix(stats::rnorm(J * 2L), J, 2L) %*% diag(c(2, 1.5))
+  mu <- simplex_linkinv(X %*% c(0.3, -0.5) + rowSums(Z * B[g, ]), "logit")
+  y <- rsimplex(n, as.numeric(mu), rep(1, n))
+  starts <- as.integer(c(0L, cumsum(rep(nj, J))))
+  th <- c(0.3, -0.5, 0, log(2), 0, log(1.5))
+
+  ll <- vapply(c(11L, 15L, 21L, 25L), function(m) {
+    -fastsimplexreg:::simplex_mixed_eval_cpp(th, y, X, Z, W, starts, 2L, 1L, m,
+                                             1L, 50L, 1e-8)$value
+  }, numeric(1))
+
+  # Successive increments must shrink towards zero. With the old pruning they
+  # grew instead, reaching ~1e-3 in this regime.
+  steps <- abs(diff(ll))
+  expect_lt(steps[length(steps)], 1e-6)
+  expect_true(all(diff(steps) < 0))
+})
+
+test_that("nAGQ below 5 warns that the standard errors are unreliable", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+  expect_warning(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 1L,
+                        n_threads = 1L, inference = FALSE),
+    "below the supported minimum")
+  # nAGQ = 2.7 trips BOTH guards: it is truncated to 2, and 2 is below 5.
+  w <- testthat::capture_warnings(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 2.7,
+                        n_threads = 1L, inference = FALSE))
+  expect_match(w, "truncated", all = FALSE)
+  expect_match(w, "below the supported minimum", all = FALSE)
+})
+
+test_that("inner_maxit below 10 is refused", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+  # With inner_maxit in 1..3 the inner solver need not reach the posterior mode,
+  # so the AGHQ expansion is taken around the wrong point and the marginal
+  # likelihood is grossly wrong -- previously with no diagnostic at all.
+  expect_error(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                        inner_maxit = 3L, n_threads = 1L),
+    "at least 10")
+})
+
+test_that("degenerate cluster structures are refused or flagged", {
+  dat <- sim_mixed(J = 20L, nj = 5L, seed = 2L)
+
+  one_level <- dat
+  one_level$g <- factor(rep("a", nrow(dat)))
+  expect_error(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = one_level, nAGQ = 7L,
+                        n_threads = 1L),
+    "at least 2 sampled levels")
+
+  singletons <- dat
+  singletons$g <- factor(seq_len(nrow(dat)))
+  expect_warning(
+    fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = singletons, nAGQ = 7L,
+                        n_threads = 1L, inference = FALSE),
+    "single observation")
+})
+
+
+# confint() on a mixed fit. Until 0.2.4 there was no method, so dispatch fell
+# through to stats::confint.default, which indexes vcov() by NAME -- and the
+# repeated "(Intercept)" made it report the MEAN intercept's interval for the
+# DISPERSION intercept, an interval that need not contain its own estimate.
+# The variance components were dropped entirely, coef() being shorter than par.
+test_that("confint on a mixed fit reports each parameter's own interval", {
+  dat <- sim_mixed(J = 40L, nj = 10L, seed = 21L)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                             n_threads = 1L)
+  ci <- confint(fit)
+  est <- fit$par
+  se <- fit$standard_errors
+
+  expect_identical(nrow(ci), length(est))
+  expect_identical(rownames(ci), names(est))
+  expect_true(all(est >= ci[, 1] & est <= ci[, 2]))
+  expect_equal(unname(ci),
+               unname(cbind(est - qnorm(0.975) * se, est + qnorm(0.975) * se)))
+
+  # Selection by position and by the now-unambiguous names.
+  expect_identical(nrow(confint(fit, parm = 2L)), 1L)
+  expect_identical(nrow(confint(fit, parm = "(phi)_(Intercept)")), 1L)
+  expect_error(confint(fit, level = 1.5), "strictly between 0 and 1")
+})
+
+test_that("the packed omega diagonal is labelled as a Cholesky factor when q >= 2", {
+  skip_if_not_installed("MASS")
+  set.seed(31)
+  J <- 60L; nj <- 10L; n <- J * nj
+  d <- data.frame(g = factor(rep(seq_len(J), each = nj)), x1 = stats::rnorm(n))
+  B <- MASS::mvrnorm(J, c(0, 0), matrix(c(0.6, 0.45, 0.45, 0.5), 2, 2))
+  d$y <- rsimplex(n, simplex_linkinv(0.3 - 0.6 * d$x1 + B[d$g, 1] +
+                                       B[d$g, 2] * d$x1, "logit"), 1)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 + x1 | g, data = d,
+                             nAGQ = 5L, n_threads = 1L, inference = FALSE)
+
+  # The label must not promise a marginal standard deviation it is not: for
+  # j >= 2, exp(omega_jj) is D[j, j], the CONDITIONAL sd. In a measured fit it
+  # understated the marginal sd of the random slope by a factor of ~1.95.
+  expect_false(any(grepl("^logsd\\.", names(fit$omega))))
+  expect_match(names(fit$omega)[3], "^logchol\\.")
+  expect_equal(unname(exp(fit$omega[3])), unname(fit$D[2, 2]))
+  expect_gt(sqrt(diag(fit$Sigma))[2], exp(fit$omega[3]))
+
+  # q = 1 keeps "logsd.", where it is exactly right.
+  f1 <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = d, nAGQ = 5L,
+                            n_threads = 1L, inference = FALSE)
+  expect_match(names(f1$omega)[1], "^logsd\\.")
+  expect_equal(unname(exp(f1$omega[1])), unname(sqrt(f1$Sigma[1, 1])))
+})
+
+
+test_that("the mixed model fits with every mean link", {
+  dat <- sim_mixed(J = 25L, nj = 6L, seed = 12L)
+  for (lk in c("logit", "probit", "cloglog", "neglog")) {
+    fit <- suppressWarnings(
+      fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, link = lk,
+                          nAGQ = 7L, n_threads = 1L, inference = FALSE))
+    expect_s3_class(fit, "simplex_fast_mixed")
+    expect_true(is.finite(fit$logLik), info = lk)
+    expect_true(all(fitted(fit) > 0 & fitted(fit) < 1), info = lk)
+    expect_identical(fit$link$mean, lk)
+  }
+})
+
+test_that("mixed predict supports every type, and plot returns ggplots", {
+  dat <- sim_mixed(J = 25L, nj = 6L, seed = 13L)
+  fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat, nAGQ = 7L,
+                             n_threads = 1L, inference = FALSE)
+
+  expect_length(predict(fit, type = "mean"), nrow(dat))
+  expect_true(all(predict(fit, type = "dispersion") > 0))
+  lp <- predict(fit, type = "link")
+  expect_named(lp, c("mean", "dispersion"))
+  both <- predict(fit, type = "both")
+  expect_s3_class(both, "data.frame")
+  expect_named(both, c("mu", "phi"))
+  expect_equal(both$mu, unname(predict(fit, type = "response")))
+  expect_equal(unname(fitted(fit, model = "dispersion")),
+               unname(predict(fit, type = "dispersion")))
+
+  skip_if_not_installed("ggplot2")
+  p <- plot(fit, which = 1L)
+  expect_s3_class(p, "ggplot")
+  # Several panels give a patchwork object when patchwork is available and a
+  # named list of ggplots otherwise -- both are the documented contract.
+  multi <- plot(fit, which = 1:2)
+  if (requireNamespace("patchwork", quietly = TRUE)) {
+    expect_s3_class(multi, "patchwork")
+  } else {
+    expect_type(multi, "list")
+    expect_length(multi, 2L)
+    expect_s3_class(multi[[1L]], "ggplot")
+  }
+})
+
+test_that("ngrps survives lme4 being attached afterwards", {
+  skip_if_not_installed("lme4")
+  x <- structure(list(ngrps = 7L), class = "simplex_fast_mixed")
+  expect_identical(ngrps(x), 7L)
+  # lme4 defines an INDEPENDENT ngrps generic whose default stops. The method is
+  # registered into lme4's namespace by .onLoad(), so either generic finds it.
+  loadNamespace("lme4")
+  expect_identical(lme4::ngrps(x), 7L)
+})

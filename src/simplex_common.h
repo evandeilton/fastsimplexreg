@@ -350,13 +350,33 @@ inline ObsKernel simplex_obs_kernel(
   return k;
 }
 
-// Expected (Fisher) information for eta_mu, a strictly positive small-dispersion
-// surrogate I_{eta_mu} = (dmu)^2 / (phi mu^3 (1-mu)^3). Used by the mixed-model
-// inner solver as a guaranteed-SPD fallback for the observed curvature.
+// EXACT expected (Fisher) information for eta_mu.
+//
+// On the mu scale,
+//
+//   I(mu) = E[-d^2 l / d mu^2] = 1 / (phi mu^3 (1-mu)^3)  +  3 / (mu (1-mu)),
+//
+// and the chain rule multiplies by (dmu/deta)^2. The second term is exact and
+// free of phi; it follows from the simplex being a PROPER dispersion model, in
+// which d(Y; mu)/phi is exactly chi-squared with one degree of freedom.
+//
+// The first term alone -- the small-dispersion surrogate this function used to
+// return -- understates the information badly once phi is not small. Verified
+// against high-accuracy quadrature of E[(dl/dmu)^2]:
+//
+//   mu = 0.50, phi = 0.01 :  exact 6412.00 vs surrogate 6400.00  (x1.00)
+//   mu = 0.50, phi = 1    :  exact   76.00 vs surrogate   64.00  (x1.19)
+//   mu = 0.50, phi = 5    :  exact   24.80 vs surrogate   12.80  (x1.94)
+//   mu = 0.50, phi = 20   :  exact   15.20 vs surrogate    3.20  (x4.75)
+//   mu = 0.20, phi = 5    :  exact   67.58 vs surrogate   48.83  (x1.38)
+//
+// Still strictly positive, so it remains a guaranteed-SPD fallback for the
+// observed curvature -- just a much better-scaled one, which tightens the
+// AGHQ grid and sharpens the inner Newton step.
 inline double simplex_fisher_eta_mu(const double mu, const double dmu, const double phi) noexcept {
   const double u = mu * (1.0 - mu);
   const double u3 = u * u * u;
-  return (dmu * dmu) / (phi * u3);
+  return (dmu * dmu) * (1.0 / (phi * u3) + 3.0 / u);
 }
 
 // Bundle returned by an objective evaluation: the negative log-likelihood, its

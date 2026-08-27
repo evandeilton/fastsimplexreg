@@ -1,3 +1,74 @@
+# Internal: resolve the `subset` argument the way stats::lm/glm do -- as an
+# EXPRESSION evaluated inside `data` first and only then in the caller.
+#
+# Until 0.2.4 `subset` was documented like glm's ("a vector specifying a subset
+# of observations") but implemented as a plain index vector: `data[subset, ]`.
+# The difference is silent and dangerous. `subset = x1 > 0` errored loudly when
+# no `x1` existed in the caller -- but when an unrelated object of that name did
+# exist, which is the common case inside a function, the fit used THAT vector
+# and quietly estimated the model on the wrong rows.
+#
+# `expr` is the result of substitute(subset) in the calling fitter; `envir` is
+# its parent.frame(). Every call form that worked before still works: a plain
+# index/logical/character vector evaluates to itself.
+.simplex_eval_subset <- function(expr, data, envir) {
+  if (is.null(expr)) return(NULL)
+  r <- eval(expr, data, envir)
+  if (is.null(r)) return(NULL)
+  if (is.logical(r)) {
+    if (length(r) != nrow(data)) {
+      stop("A logical 'subset' must have length nrow(data) (", nrow(data),
+           "), not ", length(r), ".", call. = FALSE)
+    }
+    # Match stats::model.frame: an NA in a logical subset drops the row.
+    return(r & !is.na(r))
+  }
+  r
+}
+
+
+# Internal: evaluate the offset(s) of ONE model part.
+#
+# stats::model.offset() cannot be used here: with a multi-part Formula it sums
+# the offsets of every part, so `y ~ x + offset(a) | z + offset(b)` would give
+# a + b for both the mean and the dispersion. Each part's own `terms` object
+# carries an "offset" attribute indexing into its "variables", which is what
+# keeps the two apart.
+#
+# Works from either a model frame (where the offset already exists as a column
+# named e.g. "offset(a)") or a raw `newdata` (where the expression is
+# evaluated). Returns NULL when the part has no offset, else a numeric vector.
+.simplex_offset <- function(tt, data) {
+  idx <- attr(tt, "offset")
+  if (is.null(idx) || !length(idx)) return(NULL)
+  vars <- attr(tt, "variables")
+  env <- environment(tt)
+  if (is.null(env)) env <- parent.frame()
+  vals <- lapply(idx, function(i) {
+    call_i <- vars[[i + 1L]]
+    nm <- deparse(call_i, width.cutoff = 500L)
+    v <- if (!is.null(data[[nm]])) data[[nm]] else eval(call_i, data, env)
+    as.numeric(v)
+  })
+  Reduce(`+`, vals)
+}
+
+
+# Internal: validate an offset against the number of rows it must align with.
+.simplex_check_offset <- function(off, n, what) {
+  if (is.null(off)) return(NULL)
+  if (length(off) == 1L) off <- rep(off, n)
+  if (length(off) != n) {
+    stop("The ", what, " offset has length ", length(off), " but the model has ",
+         n, " observation(s).", call. = FALSE)
+  }
+  if (any(!is.finite(off))) {
+    stop("The ", what, " offset contains non-finite values.", call. = FALSE)
+  }
+  off
+}
+
+
 # Internal helper: build one shared model frame so that subset handling, NA
 # handling, factors and contrasts are perfectly aligned across the mean and
 # dispersion components. Uses the Formula package for multi-part formulas.
@@ -9,8 +80,8 @@
     stop("'formula' must be a formula such as y ~ x1 + x2 | z1 + z2.", call. = FALSE)
   }
 
-  F <- Formula::Formula(formula)
-  dims <- length(F)
+  fml <- Formula::Formula(formula)
+  dims <- length(fml)
 
   if (dims[1L] != 1L) {
     stop("The model must contain exactly one response component.", call. = FALSE)
@@ -19,27 +90,29 @@
     stop("Use one or two RHS components: y ~ mean_terms | dispersion_terms.", call. = FALSE)
   }
 
-  # Apply the observation subset explicitly. Forwarding 'subset' straight to
-  # model.frame() would trigger its non-standard evaluation, which resolves the
-  # bare symbol in the formula's environment (picking up base::subset) instead
-  # of using the value supplied here. 'subset' is documented as an index vector.
+  # `subset` arrives here ALREADY RESOLVED to a plain index/logical vector by
+  # .simplex_eval_subset(), which the fitter calls with substitute(subset) so
+  # that an expression like `x1 > 0` is evaluated inside `data`. It is applied
+  # here rather than forwarded to model.frame(), whose own non-standard
+  # evaluation would resolve the bare symbol in the formula's environment
+  # (picking up base::subset) instead of using the value supplied here.
   if (!is.null(subset)) {
     data <- data[subset, , drop = FALSE]
   }
 
   mf <- stats::model.frame(
-    F,
+    fml,
     data = data,
     na.action = na.action,
     drop.unused.levels = TRUE
   )
 
-  response <- Formula::model.part(F, data = mf, lhs = 1L, drop = TRUE)
-  X <- stats::model.matrix(F, data = mf, rhs = 1L)
+  response <- Formula::model.part(fml, data = mf, lhs = 1L, drop = TRUE)
+  X <- stats::model.matrix(fml, data = mf, rhs = 1L)
 
   if (dims[2L] == 2L) {
-    Z <- stats::model.matrix(F, data = mf, rhs = 2L)
-    terms_dispersion <- stats::terms(F, rhs = 2L)
+    Z <- stats::model.matrix(fml, data = mf, rhs = 2L)
+    terms_dispersion <- stats::terms(fml, rhs = 2L)
   } else {
     Z <- matrix(
       1.0,
@@ -61,14 +134,21 @@
   storage.mode(X) <- "double"
   storage.mode(Z) <- "double"
 
-  terms_mean <- stats::terms(F, rhs = 1L)
+  terms_mean <- stats::terms(fml, rhs = 1L)
+
+  n_obs <- nrow(X)
+  offset_mu <- .simplex_check_offset(.simplex_offset(terms_mean, mf), n_obs, "mean")
+  offset_phi <- .simplex_check_offset(.simplex_offset(terms_dispersion, mf),
+                                      n_obs, "dispersion")
 
   list(
-    formula = F,
+    formula = fml,
     model = mf,
     y = response,
     X = X,
     Z = Z,
+    offset_mu = offset_mu,
+    offset_phi = offset_phi,
     terms_mean = terms_mean,
     terms_dispersion = terms_dispersion,
     xlevels_mean = stats::.getXlevels(terms_mean, mf),
@@ -143,6 +223,26 @@
 }
 
 
+# Internal: detect columns of a design matrix that are aliased (linearly
+# dependent on earlier columns), using the same pivoted QR that lm() uses.
+#
+# Without this the optimiser happily converges on a rank-deficient design and
+# reports a finite estimate for EVERY column, splitting one identified effect
+# arbitrarily across the collinear group. With x2 = 2 * x1 it returned
+# x1 = 0.105 and x2 = 0.210, two numbers that mean nothing individually --
+# only x1 + 2*x2 = 0.524 is identified, which is exactly the coefficient the
+# reduced model gives. lm()/glm() report NA for the aliased column instead.
+#
+# Returns a logical vector over the columns, TRUE where aliased.
+.simplex_aliased <- function(M) {
+  if (ncol(M) == 0L) return(logical(0))
+  qrM <- qr(M, tol = 1e-7, LAPACK = FALSE)
+  aliased <- rep(TRUE, ncol(M))
+  if (qrM$rank > 0L) aliased[qrM$pivot[seq_len(qrM$rank)]] <- FALSE
+  aliased
+}
+
+
 # Internal helper: stable, link-specific starting values c(beta, gamma).
 .simplex_start <- function(y, X, Z, link) {
   p <- ncol(X)
@@ -207,12 +307,26 @@
 #' @param grad_tol Numeric; tolerance on the infinity norm of the gradient.
 #' @param n_threads Integer number of OpenMP threads. Use `0` to request all
 #'   threads available to the backend.
-#' @param inference Logical; if `TRUE`, computes the Hessian, the
+#' @param inference Logical; if `TRUE`, computes the information matrix, the
 #'   variance-covariance matrix and the standard errors.
+#' @param information Character; which information matrix to invert for the
+#'   standard errors. `"observed"` (default) uses the observed information, the
+#'   Hessian of the negative log-likelihood obtained by central differences of
+#'   the analytic score. `"expected"` uses the exact Fisher information, which
+#'   for the simplex is available in closed form and is block diagonal in
+#'   \eqn{(\beta, \gamma)}: it needs no finite differencing, is positive
+#'   definite by construction, and is roughly twenty times cheaper. The two
+#'   agree asymptotically and, at \eqn{n = 4000}, to within 0.4\%. The default
+#'   stays `"observed"` because Efron and Hinkley (1978) argue it is the better
+#'   variance estimator for conditional inference; `"expected"` is the more
+#'   robust choice when the observed information is ill-conditioned.
 #' @param hessian_rel_step Numeric; the initial relative step for the Hessian,
 #'   obtained by central differences of the analytic gradient.
 #' @param trace Logical; if `TRUE`, prints optimiser progress.
-#' @param subset Optional vector specifying a subset of observations.
+#' @param subset Optional expression selecting a subset of observations,
+#'   evaluated inside `data` as in [stats::lm()] -- for example
+#'   `subset = x1 > 0`. A plain index, logical or row-name vector also
+#'   works. An `NA` in a logical subset drops that row.
 #' @param na.action A function indicating how to handle missing values.
 #' @param model Logical; if `TRUE`, stores the model frame in the fitted object.
 #' @param x Logical; if `TRUE`, stores the design matrices `X` and `Z`.
@@ -241,6 +355,11 @@
 #' simplexreg: An R Package for Regression Analysis of Proportional Data Using
 #' the Simplex Distribution.
 #' *Journal of Statistical Software*, **71**(11), 1--21.
+#'
+#' Efron, B. and Hinkley, D. V. (1978).
+#' Assessing the accuracy of the maximum likelihood estimator: observed versus
+#' expected Fisher information.
+#' *Biometrika*, **65**(3), 457--483.
 #'
 #' @seealso [dsimplex()], [rsimplex()], [simplex_linkinv()],
 #'   [predict.simplex_fast()], [summary.simplex_fast()]
@@ -279,6 +398,7 @@ fastsimplexreg <- function(
     grad_tol = 1e-6,
     n_threads = 1L,
     inference = TRUE,
+    information = c("observed", "expected"),
     hessian_rel_step = 1e-5,
     trace = FALSE,
     subset = NULL,
@@ -288,18 +408,48 @@ fastsimplexreg <- function(
     y = TRUE) {
 
   link_spec <- .normalize_simplex_link(link)
+  information <- match.arg(information)
+  # `subset` is non-standard-evaluated, like lm()/glm(): resolved inside `data`
+  # first, then in the caller. See .simplex_eval_subset().
+  subset_idx <- .simplex_eval_subset(substitute(subset), data, parent.frame())
   design <- .build_simplex_matrices(
     formula = formula,
     data = data,
-    subset = subset,
+    subset = subset_idx,
     na.action = na.action
   )
 
   response <- design$y
   X <- design$X
   Z <- design$Z
+
+  # Drop aliased columns before fitting and put NA back afterwards, as lm()
+  # does. Fitting on the full rank-deficient design would return an arbitrary
+  # split of one identified effect across the collinear group.
+  alias_x <- .simplex_aliased(X)
+  alias_z <- .simplex_aliased(Z)
+  if (any(alias_x) || any(alias_z)) {
+    warning("Design is rank deficient: ",
+            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
+                  collapse = ", "),
+            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
+            " a linear combination of the other columns and cannot be ",
+            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
+  }
+  X_full <- X
+  Z_full <- Z
+  X <- X[, !alias_x, drop = FALSE]
+  Z <- Z[, !alias_z, drop = FALSE]
+  if (ncol(X) == 0L || ncol(Z) == 0L) {
+    stop("Every column of the ", if (ncol(X) == 0L) "mean" else "dispersion",
+         " design is aliased; the model has no estimable parameters.",
+         call. = FALSE)
+  }
   p <- ncol(X)
   q <- ncol(Z)
+  # numeric(0) is the backend's "no offset" sentinel.
+  off_mu <- if (is.null(design$offset_mu)) numeric(0) else design$offset_mu
+  off_phi <- if (is.null(design$offset_phi)) numeric(0) else design$offset_phi
 
   if (is.null(start)) {
     start <- .simplex_start(response, X, Z, link = link_spec$name)
@@ -320,19 +470,34 @@ fastsimplexreg <- function(
     rel_tol = as.numeric(rel_tol),
     grad_tol = as.numeric(grad_tol),
     n_threads = as.integer(n_threads),
-    trace = isTRUE(trace)
+    trace = isTRUE(trace),
+    off_mu_ = off_mu,
+    off_phi_ = off_phi
   )
 
   theta <- as.numeric(opt$par)
-  # Bare coefficient names, matching the convention of other simplex/beta
-  # regression packages. The mean and dispersion submodels are distinguished by
-  # position (the first p entries are the mean coefficients, the remaining q are
-  # the dispersion coefficients) rather than by a name prefix.
-  names(theta) <- c(colnames(X), colnames(Z))
+  # Dispersion coefficients carry a "(phi)_" prefix in the FULL parameter
+  # vector, as betareg does. Distinguishing the two submodels by position alone
+  # is not enough: with an intercept in both, names(theta) repeated
+  # "(Intercept)", so vcov(fit)["(Intercept)", "(Intercept)"] silently returned
+  # the MEAN intercept's variance whatever the user meant, and
+  # confint(fit, parm = "(Intercept)") returned two indistinguishable rows.
+  # The per-submodel tables in summary()/coef(model=) keep the bare names.
+  names(theta) <- .simplex_par_names(colnames(X), colnames(Z))
 
-  pred <- simplex_predict_cpp(theta, X, Z, mean_link = link_spec$id)
+  # `theta` currently spans the ESTIMABLE parameters only. Keep that vector for
+  # everything numerical (prediction, the information matrix); the NA-padded
+  # full-design version is built after inference, for reporting.
+  theta_est <- theta
+  aliased <- c(alias_x, alias_z)
+  names(aliased) <- .simplex_par_names(colnames(X_full), colnames(Z_full))
+  p_full <- ncol(X_full)
+  q_full <- ncol(Z_full)
+
+  pred <- simplex_predict_cpp(theta_est, X, Z, mean_link = link_spec$id,
+                              off_mu_ = off_mu, off_phi_ = off_phi)
   logLik_value <- -as.numeric(opt$value)
-  k <- length(theta)
+  k <- length(theta_est)      # estimable parameters only (aliased ones dropped)
   n <- length(response)
 
   converged <- as.integer(opt$convergence) == 0L
@@ -343,7 +508,7 @@ fastsimplexreg <- function(
   }
 
   vc <- NULL
-  se <- stats::setNames(rep(NA_real_, k), names(theta))
+  se <- stats::setNames(rep(NA_real_, k), names(theta_est))
   hessian <- NULL
   vcov_rank <- NA_integer_
   vcov_pseudo <- NA
@@ -352,20 +517,30 @@ fastsimplexreg <- function(
   # Standard errors are only computed at a converged (stationary) fit; at a
   # non-converged point the Hessian is meaningless, so leave them NA.
   if (isTRUE(inference) && converged) {
-    hessian <- simplex_hessian_fd_cpp(
-      theta = theta,
-      y = response,
-      X = X,
-      Z = Z,
-      mean_link = link_spec$id,
-      rel_step = as.numeric(hessian_rel_step),
-      n_threads = as.integer(n_threads)
-    )
-    dimnames(hessian) <- list(names(theta), names(theta))
+    hessian <- if (information == "expected") {
+      # Exact, block diagonal and positive definite by construction; see
+      # .simplex_expected_info(). No finite differencing, hence no noise floor.
+      .simplex_expected_info(X, Z, as.numeric(pred$eta_mu),
+                             as.numeric(pred$eta_phi), link_spec$name)
+    } else {
+      simplex_hessian_fd_cpp(
+        theta = theta_est,
+        y = response,
+        X = X,
+        Z = Z,
+        mean_link = link_spec$id,
+        rel_step = as.numeric(hessian_rel_step),
+        n_threads = as.integer(n_threads),
+        off_mu_ = off_mu,
+        off_phi_ = off_phi
+      )
+    }
+    est_names <- names(theta)[!aliased]
+    dimnames(hessian) <- list(est_names, est_names)
 
     # Fail-safe inversion: a rank-deficient or indefinite Hessian yields NA
     # standard errors and a warning, never a confident zero. See R/inference.R.
-    inf <- .simplex_vcov(hessian, names(theta), what = "fastsimplexreg()")
+    inf <- .simplex_vcov(hessian, est_names, what = "fastsimplexreg()")
     vc <- inf$vcov
     se <- inf$se
     vcov_rank <- inf$rank
@@ -374,12 +549,30 @@ fastsimplexreg <- function(
     vcov_condition <- inf$condition
   }
 
+  # Re-expand to the FULL design: aliased coefficients are reported as NA, like
+  # lm(), never as an arbitrary share of an identified effect. vcov and the
+  # information matrix stay over the ESTIMABLE parameters only -- there is no
+  # curvature in an aliased direction to report.
+  if (any(aliased)) {
+    theta <- stats::setNames(rep(NA_real_, length(aliased)), names(aliased))
+    theta[!aliased] <- theta_est
+    se_full <- stats::setNames(rep(NA_real_, length(aliased)), names(aliased))
+    se_full[!aliased] <- se
+    se <- se_full
+  }
+
   # Saturation of the mean link is reported, not applied silently.
   .warn_saturated(opt$n_saturated, n, what = "fastsimplexreg()")
 
+  # Observation labels, so fitted()/residuals()/predict() can be aligned back to
+  # the source rows without assuming row order; and the na.action object, so
+  # na.exclude() can actually do what it promises (see .simplex_pad()).
+  obs_names <- rownames(design$model)
+  na_act <- attr(design$model, "na.action")
+
   coefficients <- list(
-    mean = stats::setNames(theta[seq_len(p)], colnames(X)),
-    dispersion = stats::setNames(theta[p + seq_len(q)], colnames(Z))
+    mean = stats::setNames(theta[seq_len(p_full)], colnames(X_full)),
+    dispersion = stats::setNames(theta[p_full + seq_len(q_full)], colnames(Z_full))
   )
 
   out <- list(
@@ -388,6 +581,7 @@ fastsimplexreg <- function(
     link = list(mean = link_spec$name, dispersion = "log"),
     coefficients = coefficients,
     par = theta,
+    aliased = aliased,
     standard_errors = stats::setNames(se, names(theta)),
     vcov = vc,
     vcov_rank = vcov_rank,
@@ -396,13 +590,14 @@ fastsimplexreg <- function(
     vcov_condition = vcov_condition,
     n_saturated = as.integer(opt$n_saturated),
     hessian = hessian,
-    fitted.values = as.numeric(pred$mu),
-    dispersion.values = as.numeric(pred$phi),
+    na.action = na_act,
+    fitted.values = stats::setNames(as.numeric(pred$mu), obs_names),
+    dispersion.values = stats::setNames(as.numeric(pred$phi), obs_names),
     linear.predictors = list(
-      mean = as.numeric(pred$eta_mu),
-      dispersion = as.numeric(pred$eta_phi)
+      mean = stats::setNames(as.numeric(pred$eta_mu), obs_names),
+      dispersion = stats::setNames(as.numeric(pred$eta_phi), obs_names)
     ),
-    residuals = response - as.numeric(pred$mu),
+    residuals = stats::setNames(response - as.numeric(pred$mu), obs_names),
     logLik = logLik_value,
     AIC = -2 * logLik_value + 2 * k,
     BIC = -2 * logLik_value + log(n) * k,
@@ -414,6 +609,7 @@ fastsimplexreg <- function(
     function_evaluations = as.integer(opt$function_evaluations),
     gradient_evaluations = as.integer(opt$gradient_evaluations),
     gradient = as.numeric(opt$gradient),
+    offset = list(mean = design$offset_mu, dispersion = design$offset_phi),
     terms = list(mean = design$terms_mean, dispersion = design$terms_dispersion),
     design = design[c(
       "terms_mean",
@@ -428,7 +624,7 @@ fastsimplexreg <- function(
   )
 
   if (isTRUE(model)) out$model <- design$model
-  if (isTRUE(x)) out$x <- list(mean = X, dispersion = Z)
+  if (isTRUE(x)) out$x <- list(mean = X_full, dispersion = Z_full)
   if (isTRUE(y)) out$y <- response
 
   structure(out, class = "simplex_fast")

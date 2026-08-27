@@ -25,6 +25,9 @@ if (has_viz) {
   source(system.file("benchmark", "viz_figures.R", package = "fastsimplexreg"))
   results <- readRDS(file.path(results_path, "benchmark_results.rds"))
   coefs <- readRDS(file.path(results_path, "benchmark_coefs.rds"))
+  # Read explicitly: `meta` used to arrive only as a side effect of source()ing
+  # viz_figures.R, so any refactor there broke this vignette silently.
+  meta <- readRDS(file.path(results_path, "benchmark_meta.rds"))
 }
 ```
 

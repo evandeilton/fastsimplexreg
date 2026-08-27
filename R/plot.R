@@ -48,7 +48,7 @@
 #' @export
 plot.simplex_fast <- function(x,
                               which = 1:4,
-                              type = c("deviance", "pearson", "response"),
+                              type = c("quantile", "deviance", "pearson", "response"),
                               smooth = TRUE,
                               ...) {
   .simplex_diag_plot(x, which = which, type = match.arg(type), smooth = smooth)
@@ -60,7 +60,7 @@ plot.simplex_fast <- function(x,
 # generic accessors residuals()/fitted() and on x$residuals, so it applies to
 # any fitted object exposing them.
 .simplex_diag_plot <- function(x, which = 1:4,
-                               type = c("deviance", "pearson", "response"),
+                               type = c("quantile", "deviance", "pearson", "response"),
                                smooth = TRUE) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for the diagnostic plots.", call. = FALSE)
@@ -72,8 +72,11 @@ plot.simplex_fast <- function(x,
   }
   which <- sort(unique(which))
 
+  # Unpadded throughout: fitted.values, x$residuals and .simplex_resid_raw()
+  # are all over the COMPLETE rows. Calling residuals() here would return the
+  # na.exclude-padded vector and the lengths would no longer match.
   mu <- x$fitted.values
-  res <- residuals(x, type = type)
+  res <- .simplex_resid_raw(x, type)
   y <- mu + x$residuals
   n <- length(res)
   res_label <- paste0(
