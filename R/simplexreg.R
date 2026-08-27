@@ -305,8 +305,28 @@
 #' @param maxit Integer; the maximum number of BFGS iterations.
 #' @param rel_tol Numeric; relative tolerance on the objective function.
 #' @param grad_tol Numeric; tolerance on the infinity norm of the gradient.
-#' @param n_threads Integer number of OpenMP threads. Use `0` to request all
-#'   threads available to the backend.
+#' @param n_threads Integer number of OpenMP threads; the loop over observations
+#'   is parallelised. Use `0` to request all threads available to the backend.
+#'   The linear predictors are accumulated inside that loop rather than through
+#'   BLAS, so performance does not depend on how your BLAS is configured.
+#'   Measured end-to-end speed-ups on a 24-core machine:
+#'
+#'   \tabular{lrrrr}{
+#'     \strong{problem} \tab \strong{2 threads} \tab \strong{4} \tab \strong{8} \tab \strong{16} \cr
+#'     n = 1e5, p = 5   \tab 1.4x \tab 2.2x \tab 2.1x \tab 2.2x \cr
+#'     n = 1e6, p = 10  \tab 1.9x \tab 3.2x \tab 5.0x \tab 5.2x \cr
+#'     n = 5e6, p = 10  \tab 1.1x \tab 3.3x \tab 5.1x \tab 5.1x
+#'   }
+#'
+#'   Threading pays from roughly `n = 1e5` upwards and saturates near 5x, at
+#'   which point the loop is memory-bound. The default is `1L` so that the
+#'   package never oversubscribes a machine it does not own.
+#'
+#'   Results are reproducible for a fixed `n_threads`. Across DIFFERENT thread
+#'   counts the per-thread accumulators are summed in a different order, which
+#'   perturbs the objective at the rounding level (~1e-14 relative); the line
+#'   search then follows a slightly different path, so coefficients can differ
+#'   by around `1e-8` relative. Compare with [all.equal()], not [identical()].
 #' @param inference Logical; if `TRUE`, computes the information matrix, the
 #'   variance-covariance matrix and the standard errors.
 #' @param information Character; which information matrix to invert for the

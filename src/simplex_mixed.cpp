@@ -248,7 +248,20 @@ EvalResult mixed_core(
     #pragma omp for schedule(dynamic, 8)
 #endif
     for (uword j = 0; j < J; ++j) {
+      // `invalid` is a reduction variable, so this reads THIS thread's private
+      // copy: it short-circuits the rest of this thread's clusters, not the
+      // other threads'. That is intentional and the final reduction is still
+      // correct; making it genuinely shared would need an atomic read and buy
+      // nothing.
       if (invalid) continue;
+      // Exception containment. The body below performs on the order of twenty
+      // Armadillo allocations per cluster, every one of which can throw
+      // std::bad_alloc under memory pressure -- and a throw crossing an OpenMP
+      // structured block terminates the process rather than unwinding. Turning
+      // any such failure into the existing `invalid` path converts a SIGABRT
+      // into the clean "non-finite objective" R error. Table-based unwinding
+      // costs nothing on the non-throwing path.
+      try {
       const uword a = starts[j];
       const uword bb = starts[j + 1];
       const uword nj = bb - a;
@@ -420,7 +433,17 @@ EvalResult mixed_core(
       if (!arma::chol(R, Q)) { invalid = 1; continue; }   // Q = R' R (upper R)
       double logdetQ = 0.0;
       for (int d = 0; d < q; ++d) logdetQ += 2.0 * std::log(R(d, d));
-      const mat C = arma::inv(arma::trimatu(R));           // C C' = Q^{-1}, |C| = |Q|^{-1/2}
+      // Non-throwing form. arma::inv()'s value-returning overload calls
+      // arma_stop_runtime_error on failure, i.e. it THROWS -- and a throw
+      // crossing an OpenMP structured block is undefined behaviour that
+      // terminates the process on this toolchain (verified: SIGABRT, the outer
+      // catch never runs). Every other decomposition in this region already
+      // uses the bool form; this one did not. R came from a successful chol,
+      // so failure is unlikely, but a denormal pivot that passes dpotrf can
+      // still make dtrtri report a zero diagonal, and low probability times
+      // process abort is not an acceptable trade.
+      mat C;
+      if (!arma::inv(C, arma::trimatu(R))) { invalid = 1; continue; }   // C C' = Q^{-1}
 
       // ---- Node-invariant precomputations, hoisted out of the node loop:
       //      the constant part of the log-density, 1/phi, 1/(y(1-y)), the fixed
@@ -496,6 +519,9 @@ EvalResult mixed_core(
         lg->subvec(0, p - 1) -= gbeta;
         lg->subvec(p, p + r - 1) -= ggamma;
         lg->subvec(p + r, dim - 1) -= gomega;
+      }
+      } catch (...) {
+        invalid = 1;
       }
     }
 
@@ -616,6 +642,9 @@ arma::mat simplex_mixed_hessian_fd_cpp(
 
   mat H(d, d, arma::fill::zeros);
   for (uword jcol = 0; jcol < d; ++jcol) {
+    // Serial loop of 2d objective evaluations; a meaningful share of a long
+    // fit, and previously unreachable by Ctrl-C.
+    Rcpp::checkUserInterrupt();
     double h = rel_step * std::max(1.0, std::abs(theta[jcol]));
     bool success = false;
     for (int attempt = 0; attempt < 12; ++attempt) {

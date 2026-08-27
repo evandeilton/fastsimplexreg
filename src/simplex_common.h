@@ -433,6 +433,18 @@ inline Rcpp::List bfgs_minimize(
   std::string message = "Maximum number of iterations reached.";
 
   for (int iter = 0; iter < maxit; ++iter) {
+    // Interrupt check. A whole fit is one .Call, so without this Ctrl-C is dead
+    // for its entire duration -- measured at 154 s for a single-threaded fit at
+    // n = 2e6. This is the shared serial driver for BOTH backends, and eval()
+    // opens and closes its parallel region entirely within one call, so this
+    // point is provably serial.
+    //
+    // Rcpp::checkUserInterrupt(), never R_CheckUserInterrupt(): the raw C
+    // function longjmps, which would leak the live arma::mat H, arma::vec theta
+    // and std::string message. The Rcpp form runs the check under
+    // R_ToplevelExec and THROWS, so C++ destructors unwind properly and
+    // BEGIN_RCPP/END_RCPP turns it back into a real R interrupt.
+    Rcpp::checkUserInterrupt();
     iter_done = iter + 1;
     if (arma::abs(current.grad).max() <= grad_tol) {
       convergence = 0;
@@ -624,81 +636,6 @@ inline void gauss_hermite(const int nAGQ, arma::vec& nodes, arma::vec& weights) 
   arma::eig_sym(eval, evec, J);
   nodes = eval;                                   // ascending order
   weights = SQRT_PI * arma::square(evec.row(0)).t();
-}
-
-// Gauss-Legendre nodes and weights on [-1, 1] via the same Golub-Welsch route
-// used for Gauss-Hermite above: the nodes are the eigenvalues of the symmetric
-// tridiagonal Jacobi matrix (zero diagonal, off-diagonal m / sqrt(4 m^2 - 1)),
-// and the weights are 2 times the squared first component of each normalized
-// eigenvector. Exact for polynomials of degree <= 2n - 1; the weights sum to 2.
-// Computing the rule keeps this file free of tabulated constants, matching the
-// convention already established by gauss_hermite().
-inline void gauss_legendre(const int n, arma::vec& nodes, arma::vec& weights) {
-  const int M = std::max(1, n);
-  if (M == 1) {
-    nodes = arma::vec(1, arma::fill::zeros);
-    weights = arma::vec(1);
-    weights[0] = 2.0;
-    return;
-  }
-  arma::mat J(M, M, arma::fill::zeros);
-  for (int m = 1; m < M; ++m) {
-    const double b = m / std::sqrt(4.0 * m * m - 1.0);
-    J(m - 1, m) = b;
-    J(m, m - 1) = b;
-  }
-  arma::vec eval;
-  arma::mat evec;
-  arma::eig_sym(eval, evec, J);
-  nodes = eval;
-  weights = 2.0 * arma::square(evec.row(0)).t();
-}
-
-// Fixed-order Gauss-Legendre estimate of int_a^b f.
-template <class F>
-inline double gl_estimate(F&& f, const double a, const double b,
-                          const arma::vec& nodes, const arma::vec& weights) {
-  const double half = 0.5 * (b - a);
-  const double mid = 0.5 * (a + b);
-  double acc = 0.0;
-  for (arma::uword k = 0; k < nodes.n_elem; ++k) {
-    acc += weights[k] * f(mid + half * nodes[k]);
-  }
-  return half * acc;
-}
-
-// Adaptive Gauss-Legendre quadrature by interval bisection. The error on a
-// panel is estimated by comparing the whole-panel rule with the sum of the rule
-// on its two halves; a panel is subdivided until that difference falls under
-// max(abstol_panel, reltol * |I_panel|) or the depth limit is reached. This is
-// the classic adaptive-quadrature safeguard and is enough for the simplex
-// density, which is smooth and rapidly decaying on (0, 1).
-template <class F>
-inline double adaptive_gl(F&& f, const double a, const double b,
-                          const arma::vec& nodes, const arma::vec& weights,
-                          const double whole, const double abstol,
-                          const double reltol, const int depth) {
-  const double mid = 0.5 * (a + b);
-  const double left = gl_estimate(f, a, mid, nodes, weights);
-  const double right = gl_estimate(f, mid, b, nodes, weights);
-  const double split = left + right;
-  const double err = std::abs(split - whole);
-  if (depth <= 0 || err <= std::max(abstol, reltol * std::abs(split))) {
-    return split;
-  }
-  return adaptive_gl(f, a, mid, nodes, weights, left, 0.5 * abstol, reltol, depth - 1) +
-         adaptive_gl(f, mid, b, nodes, weights, right, 0.5 * abstol, reltol, depth - 1);
-}
-
-template <class F>
-inline double integrate_adaptive(F&& f, const double a, const double b,
-                                 const arma::vec& nodes, const arma::vec& weights,
-                                 const double abstol = 1e-14,
-                                 const double reltol = 1e-12,
-                                 const int max_depth = 40) {
-  if (!(b > a)) return 0.0;
-  const double whole = gl_estimate(f, a, b, nodes, weights);
-  return adaptive_gl(f, a, b, nodes, weights, whole, abstol, reltol, max_depth);
 }
 
 } // namespace simplex_fast

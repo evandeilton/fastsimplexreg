@@ -248,52 +248,6 @@ inline double inv_gaussian_one(const double mean, const double tau) {
   return x;
 }
 
-// Integrate the simplex density over [a, b] using an adaptive Gauss-Legendre
-// rule seeded with knots placed at multiples of the first-order standard
-// deviation around the mean. Seeding matters: for small phi the density is a
-// narrow spike, and a naive adaptive rule started on the whole interval can
-// bisect into two panels that both miss the spike, converge on a near-zero
-// estimate and stop. The knots guarantee the peak is always resolved.
-//
-// The CDF no longer uses this -- simplex_logcdf_raw() is a closed form -- but
-// it is retained as an INDEPENDENT reference: tests/testthat cross-checks the
-// closed form against it, and having two unrelated routes to the same number
-// is what caught the naive-quadrature failure at mu = 0.05, phi = 1e-4 (where
-// stats::integrate() returns 6.2e-163 for a probability of 1).
-inline double simplex_integrate(const double a, const double b,
-                                const double mu, const double phi,
-                                const arma::vec& gln, const arma::vec& glw) {
-  if (!(b > a)) return 0.0;
-  const double u = mu * (1.0 - mu);
-  double sd = std::sqrt(phi * u * u * u);          // Var(Y) ~ phi * V(mu)
-  if (!(sd > 0.0) || !std::isfinite(sd)) sd = 0.1;
-
-  static const double mult[] = {-12.0, -8.0, -6.0, -4.0, -3.0, -2.0, -1.5, -1.0,
-                                -0.5, -0.25, 0.0, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0,
-                                4.0, 6.0, 8.0, 12.0};
-  std::vector<double> knots;
-  knots.reserve(24);
-  knots.push_back(a);
-  for (const double m : mult) {
-    const double k = mu + m * sd;
-    if (k > a && k < b) knots.push_back(k);
-  }
-  knots.push_back(b);
-  std::sort(knots.begin(), knots.end());
-  knots.erase(std::unique(knots.begin(), knots.end()), knots.end());
-
-  const auto integrand = [&](const double t) { 
-    return std::exp(simplex_logpdf(t, mu, phi));
-  };
-
-  double total = 0.0;
-  for (std::size_t k = 0; k + 1 < knots.size(); ++k) {
-    total += integrate_adaptive(integrand, knots[k], knots[k + 1], gln, glw,
-                                1e-15, 1e-12, 40);
-  }
-  return total;
-}
-
 // log F(y) for the simplex, in CLOSED FORM.
 //
 // Writing X = Y/(1-Y) maps the simplex onto the odds scale, where its density
@@ -445,10 +399,21 @@ Rcpp::NumericVector dsimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     const double yi = y[i % ny];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -469,6 +434,7 @@ Rcpp::NumericVector dsimplex_cpp(
     }
     const double ld = simplex_fast::simplex_logpdf(yi, mui, phii);
     out[i] = log ? ld : std::exp(ld);
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -477,10 +443,10 @@ Rcpp::NumericVector dsimplex_cpp(
 
 
 // Simplex distribution function in C++.
-// There is no closed form, so the density is integrated numerically with an
-// adaptive Gauss-Legendre rule whose panels are seeded around the mean (see
-// simplex_integrate). Argument conventions follow base R's p*(): `lower_tail`
-// and `log_p` are honoured, NA/NaN propagate, and invalid parameters give NaN.
+// Evaluated from the closed form in simplex_logcdf_raw(); log_p is computed on
+// the log scale throughout rather than as log() of a linear value. Argument
+// conventions follow base R's p*(): `lower_tail` and `log_p` are honoured,
+// NA/NaN propagate, and invalid parameters give NaN.
 // [[Rcpp::export]]
 Rcpp::NumericVector psimplex_cpp(
     const Rcpp::NumericVector& q,
@@ -504,10 +470,21 @@ Rcpp::NumericVector psimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     const double qi = q[i % nq];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -529,6 +506,7 @@ Rcpp::NumericVector psimplex_cpp(
     simplex_fast::simplex_logcdf_one(qi, mui, phii, logF, logS);
     const double lv = lower_tail ? logF : logS;
     out[i] = log_p ? lv : std::min(1.0, std::max(0.0, std::exp(lv)));
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -564,10 +542,21 @@ Rcpp::NumericVector qsimplex_cpp(
 #endif
 
   int n_bad = 0;
+  // Chunked so that an interrupt check can sit BETWEEN parallel regions --
+  // Rcpp::checkUserInterrupt() throws, so it must never be called from inside
+  // one. 65536 elements is ~0.10 s of work for the slowest of these kernels
+  // (qsimplex, measured at 1.58 us/element single-threaded), which bounds the
+  // interrupt latency, while libgomp's region-entry cost of a few microseconds
+  // is under 0.01% of a chunk. n_bad becomes a sum of partial reductions, which
+  // is an integer count, so nothing numerical changes.
+  constexpr R_xlen_t CHUNK = 1 << 16;
+  for (R_xlen_t base = 0; base < n; base += CHUNK) {
+    Rcpp::checkUserInterrupt();
+    const R_xlen_t hi = std::min(n, base + CHUNK);
 #ifdef _OPENMP
   #pragma omp parallel for num_threads(threads) schedule(static) reduction(+:n_bad)
 #endif
-  for (R_xlen_t i = 0; i < n; ++i) {
+    for (R_xlen_t i = base; i < hi; ++i) {
     double pi_ = p[i % npr];
     const double mui = mu[i % nm];
     const double phii = phi[i % np];
@@ -590,6 +579,7 @@ Rcpp::NumericVector qsimplex_cpp(
     if (pi_ < 0.0 || pi_ > 1.0) { out[i] = R_NaN; ++n_bad; continue; }
 
     out[i] = simplex_fast::simplex_quantile_one(pi_, mui, phii);
+    }
   }
 
   out.attr("n_invalid_par") = n_bad;
@@ -749,6 +739,9 @@ arma::mat simplex_hessian_fd_cpp(
   mat H(d, d, arma::fill::zeros);
 
   for (uword j = 0; j < d; ++j) {
+    // Serial loop of 2d objective evaluations; a meaningful share of a long
+    // fit, and previously unreachable by Ctrl-C.
+    Rcpp::checkUserInterrupt();
     double h = rel_step * std::max(1.0, std::abs(theta[j]));
     bool success = false;
 

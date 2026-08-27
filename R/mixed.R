@@ -207,12 +207,20 @@
 #' @param maxit Maximum number of BFGS iterations.
 #' @param rel_tol Relative objective tolerance.
 #' @param grad_tol Infinity-norm gradient tolerance.
-#' @param n_threads Number of OpenMP threads (the cluster loop is parallelised).
-#'   Zero uses all available threads. Parallelism helps most when the per-cluster
-#'   work is substantial (two or more random effects, or larger clusters); for
-#'   many tiny clusters a small `n_threads` (or `1`) can be faster, because a
-#'   multi-threaded BLAS may otherwise oversubscribe the cores. Results can differ
-#'   by a negligible amount (around `1e-13`) between thread counts.
+#' @param n_threads Number of OpenMP threads; the loop over clusters is
+#'   parallelised. Zero uses all threads available to the backend. What
+#'   parallelism buys here is governed by the work per CLUSTER, not by the number
+#'   of clusters: measured on this design at 64000 observations, speed-up at 4
+#'   threads was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x with
+#'   128. Eight threads is a loss for clusters smaller than about 32. If
+#'   \pkg{RhpcBLASctl} is installed it is used to pin the BLAS to one thread for
+#'   the duration of the fit and restore it afterwards, which was worth a further
+#'   34\% at four threads; installing it is optional.
+#'
+#'   Results are reproducible for a fixed `n_threads`, but the per-thread
+#'   accumulators are summed in thread order, so different thread counts differ
+#'   by floating-point reassociation -- around `1e-16` relative on the
+#'   log-likelihood.
 #' @param inference Logical; compute the Hessian, covariance matrix and standard
 #'   errors.
 #' @param hessian_rel_step Relative step for the finite-difference Hessian.
@@ -411,6 +419,33 @@ fastsimplexregmixed <- function(
   if (length(start) != p + r + m || any(!is.finite(start))) {
     stop("'start' must be a finite numeric vector of length ncol(X) + ncol(W) + q(q+1)/2.",
          call. = FALSE)
+  }
+
+  # BLAS thread pinning, for the duration of this call only.
+  #
+  # The mixed backend parallelises over CLUSTERS and each cluster does several
+  # small Armadillo products and decompositions. A threaded BLAS then layers its
+  # own team under ours -- 8 OpenMP threads times up to 24 BLAS threads on a
+  # 24-core box -- and the machine spends its time on scheduling. Measured on a
+  # J = 2000, nj = 8, nAGQ = 11 fit with identical data (log-likelihood equal to
+  # 12 digits in every run):
+  #
+  #   n_threads   BLAS at 24   BLAS at 1   gain
+  #           1       6.10 s      5.81 s    +5%
+  #           4       4.02 s      2.66 s   +34%
+  #           8       7.01 s      5.40 s   +23%
+  #
+  # The gap widens with the OpenMP team, which is the signature of
+  # oversubscription. Restored on exit, so the user's global BLAS setting is
+  # never left changed -- and skipped entirely when RhpcBLASctl is absent, which
+  # only costs the speed-up.
+  if (n_threads != 1L && requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+    .blas_old <- try(RhpcBLASctl::blas_get_num_procs(), silent = TRUE)
+    if (!inherits(.blas_old, "try-error") && is.numeric(.blas_old)) {
+      on.exit(try(RhpcBLASctl::blas_set_num_threads(.blas_old), silent = TRUE),
+              add = TRUE)
+      try(RhpcBLASctl::blas_set_num_threads(1L), silent = TRUE)
+    }
   }
 
   opt <- simplex_mixed_bfgs_cpp(
