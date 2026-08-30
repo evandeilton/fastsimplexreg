@@ -29,7 +29,10 @@ fastsimplexregmixed(
 }
 \arguments{
 \item{formula}{A multi-part formula \code{y ~ mean_terms | dispersion_terms}. When
-the dispersion part is omitted the dispersion is constant.}
+the dispersion part is omitted the dispersion is constant. Each part may
+carry its own \code{offset()} term, added to the linear predictor of that
+submodel on its own link scale, kept separate per submodel and rebuilt from \code{newdata}
+in \code{\link[=predict.simplex_fast_mixed]{predict.simplex_fast_mixed()}}.}
 
 \item{data}{A \code{data.frame} containing the response, covariates and grouping
 factor.}
@@ -93,7 +96,20 @@ evaluated inside \code{data} as in \code{\link[stats:lm]{stats::lm()}} -- for ex
 response in the fitted object.}
 }
 \value{
-An object of class \code{"simplex_fast_mixed"}.
+An object of S3 class \code{"simplex_fast_mixed"}: a list whose main
+components are \code{coefficients} (a list with the \code{mean} and \code{dispersion}
+fixed-effect estimates), \code{par} (the full vector \code{c(beta, gamma, omega)}),
+\code{omega} (the packed log-Cholesky parameters), \code{D} (the Cholesky factor) and
+\code{Sigma} (the estimated random-effect covariance), \code{ranef} (the
+empirical-Bayes modes, a groups-by-\code{q} matrix) with \code{ranef.postvar},
+\code{standard_errors}, \code{vcov}, \code{fitted.values} (means conditional on the
+random-effect modes), \code{dispersion.values}, \code{linear.predictors}, \code{residuals}
+(response residuals), \code{logLik} (the marginal log-likelihood), \code{AIC}, \code{BIC},
+\code{nobs}, \code{ngrps}, \code{groups}, \code{nAGQ}, \code{q}, \code{df}, \code{df.residual}, \code{convergence},
+\code{message}, \code{iterations}, the \code{offset} actually applied to each submodel and
+the stored \code{terms}/\code{design} metadata used for prediction. The same
+inference diagnostics as \code{\link[=fastsimplexreg]{fastsimplexreg()}} are stored -- \code{vcov_rank},
+\code{vcov_pseudo}, \code{vcov_eigenvalues}, \code{vcov_condition} and \code{n_saturated}.
 }
 \description{
 Fits a two-level (nested) simplex mixed model for continuous proportions in
@@ -151,11 +167,13 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 }
 \references{
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on
-the simplex. \emph{Journal of Multivariate Analysis}, \strong{39}(1), 106-116.
+the simplex. \emph{Journal of Multivariate Analysis}, \strong{39}(1), 106--116.
+\doi{10.1016/0047-259X(91)90008-P}
 
 Pinheiro, J. C. and Bates, D. M. (1995). Approximations to the log-likelihood
 function in the nonlinear mixed-effects model. \emph{Journal of Computational and
-Graphical Statistics}, \strong{4}(1), 12-35.
+Graphical Statistics}, \strong{4}(1), 12--35.
+\doi{10.1080/10618600.1995.10474663}
 }
 \seealso{
 \code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{\link[=ranef]{ranef()}}, \code{\link[=VarCorr]{VarCorr()}}

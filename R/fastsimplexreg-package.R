@@ -29,7 +29,6 @@
 #' @seealso [fastsimplexreg()], [dsimplex()], [rsimplex()], [simplex_linkinv()]
 #'
 #' @keywords internal
-#' @aliases fastsimplexreg-package
 #'
 #' @useDynLib fastsimplexreg, .registration = TRUE
 #' @importFrom Rcpp sourceCpp

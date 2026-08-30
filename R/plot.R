@@ -23,8 +23,10 @@
 #' @param x An object of class `"simplex_fast"`.
 #' @param which Integer vector selecting the panels to draw, a subset of
 #'   `1:4`.
-#' @param type Type of residual used in panels 1-3: one of `"deviance"`,
-#'   `"pearson"` or `"response"`. See [residuals.simplex_fast()].
+#' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
+#'   randomised quantile residuals, which are exactly standard normal under a
+#'   correctly specified model), `"deviance"`, `"pearson"` or `"response"`.
+#'   See [residuals.simplex_fast()].
 #' @param smooth Logical; if `TRUE` (the default) a LOESS smoother is added to
 #'   the residual and scale-location panels when there are enough observations.
 #' @param ... Additional arguments, currently ignored.

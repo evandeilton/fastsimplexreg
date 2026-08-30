@@ -52,7 +52,7 @@ named \code{object}, \code{x} or \code{formula} to match the corresponding gener
 
 \item{...}{Additional arguments, currently ignored.}
 
-\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomized
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomised
 quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
 standard normal under a correct model), \code{"response"}, \code{"pearson"} or
 \code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
@@ -92,7 +92,11 @@ Errors if the model was fitted with \code{inference = FALSE}.}
 \item{\code{nobs}}{Returns the number of observations used in the fit.}
 \item{\code{fitted}}{Returns the fitted means (\code{model = "mean"}) or fitted
 dispersions (\code{model = "dispersion"}).}
-\item{\code{residuals}}{Returns residuals. \code{type = "response"} gives
+\item{\code{residuals}}{Returns residuals. \code{type = "quantile"} (the default)
+gives randomised quantile residuals in the sense of Dunn and Smyth
+(1996): they are exactly standard normal under a correctly specified
+model, which the other three types are not, so they are the ones to read
+for diagnostics. \code{type = "response"} gives
 \eqn{y - \hat\mu}; \code{type = "pearson"} gives
 \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order
@@ -144,6 +148,11 @@ confint(fit)
 head(model.matrix(fit, model = "mean"))
 formula(fit)
 
+}
+\references{
+Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+\emph{Journal of Computational and Graphical Statistics}, \strong{5}(3), 236--244.
+\doi{10.1080/10618600.1996.10474708}
 }
 \seealso{
 \code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{\link[=summary.simplex_fast]{summary.simplex_fast()}}, \code{\link[=predict.simplex_fast]{predict.simplex_fast()}},

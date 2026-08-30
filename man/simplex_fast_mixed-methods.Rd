@@ -47,8 +47,10 @@ names, over the full vector \code{c(beta, gamma, omega)}. Defaults to all.}
 
 \item{level}{For \code{confint}, the confidence level.}
 
-\item{type}{For \code{residuals}, one of \code{"response"}, \code{"pearson"} or
-\code{"deviance"}.}
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomised
+quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+standard normal under a correctly specified model), \code{"response"},
+\code{"pearson"} or \code{"deviance"}.}
 
 \item{postVar}{For \code{ranef}, logical; attach posterior covariances.}
 
@@ -80,8 +82,8 @@ produced by \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}.
 \item{\code{ngrps}}{Number of groups.}
 \item{\code{fitted}}{Fitted means (conditional on the empirical-Bayes random
 effects) or fitted dispersions.}
-\item{\code{residuals}}{Response, Pearson or deviance residuals, conditional on
-the empirical-Bayes random effects.}
+\item{\code{residuals}}{Randomised quantile (the default), response, Pearson or
+deviance residuals, conditional on the empirical-Bayes random effects.}
 \item{\code{ranef}}{Empirical-Bayes random-effect modes (a groups-by-\code{q}
 matrix); with \code{postVar = TRUE}, the posterior covariances are attached as
 the \code{"postVar"} attribute.}
@@ -108,6 +110,11 @@ VarCorr(fit)
 head(ranef(fit))
 confint(fit)
 ngrps(fit)
+}
+\references{
+Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+\emph{Journal of Computational and Graphical Statistics}, \strong{5}(3), 236--244.
+\doi{10.1080/10618600.1996.10474708}
 }
 \seealso{
 \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}

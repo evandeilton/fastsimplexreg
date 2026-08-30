@@ -25,7 +25,15 @@ fastsimplexreg(
 )
 }
 \arguments{
-\item{formula}{A multi-part formula, for example \code{y ~ x1 + x2 | z1 + z2}.}
+\item{formula}{A multi-part formula, for example \code{y ~ x1 + x2 | z1 + z2}.
+Each part may carry its own \code{offset()} term: in
+\code{y ~ x1 + offset(a) | z1 + offset(b)}, \code{a} is added to the mean linear
+predictor and \code{b} to the dispersion linear predictor, each on its own link
+scale, and neither is estimated. The two are kept apart -- unlike
+\code{\link[stats:model.offset]{stats::model.offset()}}, which sums the offsets of every part of a
+multi-part formula -- and are rebuilt from \code{newdata} in
+\code{\link[=predict.simplex_fast]{predict.simplex_fast()}}, so \code{newdata} must supply every variable an
+offset uses.}
 
 \item{data}{A \code{data.frame} containing the response and covariates.}
 
@@ -157,16 +165,19 @@ if (requireNamespace("betareg", quietly = TRUE)) {
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
 Some parametric models on the simplex.
 \emph{Journal of Multivariate Analysis}, \strong{39}(1), 106--116.
+\doi{10.1016/0047-259X(91)90008-P}
 
 Zhang, P., Qiu, Z. and Shi, C. (2016).
 simplexreg: An R Package for Regression Analysis of Proportional Data Using
 the Simplex Distribution.
 \emph{Journal of Statistical Software}, \strong{71}(11), 1--21.
+\doi{10.18637/jss.v071.i11}
 
 Efron, B. and Hinkley, D. V. (1978).
 Assessing the accuracy of the maximum likelihood estimator: observed versus
 expected Fisher information.
 \emph{Biometrika}, \strong{65}(3), 457--483.
+\doi{10.1093/biomet/65.3.457}
 }
 \seealso{
 \code{\link[=dsimplex]{dsimplex()}}, \code{\link[=rsimplex]{rsimplex()}}, \code{\link[=simplex_linkinv]{simplex_linkinv()}},

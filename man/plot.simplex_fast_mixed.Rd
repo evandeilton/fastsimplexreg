@@ -17,7 +17,9 @@
 
 \item{which}{Integer subset of \code{1:4} selecting panels.}
 
-\item{type}{Residual type used in the panels.}
+\item{type}{Type of residual used in panels 1-3: \code{"quantile"} (the default;
+randomised quantile residuals), \code{"deviance"}, \code{"pearson"} or
+\code{"response"}. See \code{\link[=residuals.simplex_fast_mixed]{residuals.simplex_fast_mixed()}}.}
 
 \item{smooth}{Logical; add a LOESS smoother.}
 
