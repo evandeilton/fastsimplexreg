@@ -85,7 +85,7 @@ and
 Two likelihood based models dominate this setting: <strong>beta
 regression</strong> and <strong>simplex regression</strong>. This
 package implements the latter.</p>
-<p>The simplex distribution (Barndorff-Nielsen and Jørgensen, 1991) is a
+<p>The simplex distribution (Barndorff-Nielsen and Jorgensen, 1991) is a
 member of the class of <em>dispersion models</em>. A random variable
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Y</mi><mo>∈</mo><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">Y \in (0, 1)</annotation></semantics></math>
 has a simplex distribution with mean
@@ -120,7 +120,7 @@ and vanishes at the boundaries. The dispersion
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>
 here is the
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding="application/x-tex">\sigma^2</annotation></semantics></math>
-parameter of Barndorff-Nielsen and Jørgensen (1991).</p>
+parameter of Barndorff-Nielsen and Jorgensen (1991).</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.001</span>, <span class="fl">0.999</span>, length.out <span class="op">=</span> <span class="fl">400</span><span class="op">)</span></span>
 <span><span class="va">op</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html" class="external-link">par</a></span><span class="op">(</span>mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">4</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
@@ -324,7 +324,8 @@ parameter outside its domain gives <code>NaN</code> with a warning
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/simplex-distribution.html">dsimplex</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.8</span><span class="op">)</span>, mu <span class="op">=</span> <span class="fl">0.5</span>, phi <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 0.06924763 3.19153824 0.06924763</span></span>
 <span></span>
-<span><span class="co"># The CDF has no closed form; it is obtained by adaptive quadrature.</span></span>
+<span><span class="co"># The CDF is available in closed form, evaluated on the log scale so that</span></span>
+<span><span class="co"># log.p stays honest deep into the tails.</span></span>
 <span><span class="fu"><a href="../reference/simplex-distribution.html">psimplex</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.2</span>, <span class="fl">0.5</span>, <span class="fl">0.8</span><span class="op">)</span>, mu <span class="op">=</span> <span class="fl">0.5</span>, phi <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 0.001349898 0.500000000 0.998650102</span></span>
 <span></span>
@@ -364,16 +365,16 @@ skip it.</p>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
-<p>Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric
+<p>Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. <em>Journal of Multivariate Analysis</em>,
-<strong>39</strong>(1), 106-116.</p>
+<strong>39</strong>(1), 106-116. <a href="https://doi.org/10.1016/0047-259X(91)90008-P" class="external-link uri">https://doi.org/10.1016/0047-259X(91)90008-P</a></p>
 <p>Song, P. X.-K. and Tan, M. (2000). Marginal models for longitudinal
 continuous proportional data. <em>Biometrics</em>,
-<strong>56</strong>(2), 496-502.</p>
+<strong>56</strong>(2), 496-502. <a href="https://doi.org/10.1111/j.0006-341X.2000.00496.x" class="external-link uri">https://doi.org/10.1111/j.0006-341X.2000.00496.x</a></p>
 <p>Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R package for
 regression analysis of proportional data using the simplex distribution.
-<em>Journal of Statistical Software</em>, <strong>71</strong>(11),
-1-21.</p>
+<em>Journal of Statistical Software</em>, <strong>71</strong>(11), 1-21.
+<a href="https://doi.org/10.18637/jss.v071.i11" class="external-link uri">https://doi.org/10.18637/jss.v071.i11</a></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

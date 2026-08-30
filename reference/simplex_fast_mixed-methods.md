@@ -34,8 +34,8 @@ produced by
 
 - `residuals`:
 
-  Response, Pearson or deviance residuals, conditional on the
-  empirical-Bayes random effects.
+  Randomised quantile (the default), response, Pearson or deviance
+  residuals, conditional on the empirical-Bayes random effects.
 
 - `ranef`:
 
@@ -116,7 +116,10 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
 
 - type:
 
-  For `residuals`, one of `"response"`, `"pearson"` or `"deviance"`.
+  For `residuals`, one of `"quantile"` (the default; randomised quantile
+  residuals in the sense of Dunn and Smyth, 1996, which are exactly
+  standard normal under a correctly specified model), `"response"`,
+  `"pearson"` or `"deviance"`.
 
 - postVar:
 
@@ -141,6 +144,12 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
 a matrix; `ranef` returns a matrix; `VarCorr` returns the covariance
 matrix with `stddev`/`correlation` attributes; `logLik` returns a
 `"logLik"` object.
+
+## References
+
+Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+*Journal of Computational and Graphical Statistics*, **5**(3), 236–244.
+[doi:10.1080/10618600.1996.10474708](https://doi.org/10.1080/10618600.1996.10474708)
 
 ## See also
 

@@ -66,27 +66,19 @@
 <!-- badges: end -->
 <p>A high-performance implementation of simplex regression for continuous proportions in the open interval <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math>, with separate submodels for the mean and the dispersion, and both fixed- and mixed-effects fitting. The numerical core (log-likelihood, analytic score, native BFGS, adaptive Gauss-Hermite quadrature, density, random generation, prediction) is written in C++ with <code>RcppArmadillo</code>, <code>BLAS</code>/<code>LAPACK</code> and optional <code>OpenMP</code>.</p>
 <p><code>fastsimplexreg</code> provides high-performance maximum-likelihood estimation of <strong>simplex regression</strong> models for continuous proportions in the open interval <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math>, following Barndorff-Nielsen and Jorgensen (1991). It fits separate submodels for the mean and the dispersion,</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mi>i</mi></msub><mo>∼</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>,</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>g</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐳</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛄</mi><mo>,</mo></mrow><annotation encoding="application/x-tex">
-Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mi>i</mi></msub><mo>∼</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>,</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>g</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐳</mi><mi>i</mi><mi>⊤</mi></msubsup><mi>𝛄</mi><mo>,</mo></mrow><annotation encoding="application/x-tex">Y_i \sim \mathrm{Simplex}(\mu_i, \phi_i), \qquad
 g(\mu_i) = \mathbf{x}_i^\top \boldsymbol\beta, \qquad
-\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,
-</annotation></semantics></math></p>
+\log(\phi_i) = \mathbf{z}_i^\top \boldsymbol\gamma,</annotation></semantics></math></p>
 <p>with the density</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo>;</mo><mi>μ</mi><mo>,</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msup><mrow><mo stretchy="true" form="prefix">[</mo><mn>2</mn><mi>π</mi><mi>ϕ</mi><mspace width="0.167em"></mspace><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo><msup><mo stretchy="false" form="postfix">)</mo><mn>3</mn></msup><mo stretchy="true" form="postfix">]</mo></mrow><mrow><mi>−</mi><mn>1</mn><mi>/</mi><mn>2</mn></mrow></msup><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">{</mo><mi>−</mi><mfrac><mn>1</mn><mrow><mn>2</mn><mi>ϕ</mi></mrow></mfrac><mspace width="0.167em"></mspace><mfrac><mrow><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo>−</mo><mi>μ</mi><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><msup><mi>μ</mi><mn>2</mn></msup><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>μ</mi><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow></mfrac><mo stretchy="true" form="postfix">}</mo></mrow><mo>,</mo><mspace width="2.0em"></mspace><mn>0</mn><mo>&lt;</mo><mi>y</mi><mo>&lt;</mo><mn>1</mn><mi>.</mi></mrow><annotation encoding="application/x-tex">
-f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo>;</mo><mi>μ</mi><mo>,</mo><mi>ϕ</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msup><mrow><mo stretchy="true" form="prefix">[</mo><mn>2</mn><mi>π</mi><mi>ϕ</mi><mspace width="0.167em"></mspace><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo><msup><mo stretchy="false" form="postfix">)</mo><mn>3</mn></msup><mo stretchy="true" form="postfix">]</mo></mrow><mrow><mi>−</mi><mn>1</mn><mi>/</mi><mn>2</mn></mrow></msup><mrow><mi mathvariant="normal">exp</mi><mo>⁡</mo></mrow><mspace width="-0.167em"></mspace><mrow><mo stretchy="true" form="prefix">{</mo><mi>−</mi><mfrac><mn>1</mn><mrow><mn>2</mn><mi>ϕ</mi></mrow></mfrac><mspace width="0.167em"></mspace><mfrac><mrow><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo>−</mo><mi>μ</mi><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow><mrow><mi>y</mi><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><msup><mi>μ</mi><mn>2</mn></msup><mo stretchy="false" form="prefix">(</mo><mn>1</mn><mo>−</mo><mi>μ</mi><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow></mfrac><mo stretchy="true" form="postfix">}</mo></mrow><mo>,</mo><mspace width="2.0em"></mspace><mn>0</mn><mo>&lt;</mo><mi>y</mi><mo>&lt;</mo><mn>1</mn><mi>.</mi></mrow><annotation encoding="application/x-tex">f(y; \mu, \phi) = \left[2\pi\phi\,(y(1-y))^3\right]^{-1/2}
 \exp\!\left\lbrace -\frac{1}{2\phi}\,
-\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\rbrace, \qquad 0 &lt; y &lt; 1.
-</annotation></semantics></math></p>
+\frac{(y-\mu)^2}{y(1-y)\,\mu^2(1-\mu)^2}\right\rbrace, \qquad 0 &lt; y &lt; 1.</annotation></semantics></math></p>
 <p>For nested or clustered proportion data, the package also fits <strong>simplex mixed-effects models</strong> with cluster-specific random effects <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>𝐛</mi><mi>j</mi></msub><mo>∼</mo><msub><mi>N</mi><mi>q</mi></msub><mo stretchy="false" form="prefix">(</mo><mn>𝟎</mn><mo>,</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{b}_j \sim N_q(\mathbf{0}, \boldsymbol\Sigma)</annotation></semantics></math> in the mean submodel:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∣</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>∼</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>,</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>g</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>+</mo><msubsup><mi>𝐳</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><msub><mi>𝐛</mi><mi>j</mi></msub><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐰</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><mi>𝛄</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">
-Y_{ij} \mid \mathbf{b}_j \sim \mathrm{Simplex}(\mu_{ij}, \phi_{ij}), \qquad
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∣</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>∼</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>,</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>,</mo><mspace width="2.0em"></mspace><mi>g</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐱</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><mi>𝛃</mi><mo>+</mo><msubsup><mi>𝐳</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><msub><mi>𝐛</mi><mi>j</mi></msub><mo>,</mo><mspace width="2.0em"></mspace><mrow><mi mathvariant="normal">log</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msubsup><mi>𝐰</mi><mrow><mi>i</mi><mi>j</mi></mrow><mi>⊤</mi></msubsup><mi>𝛄</mi><mi>.</mi></mrow><annotation encoding="application/x-tex">Y_{ij} \mid \mathbf{b}_j \sim \mathrm{Simplex}(\mu_{ij}, \phi_{ij}), \qquad
 g(\mu_{ij}) = \mathbf{x}_{ij}^\top \boldsymbol\beta + \mathbf{z}_{ij}^\top \mathbf{b}_j, \qquad
-\log(\phi_{ij}) = \mathbf{w}_{ij}^\top \boldsymbol\gamma.
-</annotation></semantics></math></p>
-<p>Since the random effects are unobserved, estimation is performed by maximizing the marginal likelihood:</p>
-<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo stretchy="false" form="prefix">(</mo><mi>𝛃</mi><mo>,</mo><mi>𝛄</mi><mo>,</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><munder><mo>∏</mo><mi>j</mi></munder><msub><mo>∫</mo><msup><mi>ℝ</mi><mi>q</mi></msup></msub><mrow><mo stretchy="true" form="prefix">[</mo><munder><mo>∏</mo><mi>i</mi></munder><mi>f</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∣</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>;</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>,</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">]</mo></mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>;</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mi mathvariant="normal">d</mi><msub><mi>𝐛</mi><mi>j</mi></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">
-L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,
-</annotation></semantics></math></p>
+\log(\phi_{ij}) = \mathbf{w}_{ij}^\top \boldsymbol\gamma.</annotation></semantics></math></p>
+<p>Since the random effects are unobserved, estimation is performed by maximising the marginal likelihood:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo stretchy="false" form="prefix">(</mo><mi>𝛃</mi><mo>,</mo><mi>𝛄</mi><mo>,</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><munder><mo>∏</mo><mi>j</mi></munder><msub><mo>∫</mo><msup><mi>ℝ</mi><mi>q</mi></msup></msub><mrow><mo stretchy="true" form="prefix">[</mo><munder><mo>∏</mo><mi>i</mi></munder><mi>f</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>∣</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>;</mo><msub><mi>μ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>,</mo><msub><mi>ϕ</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo><mo stretchy="true" form="postfix">]</mo></mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>;</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.167em"></mspace><mi mathvariant="normal">d</mi><msub><mi>𝐛</mi><mi>j</mi></msub><mo>,</mo></mrow><annotation encoding="application/x-tex">L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,</annotation></semantics></math></p>
 <p>where <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>𝐛</mi><mi>j</mi></msub><mo>;</mo><mi>𝚺</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">f(\mathbf{b}_j; \boldsymbol\Sigma)</annotation></semantics></math> is the multivariate normal density. This high-dimensional integral is approximated using high-performance <strong>adaptive Gauss-Hermite quadrature</strong> (AGHQ).</p>
 <p>The entire numerical hot path – log-likelihood, analytic score, a native BFGS optimiser, density, random generation, prediction and link inverses – is implemented in C++ with <code>RcppArmadillo</code>, BLAS/LAPACK and optional OpenMP parallelism, so that models scale to large data sets.</p>
 <div class="section level2">
@@ -104,6 +96,10 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexreg.html">fastsimplexreg</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x1</span> <span class="op">+</span> <span class="va">x2</span> <span class="op">|</span> <span class="va">z1</span> <span class="op">+</span> <span class="va">z2</span>, data <span class="op">=</span> <span class="va">dat</span>, link <span class="op">=</span> <span class="st">"logit"</span><span class="op">)</span></span></code></pre></div>
 <p>The first right-hand side component models the mean <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>μ</mi><annotation encoding="application/x-tex">\mu</annotation></semantics></math>; the second models the dispersion <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ϕ</mi><annotation encoding="application/x-tex">\phi</annotation></semantics></math>. When the second component is omitted, as in <code>y ~ x1 + x2</code>, the dispersion is constant (equivalent to <code>| 1</code>).</p>
+<p>Each component may carry its own <code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> term, added to the linear predictor of that submodel on its own link scale and not estimated:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexreg.html">fastsimplexreg</a></span><span class="op">(</span><span class="va">y</span> <span class="op">~</span> <span class="va">x1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span> <span class="op">|</span> <span class="va">z1</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset</a></span><span class="op">(</span><span class="va">b</span><span class="op">)</span>, data <span class="op">=</span> <span class="va">dat</span><span class="op">)</span></span></code></pre></div>
+<p>The two offsets are kept apart – unlike <code><a href="https://rdrr.io/r/stats/model.extract.html" class="external-link">stats::model.offset()</a></code>, which sums the offsets of every part of a multi-part formula – and are rebuilt from <code>newdata</code> in <code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="mean-links">Mean links<a class="anchor" aria-label="anchor" href="#mean-links"></a>
@@ -144,7 +140,7 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <h2 id="a-worked-example">A worked example<a class="anchor" aria-label="anchor" href="#a-worked-example"></a>
 </h2>
 <p>We use the <code>ReadingSkills</code> data from the <strong>betareg</strong> package: the response <code>accuracy</code> is a reading-accuracy score in <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(0, 1)</annotation></semantics></math> for children with and without <code>dyslexia</code>, together with a standardised <code>iq</code>. We let the mean depend on both and the dispersion depend on dyslexia status.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/evandeilton/fastsimplexreg" class="external-link">fastsimplexreg</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"ReadingSkills"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span>
 <span></span>
@@ -156,54 +152,56 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <span><span class="co">#&gt; fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, </span></span>
 <span><span class="co">#&gt;     data = ReadingSkills, link = "logit")</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Pearson residuals:</span></span>
+<span><span class="co">#&gt; Quantile residuals:</span></span>
 <span><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
-<span><span class="co">#&gt; -2.39081 -0.62295  0.24243  0.43805  1.48447 </span></span>
+<span><span class="co">#&gt; -2.37009 -0.80217  0.14155  0.90867  1.55585 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (mean model with logit link):</span></span>
 <span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
-<span><span class="co">#&gt; (Intercept)  1.37697    0.15352   8.969  &lt; 2e-16 ***</span></span>
-<span><span class="co">#&gt; dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***</span></span>
+<span><span class="co">#&gt; (Intercept)  1.37696    0.15352   8.969  &lt; 2e-16 ***</span></span>
+<span><span class="co">#&gt; dyslexia    -0.97656    0.15485  -6.307 2.85e-10 ***</span></span>
 <span><span class="co">#&gt; iq          -0.04369    0.07130  -0.613     0.54    </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (dispersion model with log link):</span></span>
 <span><span class="co">#&gt;             Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
 <span><span class="co">#&gt; (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***</span></span>
-<span><span class="co">#&gt; dyslexia     -2.6917     0.2162 -12.450  &lt; 2e-16 ***</span></span>
+<span><span class="co">#&gt; dyslexia     -2.6918     0.2162 -12.450  &lt; 2e-16 ***</span></span>
 <span><span class="co">#&gt; ---</span></span>
 <span><span class="co">#&gt; Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 </span></span>
-<span><span class="co">#&gt; Deviance:    44 | Observations: 44 | Iterations: 15 </span></span>
+<span><span class="co">#&gt; Deviance:  1538 | Observations: 44 | Iterations: 15 </span></span>
 <span><span class="co">#&gt; Convergence: 0 - Converged: relative objective tolerance satisfied.</span></span></code></pre></div>
 <p>Coefficients, the variance-covariance matrix, the log-likelihood and predictions are available through the usual extractor methods:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/coef.html" class="external-link">coef</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt; (Intercept)    dyslexia          iq (Intercept)    dyslexia </span></span>
-<span><span class="co">#&gt;  1.37696520 -0.97656510 -0.04369204  1.42419092 -2.69174257</span></span>
+<span><span class="co">#&gt;       (Intercept)          dyslexia                iq (phi)_(Intercept) </span></span>
+<span><span class="co">#&gt;        1.37696488       -0.97656347       -0.04368717        1.42418949 </span></span>
+<span><span class="co">#&gt;    (phi)_dyslexia </span></span>
+<span><span class="co">#&gt;       -2.69175021</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/confint.html" class="external-link">confint</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
-<span><span class="co">#&gt;                  2.5 %      97.5 %</span></span>
-<span><span class="co">#&gt; (Intercept)  1.0760642  1.67786626</span></span>
-<span><span class="co">#&gt; dyslexia    -1.2800609 -0.67306929</span></span>
-<span><span class="co">#&gt; iq          -0.1834433  0.09605926</span></span>
-<span><span class="co">#&gt; (Intercept)  1.0023482  1.84603360</span></span>
-<span><span class="co">#&gt; dyslexia    -3.1155107 -2.26797445</span></span>
+<span><span class="co">#&gt;                        2.5 %      97.5 %</span></span>
+<span><span class="co">#&gt; (Intercept)        1.0760625  1.67786728</span></span>
+<span><span class="co">#&gt; dyslexia          -1.2800606 -0.67306633</span></span>
+<span><span class="co">#&gt; iq                -0.1834381  0.09606372</span></span>
+<span><span class="co">#&gt; (phi)_(Intercept)  1.0023473  1.84603166</span></span>
+<span><span class="co">#&gt; (phi)_dyslexia    -3.1155184 -2.26798204</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/stats/logLik.html" class="external-link">logLik</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 'log Lik.' 68.00509 (df=5)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;          mu      phi</span></span>
-<span><span class="co">#&gt; 1 0.9103076 61.30942</span></span>
-<span><span class="co">#&gt; 2 0.9111495 61.30942</span></span>
-<span><span class="co">#&gt; 3 0.9115695 61.30942</span></span>
-<span><span class="co">#&gt; 4 0.9091703 61.30942</span></span>
-<span><span class="co">#&gt; 5 0.9155269 61.30942</span></span>
-<span><span class="co">#&gt; 6 0.9159281 61.30942</span></span></code></pre></div>
+<span><span class="co">#&gt;          mu     phi</span></span>
+<span><span class="co">#&gt; 1 0.9103078 61.3098</span></span>
+<span><span class="co">#&gt; 2 0.9111496 61.3098</span></span>
+<span><span class="co">#&gt; 3 0.9115696 61.3098</span></span>
+<span><span class="co">#&gt; 4 0.9091706 61.3098</span></span>
+<span><span class="co">#&gt; 5 0.9155265 61.3098</span></span>
+<span><span class="co">#&gt; 6 0.9159277 61.3098</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="mixed-effects-models">Mixed-effects models<a class="anchor" aria-label="anchor" href="#mixed-effects-models"></a>
 </h2>
 <p>For nested or clustered proportion data, <code><a href="reference/fastsimplexregmixed.html">fastsimplexregmixed()</a></code> adds a cluster-specific random effect, estimated by adaptive Gauss-Hermite quadrature. The <code>GasolineYield</code> data (also from <strong>betareg</strong>) records the proportion <code>yield</code> of crude oil converted to gasoline across several experimental conditions, in 10 crude-oil <code>batch</code>es. We fit a random intercept per batch:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"GasolineYield"</span>, package <span class="op">=</span> <span class="st">"betareg"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">mfit</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastsimplexregmixed.html">fastsimplexregmixed</a></span><span class="op">(</span><span class="va">yield</span> <span class="op">~</span> <span class="va">temp</span>, random <span class="op">=</span> <span class="op">~</span> <span class="fl">1</span> <span class="op">|</span> <span class="va">batch</span>,</span>
@@ -214,9 +212,9 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <span><span class="co">#&gt; fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, </span></span>
 <span><span class="co">#&gt;     random = ~1 | batch, link = "logit", nAGQ = 15)</span></span>
 <span><span class="co">#&gt; </span></span>
-<span><span class="co">#&gt; Pearson residuals:</span></span>
+<span><span class="co">#&gt; Quantile residuals:</span></span>
 <span><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
-<span><span class="co">#&gt; -2.00837 -0.50439  0.09397  0.48606  1.32804 </span></span>
+<span><span class="co">#&gt; -2.19861 -0.47152  0.15437  0.53801  1.29449 </span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; Coefficients (mean model with logit link):</span></span>
 <span><span class="co">#&gt;               Estimate Std. Error z value Pr(&gt;|z|)    </span></span>
@@ -246,7 +244,7 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <h2 id="prediction">Prediction<a class="anchor" aria-label="anchor" href="#prediction"></a>
 </h2>
 <p>The available prediction types are <code>"response"</code>/<code>"mean"</code>, <code>"dispersion"</code>, <code>"link"</code> and <code>"both"</code>. Prediction on new data reuses the <code>terms</code>, <code>xlevels</code> and <code>contrasts</code> stored at fitting time:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict</a></span><span class="op">(</span><span class="va">fit</span>, newdata <span class="op">=</span> <span class="va">new_dat</span>, type <span class="op">=</span> <span class="st">"both"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -265,14 +263,16 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <strong>A single <code>model.frame</code></strong> for both submodels, guaranteeing consistent handling of <code>subset</code>, <code>NA</code>, factors and levels.</li>
 <li>
 <strong>Optional inference</strong>: pass <code>inference = FALSE</code> to skip the Hessian for exploratory fits on massive data.</li>
+<li>
+<strong>Closed-form expected information</strong>: <code>information = "expected"</code> replaces the finite-differenced observed information with the exact Fisher information, which is block diagonal in <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><mi>𝛃</mi><mo>,</mo><mi>𝛄</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(\boldsymbol\beta, \boldsymbol\gamma)</annotation></semantics></math>, positive definite by construction and about twenty times cheaper. The default stays <code>"observed"</code>, following Efron and Hinkley (1978).</li>
 </ul>
 <p>In head-to-head benchmarks, <code>fastsimplexreg</code> returns <strong>numerically identical maximum-likelihood estimates</strong> to the CRAN package <code>simplexreg</code> (fitted-mean correlation = 1) while running roughly <strong>5-13x faster</strong> for sample sizes up to 1e5, and is ~2-4x faster than <code>betareg</code> while fitting a richer model. See the <a href="https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html">benchmark article</a> (the full reproducible study ships in <code>inst/benchmark/</code>).</p>
 </div>
 <div class="section level2">
 <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a>
 </h2>
-<p>Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on the simplex. <em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116.</p>
-<p>Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for Regression Analysis of Proportional Data Using the Simplex Distribution. <em>Journal of Statistical Software</em>, <strong>71</strong>(11), 1–21.</p>
+<p>Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on the simplex. <em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116. <a href="https://doi.org/10.1016/0047-259X(91)90008-P" class="external-link uri">https://doi.org/10.1016/0047-259X(91)90008-P</a></p>
+<p>Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for Regression Analysis of Proportional Data Using the Simplex Distribution. <em>Journal of Statistical Software</em>, <strong>71</strong>(11), 1–21. <a href="https://doi.org/10.18637/jss.v071.i11" class="external-link uri">https://doi.org/10.18637/jss.v071.i11</a></p>
 </div>
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
@@ -315,7 +315,9 @@ L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathb
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
 <li><a href="https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://www.r-project.org/" class="external-link"><img src="https://img.shields.io/badge/R%3E%3D-4.0.0-6666ff.svg" alt="R"></a></li>
 <li><a href="https://opensource.org/licenses/MIT" class="external-link"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License:MIT"></a></li>
+<li><a href="https://lifecycle.r-lib.org/articles/stages.html#experimental" class="external-link"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle:experimental"></a></li>
 </ul>
 </div>
 

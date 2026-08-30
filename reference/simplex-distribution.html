@@ -131,13 +131,24 @@ propagates as <code>NA</code> and <code>NaN</code> as <code>NaN</code>; and a pa
 <code>NaN</code> with a warning, rather than an error or a silent zero. Values of <code>x</code>
 outside the open support \((0, 1)\) have density <code>0</code> (<code>-Inf</code> on the log
 scale), which is a genuine density value and is therefore not a warning.</p>
-<p>The distribution function has no closed form and is obtained by adaptive
-Gauss-Legendre quadrature of the density, with quadrature panels seeded
-around the mean so that a sharply peaked density (small <code>phi</code>) is always
-resolved. <code>qsimplex()</code> inverts <code>psimplex()</code> by safeguarded Newton-bisection.
-Both are accurate to roughly <code>1e-12</code> relative and are correspondingly more
-expensive than <code>dsimplex()</code>; <code>psimplex()</code> and <code>qsimplex()</code> accept
-<code>n_threads</code> for that reason.</p>
+<p>The distribution function is available in <strong>closed form</strong>. Mapping to the
+odds scale \(X = Y/(1-Y)\) turns the simplex density into a mixture of an
+inverse Gaussian and its size-biased version, both of which integrate
+exactly, giving
+$$F(y; \mu, \phi) = \Phi(a) + (1 - 2\mu)\,e^{k}\,\Phi(b),$$
+with
+$$a = \frac{y - \mu}{\mu(1-\mu)\sqrt{\phi\, y (1-y)}}, \qquad
+  b = \frac{-(y + \mu - 2 y \mu)}{\mu(1-\mu)\sqrt{\phi\, y (1-y)}},
+  \qquad k = \frac{2}{\phi\, \mu (1-\mu)}.$$
+The product \(e^{k}\Phi(b)\) is formed on the log scale and never
+evaluated directly, so it neither overflows nor loses <code>log.p</code>:
+<code>psimplex(0.15, mu = 0.5, phi = 0.01, log.p = TRUE)</code> returns about <code>-773.2</code>
+rather than <code>-Inf</code>. The upper tail uses the exact reflection
+\(P(Y &gt; y \mid \mu) = F(1 - y \mid 1 - \mu)\), which follows from the unit
+deviance satisfying \(d(y; \mu) = d(1-y; 1-\mu)\) and keeps full relative
+accuracy in both tails.</p>
+<p><code>qsimplex()</code> inverts <code>psimplex()</code> by safeguarded Newton-bisection. Both are
+more expensive than <code>dsimplex()</code> and accept <code>n_threads</code> for that reason.</p>
 <p><code>rsimplex()</code> uses the exact inverse-Gaussian-mixture representation: with
 \(\epsilon = \mu/(1-\mu)\) and \(\tau = \phi (1-\mu)^2\), a variate
 \(x\) is built from an inverse-Gaussian draw plus, with probability
@@ -148,7 +159,8 @@ expensive than <code>dsimplex()</code>; <code>psimplex()</code> and <code>qsimpl
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
 Some parametric models on the simplex.
-<em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116.</p>
+<em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116.
+<a href="https://doi.org/10.1016/0047-259X%2891%2990008-P" class="external-link">doi:10.1016/0047-259X(91)90008-P</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -43,7 +43,11 @@ fastsimplexregmixed(
 - formula:
 
   A multi-part formula `y ~ mean_terms | dispersion_terms`. When the
-  dispersion part is omitted the dispersion is constant.
+  dispersion part is omitted the dispersion is constant. Each part may
+  carry its own [`offset()`](https://rdrr.io/r/stats/offset.html) term,
+  added to the linear predictor of that submodel on its own link scale,
+  kept separate per submodel and rebuilt from `newdata` in
+  [`predict.simplex_fast_mixed()`](https://evandeilton.github.io/fastsimplexreg/reference/predict.simplex_fast_mixed.md).
 
 - data:
 
@@ -142,7 +146,23 @@ fastsimplexregmixed(
 
 ## Value
 
-An object of class `"simplex_fast_mixed"`.
+An object of S3 class `"simplex_fast_mixed"`: a list whose main
+components are `coefficients` (a list with the `mean` and `dispersion`
+fixed-effect estimates), `par` (the full vector
+`c(beta, gamma, omega)`), `omega` (the packed log-Cholesky parameters),
+`D` (the Cholesky factor) and `Sigma` (the estimated random-effect
+covariance), `ranef` (the empirical-Bayes modes, a groups-by-`q` matrix)
+with `ranef.postvar`, `standard_errors`, `vcov`, `fitted.values` (means
+conditional on the random-effect modes), `dispersion.values`,
+`linear.predictors`, `residuals` (response residuals), `logLik` (the
+marginal log-likelihood), `AIC`, `BIC`, `nobs`, `ngrps`, `groups`,
+`nAGQ`, `q`, `df`, `df.residual`, `convergence`, `message`,
+`iterations`, the `offset` actually applied to each submodel and the
+stored `terms`/`design` metadata used for prediction. The same inference
+diagnostics as
+[`fastsimplexreg()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexreg.md)
+are stored – `vcov_rank`, `vcov_pseudo`, `vcov_eigenvalues`,
+`vcov_condition` and `n_saturated`.
 
 ## Details
 
@@ -167,11 +187,13 @@ Gaussian random effects in the mean submodel, and fixed-effect
 
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. *Journal of Multivariate Analysis*, **39**(1),
-106-116.
+106–116.
+[doi:10.1016/0047-259X(91)90008-P](https://doi.org/10.1016/0047-259X%2891%2990008-P)
 
 Pinheiro, J. C. and Bates, D. M. (1995). Approximations to the
 log-likelihood function in the nonlinear mixed-effects model. *Journal
-of Computational and Graphical Statistics*, **4**(1), 12-35.
+of Computational and Graphical Statistics*, **4**(1), 12–35.
+[doi:10.1080/10618600.1995.10474663](https://doi.org/10.1080/10618600.1995.10474663)
 
 ## See also
 

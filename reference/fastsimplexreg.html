@@ -104,7 +104,15 @@ use Armadillo/BLAS and the per-observation loop may use OpenMP.</p>
 
 
 <dl><dt id="arg-formula">formula<a class="anchor" aria-label="anchor" href="#arg-formula"></a></dt>
-<dd><p>A multi-part formula, for example <code>y ~ x1 + x2 | z1 + z2</code>.</p></dd>
+<dd><p>A multi-part formula, for example <code>y ~ x1 + x2 | z1 + z2</code>.
+Each part may carry its own <code><a href="https://rdrr.io/r/stats/offset.html" class="external-link">offset()</a></code> term: in
+<code>y ~ x1 + offset(a) | z1 + offset(b)</code>, <code>a</code> is added to the mean linear
+predictor and <code>b</code> to the dispersion linear predictor, each on its own link
+scale, and neither is estimated. The two are kept apart – unlike
+<code><a href="https://rdrr.io/r/stats/model.extract.html" class="external-link">stats::model.offset()</a></code>, which sums the offsets of every part of a
+multi-part formula – and are rebuilt from <code>newdata</code> in
+<code><a href="predict.simplex_fast.html">predict.simplex_fast()</a></code>, so <code>newdata</code> must supply every variable an
+offset uses.</p></dd>
 
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
@@ -220,15 +228,18 @@ parameters that the data do not identify are <code>NA</code>, never <code>0</cod
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
     <p>Barndorff-Nielsen, O. E. and Jorgensen, B. (1991).
 Some parametric models on the simplex.
-<em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116.</p>
+<em>Journal of Multivariate Analysis</em>, <strong>39</strong>(1), 106–116.
+<a href="https://doi.org/10.1016/0047-259X%2891%2990008-P" class="external-link">doi:10.1016/0047-259X(91)90008-P</a></p>
 <p>Zhang, P., Qiu, Z. and Shi, C. (2016).
 simplexreg: An R Package for Regression Analysis of Proportional Data Using
 the Simplex Distribution.
-<em>Journal of Statistical Software</em>, <strong>71</strong>(11), 1–21.</p>
+<em>Journal of Statistical Software</em>, <strong>71</strong>(11), 1–21.
+<a href="https://doi.org/10.18637/jss.v071.i11" class="external-link">doi:10.18637/jss.v071.i11</a></p>
 <p>Efron, B. and Hinkley, D. V. (1978).
 Assessing the accuracy of the maximum likelihood estimator: observed versus
 expected Fisher information.
-<em>Biometrika</em>, <strong>65</strong>(3), 457–483.</p>
+<em>Biometrika</em>, <strong>65</strong>(3), 457–483.
+<a href="https://doi.org/10.1093/biomet/65.3.457" class="external-link">doi:10.1093/biomet/65.3.457</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

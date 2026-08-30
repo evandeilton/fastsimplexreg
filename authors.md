@@ -15,7 +15,7 @@ Dispersion*. R package version 0.2.4,
 
     @Manual{,
       title = {{fastsimplexreg}: Fast Simplex Regression with Variable Dispersion},
-      author = {Jose Evandeilton Lopes},
+      author = {José Evandeilton Lopes},
       year = {2026},
       note = {R package version 0.2.4},
       url = {https://github.com/evandeilton/fastsimplexreg},

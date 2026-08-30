@@ -11,7 +11,7 @@ boundaries $`0`$ and $`1`$. Two likelihood based models dominate this
 setting: **beta regression** and **simplex regression**. This package
 implements the latter.
 
-The simplex distribution (Barndorff-Nielsen and Jørgensen, 1991) is a
+The simplex distribution (Barndorff-Nielsen and Jorgensen, 1991) is a
 member of the class of *dispersion models*. A random variable
 $`Y \in (0, 1)`$ has a simplex distribution with mean $`\mu \in (0, 1)`$
 and dispersion $`\phi > 0`$, written
@@ -32,7 +32,7 @@ dispersion the variance is $`\mathrm{Var}(Y) \approx \phi\, V(\mu)`$
 with the simplex **variance function** $`V(\mu) = \mu^3(1-\mu)^3`$ — the
 variance is largest near $`\mu = 1/2`$ and vanishes at the boundaries.
 The dispersion $`\phi`$ here is the $`\sigma^2`$ parameter of
-Barndorff-Nielsen and Jørgensen (1991).
+Barndorff-Nielsen and Jorgensen (1991).
 
 ``` r
 
@@ -232,7 +232,8 @@ behave as in
 dsimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
 #> [1] 0.06924763 3.19153824 0.06924763
 
-# The CDF has no closed form; it is obtained by adaptive quadrature.
+# The CDF is available in closed form, evaluated on the log scale so that
+# log.p stays honest deep into the tails.
 psimplex(c(0.2, 0.5, 0.8), mu = 0.5, phi = 1)
 #> [1] 0.001349898 0.500000000 0.998650102
 
@@ -274,13 +275,15 @@ so exploratory fits on massive data can skip it.
 
 ## References
 
-Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric
+Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. *Journal of Multivariate Analysis*, **39**(1),
-106-116.
+106-116. <https://doi.org/10.1016/0047-259X(91)90008-P>
 
 Song, P. X.-K. and Tan, M. (2000). Marginal models for longitudinal
 continuous proportional data. *Biometrics*, **56**(2), 496-502.
+<https://doi.org/10.1111/j.0006-341X.2000.00496.x>
 
 Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R package for
 regression analysis of proportional data using the simplex distribution.
 *Journal of Statistical Software*, **71**(11), 1-21.
+<https://doi.org/10.18637/jss.v071.i11>

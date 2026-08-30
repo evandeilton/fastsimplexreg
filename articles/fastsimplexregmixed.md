@@ -231,13 +231,15 @@ releases.
 
 ## References
 
-Barndorff-Nielsen, O. E. and Jørgensen, B. (1991). Some parametric
+Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. *Journal of Multivariate Analysis*, **39**(1),
-106-116.
+106-116. <https://doi.org/10.1016/0047-259X(91)90008-P>
 
 Pinheiro, J. C. and Bates, D. M. (1995). Approximations to the
 log-likelihood function in the nonlinear mixed-effects model. *Journal
 of Computational and Graphical Statistics*, **4**(1), 12-35.
+<https://doi.org/10.1080/10618600.1995.10474663>
 
 Song, P. X.-K. and Tan, M. (2000). Marginal models for longitudinal
 continuous proportional data. *Biometrics*, **56**(2), 496-502.
+<https://doi.org/10.1111/j.0006-341X.2000.00496.x>

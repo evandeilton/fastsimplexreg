@@ -48,6 +48,7 @@ A numeric vector of means in \\(0, 1)\\, of the same length as `eta`.
 Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for
 Regression Analysis of Proportional Data Using the Simplex Distribution.
 *Journal of Statistical Software*, **71**(11), 1–21.
+[doi:10.18637/jss.v071.i11](https://doi.org/10.18637/jss.v071.i11)
 
 ## See also
 

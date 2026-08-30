@@ -39,7 +39,7 @@ g(\mu_{ij}) = \mathbf{x}_{ij}^\top \boldsymbol\beta + \mathbf{z}_{ij}^\top \math
 ```
 
 Since the random effects are unobserved, estimation is performed by
-maximizing the marginal likelihood:
+maximising the marginal likelihood:
 
 ``` math
 L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,
@@ -79,6 +79,22 @@ The first right-hand side component models the mean $`\mu`$; the second
 models the dispersion $`\phi`$. When the second component is omitted, as
 in `y ~ x1 + x2`, the dispersion is constant (equivalent to `| 1`).
 
+Each component may carry its own
+[`offset()`](https://rdrr.io/r/stats/offset.html) term, added to the
+linear predictor of that submodel on its own link scale and not
+estimated:
+
+``` r
+
+fit <- fastsimplexreg(y ~ x1 + offset(a) | z1 + offset(b), data = dat)
+```
+
+The two offsets are kept apart – unlike
+[`stats::model.offset()`](https://rdrr.io/r/stats/model.extract.html),
+which sums the offsets of every part of a multi-part formula – and are
+rebuilt from `newdata` in
+[`predict()`](https://rdrr.io/r/stats/predict.html).
+
 ## Mean links
 
 The mean supports four links; the dispersion always uses a log link.
@@ -113,25 +129,25 @@ summary(fit)
 #> fastsimplexreg(formula = accuracy ~ dyslexia + iq | dyslexia, 
 #>     data = ReadingSkills, link = "logit")
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.39081 -0.62295  0.24243  0.43805  1.48447 
+#> -2.37009 -0.80217  0.14155  0.90867  1.55585 
 #> 
 #> Coefficients (mean model with logit link):
 #>             Estimate Std. Error z value Pr(>|z|)    
-#> (Intercept)  1.37697    0.15352   8.969  < 2e-16 ***
-#> dyslexia    -0.97657    0.15485  -6.307 2.85e-10 ***
+#> (Intercept)  1.37696    0.15352   8.969  < 2e-16 ***
+#> dyslexia    -0.97656    0.15485  -6.307 2.85e-10 ***
 #> iq          -0.04369    0.07130  -0.613     0.54    
 #> 
 #> Coefficients (dispersion model with log link):
 #>             Estimate Std. Error z value Pr(>|z|)    
 #> (Intercept)   1.4242     0.2152   6.617 3.66e-11 ***
-#> dyslexia     -2.6917     0.2162 -12.450  < 2e-16 ***
+#> dyslexia     -2.6918     0.2162 -12.450  < 2e-16 ***
 #> ---
 #> Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
 #> 
 #> Log-likelihood: 68.01 | AIC:  -126 | BIC: -117.1 
-#> Deviance:    44 | Observations: 44 | Iterations: 15 
+#> Deviance:  1538 | Observations: 44 | Iterations: 15 
 #> Convergence: 0 - Converged: relative objective tolerance satisfied.
 ```
 
@@ -141,25 +157,27 @@ predictions are available through the usual extractor methods:
 ``` r
 
 coef(fit)
-#> (Intercept)    dyslexia          iq (Intercept)    dyslexia 
-#>  1.37696520 -0.97656510 -0.04369204  1.42419092 -2.69174257
+#>       (Intercept)          dyslexia                iq (phi)_(Intercept) 
+#>        1.37696488       -0.97656347       -0.04368717        1.42418949 
+#>    (phi)_dyslexia 
+#>       -2.69175021
 confint(fit)
-#>                  2.5 %      97.5 %
-#> (Intercept)  1.0760642  1.67786626
-#> dyslexia    -1.2800609 -0.67306929
-#> iq          -0.1834433  0.09605926
-#> (Intercept)  1.0023482  1.84603360
-#> dyslexia    -3.1155107 -2.26797445
+#>                        2.5 %      97.5 %
+#> (Intercept)        1.0760625  1.67786728
+#> dyslexia          -1.2800606 -0.67306633
+#> iq                -0.1834381  0.09606372
+#> (phi)_(Intercept)  1.0023473  1.84603166
+#> (phi)_dyslexia    -3.1155184 -2.26798204
 logLik(fit)
 #> 'log Lik.' 68.00509 (df=5)
 head(predict(fit, type = "both"))
-#>          mu      phi
-#> 1 0.9103076 61.30942
-#> 2 0.9111495 61.30942
-#> 3 0.9115695 61.30942
-#> 4 0.9091703 61.30942
-#> 5 0.9155269 61.30942
-#> 6 0.9159281 61.30942
+#>          mu     phi
+#> 1 0.9103078 61.3098
+#> 2 0.9111496 61.3098
+#> 3 0.9115696 61.3098
+#> 4 0.9091706 61.3098
+#> 5 0.9155265 61.3098
+#> 6 0.9159277 61.3098
 ```
 
 ## Mixed-effects models
@@ -184,9 +202,9 @@ summary(mfit)
 #> fastsimplexregmixed(formula = yield ~ temp, data = GasolineYield, 
 #>     random = ~1 | batch, link = "logit", nAGQ = 15)
 #> 
-#> Pearson residuals:
+#> Quantile residuals:
 #>      Min       1Q   Median       3Q      Max 
-#> -2.00837 -0.50439  0.09397  0.48606  1.32804 
+#> -2.19861 -0.47152  0.15437  0.53801  1.29449 
 #> 
 #> Coefficients (mean model with logit link):
 #>               Estimate Std. Error z value Pr(>|z|)    
@@ -237,6 +255,12 @@ predict(fit, newdata = new_dat, type = "both")
   handling of `subset`, `NA`, factors and levels.
 - **Optional inference**: pass `inference = FALSE` to skip the Hessian
   for exploratory fits on massive data.
+- **Closed-form expected information**: `information = "expected"`
+  replaces the finite-differenced observed information with the exact
+  Fisher information, which is block diagonal in
+  $`(\boldsymbol\beta, \boldsymbol\gamma)`$, positive definite by
+  construction and about twenty times cheaper. The default stays
+  `"observed"`, following Efron and Hinkley (1978).
 
 In head-to-head benchmarks, `fastsimplexreg` returns **numerically
 identical maximum-likelihood estimates** to the CRAN package
@@ -250,11 +274,12 @@ article](https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html)
 
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. *Journal of Multivariate Analysis*, **39**(1),
-106–116.
+106–116. <https://doi.org/10.1016/0047-259X(91)90008-P>
 
 Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for
 Regression Analysis of Proportional Data Using the Simplex Distribution.
 *Journal of Statistical Software*, **71**(11), 1–21.
+<https://doi.org/10.18637/jss.v071.i11>
 
 ## License
 

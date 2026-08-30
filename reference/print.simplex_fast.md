@@ -45,7 +45,7 @@ print(fit)
 #> 
 #> Fast simplex regression with variable dispersion
 #> Formula: y ~ x1
-#> <environment: 0x55defeb80da0>
+#> <environment: 0x56251d43fa48>
 #> Mean link: logit | Dispersion link: log 
 #> Observations: 200 
 #> Log-likelihood: 190.9 

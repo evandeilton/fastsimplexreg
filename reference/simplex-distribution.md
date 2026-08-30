@@ -75,13 +75,24 @@ silent zero. Values of `x` outside the open support \\(0, 1)\\ have
 density `0` (`-Inf` on the log scale), which is a genuine density value
 and is therefore not a warning.
 
-The distribution function has no closed form and is obtained by adaptive
-Gauss-Legendre quadrature of the density, with quadrature panels seeded
-around the mean so that a sharply peaked density (small `phi`) is always
-resolved. `qsimplex()` inverts `psimplex()` by safeguarded
-Newton-bisection. Both are accurate to roughly `1e-12` relative and are
-correspondingly more expensive than `dsimplex()`; `psimplex()` and
-`qsimplex()` accept `n_threads` for that reason.
+The distribution function is available in **closed form**. Mapping to
+the odds scale \\X = Y/(1-Y)\\ turns the simplex density into a mixture
+of an inverse Gaussian and its size-biased version, both of which
+integrate exactly, giving \$\$F(y; \mu, \phi) = \Phi(a) + (1 -
+2\mu)\\e^{k}\\\Phi(b),\$\$ with \$\$a = \frac{y -
+\mu}{\mu(1-\mu)\sqrt{\phi\\ y (1-y)}}, \qquad b = \frac{-(y + \mu - 2 y
+\mu)}{\mu(1-\mu)\sqrt{\phi\\ y (1-y)}}, \qquad k = \frac{2}{\phi\\ \mu
+(1-\mu)}.\$\$ The product \\e^{k}\Phi(b)\\ is formed on the log scale
+and never evaluated directly, so it neither overflows nor loses `log.p`:
+`psimplex(0.15, mu = 0.5, phi = 0.01, log.p = TRUE)` returns about
+`-773.2` rather than `-Inf`. The upper tail uses the exact reflection
+\\P(Y \> y \mid \mu) = F(1 - y \mid 1 - \mu)\\, which follows from the
+unit deviance satisfying \\d(y; \mu) = d(1-y; 1-\mu)\\ and keeps full
+relative accuracy in both tails.
+
+`qsimplex()` inverts `psimplex()` by safeguarded Newton-bisection. Both
+are more expensive than `dsimplex()` and accept `n_threads` for that
+reason.
 
 `rsimplex()` uses the exact inverse-Gaussian-mixture representation:
 with \\\epsilon = \mu/(1-\mu)\\ and \\\tau = \phi (1-\mu)^2\\, a variate
@@ -94,6 +105,7 @@ with \\\epsilon = \mu/(1-\mu)\\ and \\\tau = \phi (1-\mu)^2\\, a variate
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric
 models on the simplex. *Journal of Multivariate Analysis*, **39**(1),
 106–116.
+[doi:10.1016/0047-259X(91)90008-P](https://doi.org/10.1016/0047-259X%2891%2990008-P)
 
 ## See also
 

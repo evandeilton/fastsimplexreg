@@ -24,8 +24,8 @@ Fitted means (conditional on the empirical-Bayes random
 effects) or fitted dispersions.
 
 residuals
-Response, Pearson or deviance residuals, conditional on
-the empirical-Bayes random effects.
+Randomised quantile (the default), response, Pearson or
+deviance residuals, conditional on the empirical-Bayes random effects.
 
 ranef
 Empirical-Bayes random-effect modes (a groups-by-q
@@ -70,8 +70,8 @@ Fitted means (conditional on the empirical-Bayes random
 effects) or fitted dispersions.
 
 residuals
-Response, Pearson or deviance residuals, conditional on
-the empirical-Bayes random effects.
+Randomised quantile (the default), response, Pearson or
+deviance residuals, conditional on the empirical-Bayes random effects.
 
 ranef
 Empirical-Bayes random-effect modes (a groups-by-q
@@ -156,8 +156,8 @@ produced by <code><a href="fastsimplexregmixed.html">fastsimplexregmixed()</a></
 effects) or fitted dispersions.</p></dd>
 
 <dt><code>residuals</code></dt>
-<dd><p>Response, Pearson or deviance residuals, conditional on
-the empirical-Bayes random effects.</p></dd>
+<dd><p>Randomised quantile (the default), response, Pearson or
+deviance residuals, conditional on the empirical-Bayes random effects.</p></dd>
 
 <dt><code>ranef</code></dt>
 <dd><p>Empirical-Bayes random-effect modes (a groups-by-<code>q</code>
@@ -238,8 +238,10 @@ names, over the full vector <code>c(beta, gamma, omega)</code>. Defaults to all.
 
 
 <dt id="arg-type">type<a class="anchor" aria-label="anchor" href="#arg-type"></a></dt>
-<dd><p>For <code>residuals</code>, one of <code>"response"</code>, <code>"pearson"</code> or
-<code>"deviance"</code>.</p></dd>
+<dd><p>For <code>residuals</code>, one of <code>"quantile"</code> (the default; randomised
+quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+standard normal under a correctly specified model), <code>"response"</code>,
+<code>"pearson"</code> or <code>"deviance"</code>.</p></dd>
 
 
 <dt id="arg-postvar">postVar<a class="anchor" aria-label="anchor" href="#arg-postvar"></a></dt>
@@ -264,6 +266,12 @@ digits to display.</p></dd>
 returns a matrix; <code>ranef</code> returns a matrix; <code>VarCorr</code> returns the
 covariance matrix with <code>stddev</code>/<code>correlation</code> attributes; <code>logLik</code> returns
 a <code>"logLik"</code> object.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
+    <p>Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+<em>Journal of Computational and Graphical Statistics</em>, <strong>5</strong>(3), 236–244.
+<a href="https://doi.org/10.1080/10618600.1996.10474708" class="external-link">doi:10.1080/10618600.1996.10474708</a></p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

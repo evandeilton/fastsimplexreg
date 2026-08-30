@@ -33,7 +33,11 @@ generalised linear models.
 
 - `residuals`:
 
-  Returns residuals. `type = "response"` gives \\y - \hat\mu\\;
+  Returns residuals. `type = "quantile"` (the default) gives randomised
+  quantile residuals in the sense of Dunn and Smyth (1996): they are
+  exactly standard normal under a correctly specified model, which the
+  other three types are not, so they are the ones to read for
+  diagnostics. `type = "response"` gives \\y - \hat\mu\\;
   `type = "pearson"` gives \\(y - \hat\mu) / \sqrt{\hat\phi\\
   V(\hat\mu)}\\ with the simplex unit variance function \\V(\mu) =
   \\\mu(1-\mu)\\^3\\, i.e. the first-order dispersion-model
@@ -144,7 +148,7 @@ confint(object, parm, level = 0.95, ...)
 
 - type:
 
-  For `residuals`, one of `"quantile"` (the default; randomized quantile
+  For `residuals`, one of `"quantile"` (the default; randomised quantile
   residuals in the sense of Dunn and Smyth, 1996, which are exactly
   standard normal under a correct model), `"response"`, `"pearson"` or
   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
@@ -179,6 +183,12 @@ confint(object, parm, level = 0.95, ...)
 `"logLik"` object; `deviance` returns a single number; `terms`,
 `formula` and `model.frame` return the corresponding model-description
 objects.
+
+## References
+
+Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+*Journal of Computational and Graphical Statistics*, **5**(3), 236–244.
+[doi:10.1080/10618600.1996.10474708](https://doi.org/10.1080/10618600.1996.10474708)
 
 ## See also
 
@@ -239,5 +249,5 @@ head(model.matrix(fit, model = "mean"))
 #> 6           1 -0.8204684
 formula(fit)
 #> y ~ x1 | z1
-#> <environment: 0x55df04b51528>
+#> <environment: 0x56251fee9a08>
 ```

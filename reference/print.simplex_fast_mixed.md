@@ -46,9 +46,9 @@ print(fit)
 #> 
 #> Fast simplex mixed model with variable dispersion
 #> Formula: y ~ x1
-#> <environment: 0x55df051a0dd8>
+#> <environment: 0x5625204b4ae8>
 #> Random:  ~1 | g
-#> <environment: 0x55df051a0dd8>
+#> <environment: 0x5625204b4ae8>
 #> Mean link: logit | Dispersion link: log 
 #> Observations: 320 | Groups: 40 | nAGQ: 7 
 #> Log-likelihood: 265.6 | AIC: -523.1 | BIC: -508.1 

@@ -38,8 +38,10 @@ plot(
 
 - type:
 
-  Type of residual used in panels 1-3: one of `"deviance"`, `"pearson"`
-  or `"response"`. See
+  Type of residual used in panels 1-3: `"quantile"` (the default;
+  randomised quantile residuals, which are exactly standard normal under
+  a correctly specified model), `"deviance"`, `"pearson"` or
+  `"response"`. See
   [`residuals.simplex_fast()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast-methods.md).
 
 - smooth:
