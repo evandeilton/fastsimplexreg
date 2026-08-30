@@ -18,8 +18,10 @@
 \item{which}{Integer vector selecting the panels to draw, a subset of
 \code{1:4}.}
 
-\item{type}{Type of residual used in panels 1-3: one of \code{"deviance"},
-\code{"pearson"} or \code{"response"}. See \code{\link[=residuals.simplex_fast]{residuals.simplex_fast()}}.}
+\item{type}{Type of residual used in panels 1-3: \code{"quantile"} (the default;
+randomised quantile residuals, which are exactly standard normal under a
+correctly specified model), \code{"deviance"}, \code{"pearson"} or \code{"response"}.
+See \code{\link[=residuals.simplex_fast]{residuals.simplex_fast()}}.}
 
 \item{smooth}{Logical; if \code{TRUE} (the default) a LOESS smoother is added to
 the residual and scale-location panels when there are enough observations.}

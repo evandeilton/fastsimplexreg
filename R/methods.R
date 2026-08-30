@@ -16,7 +16,11 @@
 #'   \item{`nobs`}{Returns the number of observations used in the fit.}
 #'   \item{`fitted`}{Returns the fitted means (`model = "mean"`) or fitted
 #'     dispersions (`model = "dispersion"`).}
-#'   \item{`residuals`}{Returns residuals. `type = "response"` gives
+#'   \item{`residuals`}{Returns residuals. `type = "quantile"` (the default)
+#'     gives randomised quantile residuals in the sense of Dunn and Smyth
+#'     (1996): they are exactly standard normal under a correctly specified
+#'     model, which the other three types are not, so they are the ones to read
+#'     for diagnostics. `type = "response"` gives
 #'     \eqn{y - \hat\mu}; `type = "pearson"` gives
 #'     \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 #'     variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order
@@ -58,7 +62,7 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomized
+#' @param type For `residuals`, one of `"quantile"` (the default; randomised
 #'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
 #'   standard normal under a correct model), `"response"`, `"pearson"` or
 #'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
@@ -71,6 +75,11 @@
 #'   `vcov`, `confint` and `model.matrix` return matrices; `logLik` returns a
 #'   `"logLik"` object; `deviance` returns a single number; `terms`, `formula`
 #'   and `model.frame` return the corresponding model-description objects.
+#'
+#' @references
+#' Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+#' *Journal of Computational and Graphical Statistics*, **5**(3), 236--244.
+#' \doi{10.1080/10618600.1996.10474708}
 #'
 #' @seealso [fastsimplexreg()], [summary.simplex_fast()], [predict.simplex_fast()],
 #'   [plot.simplex_fast()], [simulate.simplex_fast()]

@@ -65,8 +65,8 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   \item{`ngrps`}{Number of groups.}
 #'   \item{`fitted`}{Fitted means (conditional on the empirical-Bayes random
 #'     effects) or fitted dispersions.}
-#'   \item{`residuals`}{Response, Pearson or deviance residuals, conditional on
-#'     the empirical-Bayes random effects.}
+#'   \item{`residuals`}{Randomised quantile (the default), response, Pearson or
+#'     deviance residuals, conditional on the empirical-Bayes random effects.}
 #'   \item{`ranef`}{Empirical-Bayes random-effect modes (a groups-by-`q`
 #'     matrix); with `postVar = TRUE`, the posterior covariances are attached as
 #'     the `"postVar"` attribute.}
@@ -82,8 +82,10 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #' @param object,x A fitted `"simplex_fast_mixed"` object.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"response"`, `"pearson"` or
-#'   `"deviance"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; randomised
+#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
+#'   standard normal under a correctly specified model), `"response"`,
+#'   `"pearson"` or `"deviance"`.
 #' @param postVar For `ranef`, logical; attach posterior covariances.
 #' @param parm For `confint`, which parameters to report: numeric positions or
 #'   names, over the full vector `c(beta, gamma, omega)`. Defaults to all.
@@ -101,8 +103,12 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   covariance matrix with `stddev`/`correlation` attributes; `logLik` returns
 #'   a `"logLik"` object.
 #'
-#' @seealso [fastsimplexregmixed()]
+#' @references
+#' Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
+#' *Journal of Computational and Graphical Statistics*, **5**(3), 236--244.
+#' \doi{10.1080/10618600.1996.10474708}
 #'
+#' @seealso [fastsimplexregmixed()]
 #'
 #' @examples
 #' set.seed(1)
@@ -387,7 +393,9 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
 #'
 #' @param x A fitted `"simplex_fast_mixed"` object.
 #' @param which Integer subset of `1:4` selecting panels.
-#' @param type Residual type used in the panels.
+#' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
+#'   randomised quantile residuals), `"deviance"`, `"pearson"` or
+#'   `"response"`. See [residuals.simplex_fast_mixed()].
 #' @param smooth Logical; add a LOESS smoother.
 #' @param ... Additional arguments, currently ignored.
 #'

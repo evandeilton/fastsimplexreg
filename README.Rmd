@@ -20,9 +20,11 @@ knitr::opts_chunk$set(
 <!-- [![CRAN -->
 <!-- status](https://www.r-pkg.org/badges/version/fastsimplexreg)](https://CRAN.R-project.org/package=fastsimplexreg) -->
 [![R-CMD-check](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/evandeilton/fastsimplexreg/actions/workflows/R-CMD-check.yaml)
+[![R](https://img.shields.io/badge/R%3E%3D-4.0.0-6666ff.svg)](https://www.r-project.org/)
+[![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Lifecycle:experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 <!-- Re-enable once the package is on CRAN; until then the target 404s. -->
 <!-- [![Downloads](https://cranlogs.r-pkg.org/badges/grand-total/fastsimplexreg)](https://cran.r-project.org/package=fastsimplexreg) -->
-[![License:MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <!-- badges: end -->
 
@@ -60,7 +62,7 @@ g(\mu_{ij}) = \mathbf{x}_{ij}^\top \boldsymbol\beta + \mathbf{z}_{ij}^\top \math
 \log(\phi_{ij}) = \mathbf{w}_{ij}^\top \boldsymbol\gamma.
 $$
 
-Since the random effects are unobserved, estimation is performed by maximizing the marginal likelihood:
+Since the random effects are unobserved, estimation is performed by maximising the marginal likelihood:
 
 $$
 L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,
@@ -95,6 +97,17 @@ fit <- fastsimplexreg(y ~ x1 + x2 | z1 + z2, data = dat, link = "logit")
 The first right-hand side component models the mean $\mu$; the second models the
 dispersion $\phi$. When the second component is omitted, as in `y ~ x1 + x2`,
 the dispersion is constant (equivalent to `| 1`).
+
+Each component may carry its own `offset()` term, added to the linear
+predictor of that submodel on its own link scale and not estimated:
+
+```r
+fit <- fastsimplexreg(y ~ x1 + offset(a) | z1 + offset(b), data = dat)
+```
+
+The two offsets are kept apart -- unlike `stats::model.offset()`, which sums the
+offsets of every part of a multi-part formula -- and are rebuilt from `newdata`
+in `predict()`.
 
 ## Mean links
 
@@ -175,6 +188,11 @@ predict(fit, newdata = new_dat, type = "both")
   handling of `subset`, `NA`, factors and levels.
 * **Optional inference**: pass `inference = FALSE` to skip the Hessian for
   exploratory fits on massive data.
+* **Closed-form expected information**: `information = "expected"` replaces the
+  finite-differenced observed information with the exact Fisher information,
+  which is block diagonal in $(\boldsymbol\beta, \boldsymbol\gamma)$, positive
+  definite by construction and about twenty times cheaper. The default stays
+  `"observed"`, following Efron and Hinkley (1978).
 
 In head-to-head benchmarks, `fastsimplexreg` returns **numerically identical
 maximum-likelihood estimates** to the CRAN package `simplexreg` (fitted-mean
@@ -187,10 +205,12 @@ correlation = 1) while running roughly **5-13x faster** for sample sizes up to
 
 Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on
 the simplex. *Journal of Multivariate Analysis*, **39**(1), 106--116.
+<https://doi.org/10.1016/0047-259X(91)90008-P>
 
 Zhang, P., Qiu, Z. and Shi, C. (2016). simplexreg: An R Package for Regression
 Analysis of Proportional Data Using the Simplex Distribution. *Journal of
 Statistical Software*, **71**(11), 1--21.
+<https://doi.org/10.18637/jss.v071.i11>
 
 ## License
 
