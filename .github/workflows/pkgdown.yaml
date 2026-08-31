@@ -24,7 +24,7 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -46,7 +46,7 @@ jobs:
 
       - name: Deploy to GitHub Pages
         if: github.event_name != 'pull_request'
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
           clean: true
           branch: gh-pages
