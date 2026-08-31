@@ -249,5 +249,5 @@ head(model.matrix(fit, model = "mean"))
 #> 6           1 -0.8204684
 formula(fit)
 #> y ~ x1 | z1
-#> <environment: 0x56251fee9a08>
+#> <environment: 0x56234c25aa10>
 ```
