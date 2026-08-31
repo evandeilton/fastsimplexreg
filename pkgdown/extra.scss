@@ -1,0 +1,13 @@
+// -----------------------------------------------------------------------------
+// fastsimplexreg -- ajustes finos do tema pkgdown
+// -----------------------------------------------------------------------------
+
+// A navbar usa o grafite do hexagono do logo ($navbar-bg em _pkgdown.yml) nos
+// dois modos de cor. O `.nav-text` do pkgdown -- o numero da versao ao lado do
+// nome do pacote -- e um `.text-muted`, e herda a cor do CORPO da pagina. No
+// modo claro isso da texto quase preto sobre grafite: 1.23:1, ilegivel.
+// Fixamos a cor aqui; como o fundo da navbar e o mesmo nos dois modos, um unico
+// valor claro serve para ambos.
+.navbar .nav-text {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
