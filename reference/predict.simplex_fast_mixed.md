@@ -1,6 +1,11 @@
 # Predictions from a Simplex Mixed-Model Fit
 
-Predictions from a Simplex Mixed-Model Fit
+Computes predictions from a fitted `"simplex_fast_mixed"` model, either
+on the data used for fitting or on new data. Predictions are conditional
+on the estimated random effects by default; `re.form` requests
+population-level predictions instead. When `newdata` is supplied, the
+stored `terms`, `xlevels` and `contrasts` are reused so that the design
+matrices are built consistently with the fit.
 
 ## Usage
 

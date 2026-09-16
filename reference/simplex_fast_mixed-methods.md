@@ -85,9 +85,6 @@ ranef(object, postVar = FALSE, ...)
 
 # S3 method for class 'simplex_fast_mixed'
 VarCorr(x, sigma = 1, ...)
-
-# S3 method for class 'VarCorr.simplex_fast_mixed'
-print(x, digits = max(3L, getOption("digits") - 3L), ...)
 ```
 
 ## Arguments
@@ -132,11 +129,6 @@ print(x, digits = max(3L, getOption("digits") - 3L), ...)
   simplex mixed model has no residual scale parameter, so the argument
   rescales nothing; supplying anything other than `1` raises a warning
   and is ignored.
-
-- digits:
-
-  For the `VarCorr` print method, the number of significant digits to
-  display.
 
 ## Value
 

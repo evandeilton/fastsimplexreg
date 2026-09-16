@@ -65,8 +65,9 @@ Methods for objects of class simplex_fast_mixed.
   [`residuals(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`ranef(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   [`VarCorr(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
-  [`print(`*`<VarCorr.simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_fast_mixed-methods.md)
   : Extractor Methods for Simplex Mixed-Model Fits
+- [`print(`*`<VarCorr.simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/print.VarCorr.simplex_fast_mixed.md)
+  : Print a Simplex Mixed-Model Variance-Covariance Matrix
 - [`summary(`*`<simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/summary.simplex_fast_mixed.md)
   [`print(`*`<summary.simplex_fast_mixed>`*`)`](https://evandeilton.github.io/fastsimplexreg/reference/summary.simplex_fast_mixed.md)
   : Summarise a Simplex Mixed-Model Fit

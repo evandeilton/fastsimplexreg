@@ -1,6 +1,9 @@
 # Summarise a Simplex Mixed-Model Fit
 
-Summarise a Simplex Mixed-Model Fit
+Produces a summary of a fitted `"simplex_fast_mixed"` object, including
+coefficient tables with standard errors, Wald z-statistics and p-values
+for the fixed-effect mean and dispersion submodels, together with the
+estimated random-effect covariance.
 
 ## Usage
 

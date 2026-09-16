@@ -366,7 +366,9 @@ either a vector of numeric indices or of names. Defaults to all.</p></dd>
     <p><code>coef</code>, <code>fitted</code>, <code>residuals</code> and <code>nobs</code> return numeric vectors;
 <code>vcov</code>, <code>confint</code> and <code>model.matrix</code> return matrices; <code>logLik</code> returns a
 <code>"logLik"</code> object; <code>deviance</code> returns a single number; <code>terms</code>, <code>formula</code>
-and <code>model.frame</code> return the corresponding model-description objects.</p>
+and <code>model.frame</code> return the corresponding model-description objects;
+<code>update</code> returns a refitted <code>"simplex_fast"</code> object, or the unevaluated
+call when <code>evaluate = FALSE</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -430,7 +432,7 @@ and <code>model.frame</code> return the corresponding model-description objects.
 <span class="r-out co"><span class="r-pr">#&gt;</span> 6           1 -0.8204684</span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">formula</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> y ~ x1 | z1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;environment: 0x55692e8f9af8&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;environment: 0x562e6558fb48&gt;</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

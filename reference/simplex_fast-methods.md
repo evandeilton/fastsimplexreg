@@ -182,7 +182,8 @@ confint(object, parm, level = 0.95, ...)
 `confint` and `model.matrix` return matrices; `logLik` returns a
 `"logLik"` object; `deviance` returns a single number; `terms`,
 `formula` and `model.frame` return the corresponding model-description
-objects.
+objects; `update` returns a refitted `"simplex_fast"` object, or the
+unevaluated call when `evaluate = FALSE`.
 
 ## References
 
@@ -249,5 +250,5 @@ head(model.matrix(fit, model = "mean"))
 #> 6           1 -0.8204684
 formula(fit)
 #> y ~ x1 | z1
-#> <environment: 0x55692e8f9af8>
+#> <environment: 0x562e6558fb48>
 ```

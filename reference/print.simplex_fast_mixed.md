@@ -1,6 +1,9 @@
 # Print a Simplex Mixed-Model Fit
 
-Print a Simplex Mixed-Model Fit
+Compactly prints a fitted `"simplex_fast_mixed"` object: the formula,
+the random-effects specification, links, number of observations and
+groups, fit statistics, the mean and dispersion coefficients, and the
+estimated random-effect covariance.
 
 ## Usage
 
@@ -46,9 +49,9 @@ print(fit)
 #> 
 #> Fast simplex mixed model with variable dispersion
 #> Formula: y ~ x1
-#> <environment: 0x55692e6b3fe0>
+#> <environment: 0x562e659638d0>
 #> Random:  ~1 | g
-#> <environment: 0x55692e6b3fe0>
+#> <environment: 0x562e659638d0>
 #> Mean link: logit | Dispersion link: log 
 #> Observations: 320 | Groups: 40 | nAGQ: 7 
 #> Log-likelihood: 265.6 | AIC: -523.1 | BIC: -508.1 

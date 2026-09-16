@@ -124,9 +124,8 @@
 <h3 id="packaging-0-2-4">Packaging<a class="anchor" aria-label="anchor" href="#packaging-0-2-4"></a></h3>
 <ul><li>
 <code>Depends: R (&gt;= 4.0.0)</code> – no R 4.1 feature is used.</li>
-<li>
-<code>simplexreg</code>, <code>microbenchmark</code>, <code>parallel</code>, <code>utils</code> and <code>MASS</code> declared in <code>Suggests</code>; the shipped benchmark script needs them.</li>
-<li>Added <code>inst/CITATION</code> and a test-coverage workflow; dropped the redundant <code>SystemRequirements: C++17</code>; fixed a 404 badge in the README.</li>
+<li>Suggests now declares what is actually used: <code>microbenchmark</code> (the shipped benchmark script) and <code>MASS</code> (a mixed-model test). <code>simplexreg</code> is deliberately NOT declared – it is archived on CRAN, so declaring it would produce a permanent NOTE; <code>inst/benchmark/run_benchmark.R</code> guards it with <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> and says so in its header.</li>
+<li>Added <code>inst/CITATION</code>; fixed the test-coverage workflow (dropped the archived <code>simplexreg</code> reference); dropped the redundant <code>SystemRequirements: C++17</code>; fixed a 404 badge in the README.</li>
 </ul></div>
 </div>
     <div class="section level2">

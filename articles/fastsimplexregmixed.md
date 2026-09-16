@@ -212,11 +212,18 @@ plot(fit, which = 1:4)
 
 ## 4. Choosing `nAGQ` and performance
 
-`nAGQ` trades accuracy for cost. `nAGQ = 1` (Laplace) is fastest and is
-often adequate when clusters are large; `nAGQ = 9`-`15` gives high
-accuracy for small clusters. Since the tensor grid has
-$`\mathtt{nAGQ}^q`$ nodes, keep the number of random effects small
-($`q \le 3`$) and lower `nAGQ` as $`q`$ grows (good defaults: `11` for
+`nAGQ` trades accuracy for cost, but `nAGQ = 1` (the Laplace
+approximation) is not a supported choice for inference in this package:
+the analytic score is the score of the *exact* marginal likelihood, not
+of the coarse one-point quadrature, so at `nAGQ = 1` the two disagree by
+about 66% and the resulting Wald intervals cover only 57% of their
+nominal 95% (see
+[`?fastsimplexregmixed`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md)
+for the measurements). Use `nAGQ >= 5` always, and `nAGQ >= 11` when
+reporting inference; `9`-`15` gives high accuracy for small clusters.
+Since the tensor grid has $`\mathtt{nAGQ}^q`$ nodes, keep the number of
+random effects small ($`q \le 3`$) and lower `nAGQ` as $`q`$ grows (good
+defaults, all comfortably above the supported minimum: `11` for
 $`q = 1`$, `9` for $`q = 2`$, `7` for $`q = 3`$). Because clusters are
 conditionally independent, the work is parallelised over clusters — set
 `n_threads = 0` to use all available cores.

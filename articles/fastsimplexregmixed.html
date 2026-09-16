@@ -300,16 +300,23 @@ random effects</strong>:</p>
 <div class="section level2">
 <h2 id="choosing-nagq-and-performance">4. Choosing <code>nAGQ</code> and performance<a class="anchor" aria-label="anchor" href="#choosing-nagq-and-performance"></a>
 </h2>
-<p><code>nAGQ</code> trades accuracy for cost. <code>nAGQ = 1</code>
-(Laplace) is fastest and is often adequate when clusters are large;
-<code>nAGQ = 9</code>-<code>15</code> gives high accuracy for small
-clusters. Since the tensor grid has
+<p><code>nAGQ</code> trades accuracy for cost, but <code>nAGQ = 1</code>
+(the Laplace approximation) is not a supported choice for inference in
+this package: the analytic score is the score of the <em>exact</em>
+marginal likelihood, not of the coarse one-point quadrature, so at
+<code>nAGQ = 1</code> the two disagree by about 66% and the resulting
+Wald intervals cover only 57% of their nominal 95% (see
+<code><a href="../reference/fastsimplexregmixed.html">?fastsimplexregmixed</a></code> for the measurements). Use
+<code>nAGQ &gt;= 5</code> always, and <code>nAGQ &gt;= 11</code> when
+reporting inference; <code>9</code>-<code>15</code> gives high accuracy
+for small clusters. Since the tensor grid has
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mrow><mi>𝚗</mi><mi>𝙰</mi><mi>𝙶</mi><mi>𝚀</mi></mrow><mi>q</mi></msup><annotation encoding="application/x-tex">\mathtt{nAGQ}^q</annotation></semantics></math>
 nodes, keep the number of random effects small
 (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi><mo>≤</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">q \le 3</annotation></semantics></math>)
 and lower <code>nAGQ</code> as
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>q</mi><annotation encoding="application/x-tex">q</annotation></semantics></math>
-grows (good defaults: <code>11</code> for
+grows (good defaults, all comfortably above the supported minimum:
+<code>11</code> for
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">q = 1</annotation></semantics></math>,
 <code>9</code> for
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">q = 2</annotation></semantics></math>,

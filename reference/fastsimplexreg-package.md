@@ -30,6 +30,7 @@ Regression Analysis of Proportional Data Using the Simplex Distribution.
 ## See also
 
 [`fastsimplexreg()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexreg.md),
+[`fastsimplexregmixed()`](https://evandeilton.github.io/fastsimplexreg/reference/fastsimplexregmixed.md),
 [`dsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
 [`rsimplex()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex-distribution.md),
 [`simplex_linkinv()`](https://evandeilton.github.io/fastsimplexreg/reference/simplex_linkinv.md)
