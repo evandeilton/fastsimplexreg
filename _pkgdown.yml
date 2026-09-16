@@ -85,6 +85,7 @@ reference:
     desc: "Methods for objects of class simplex_fast_mixed."
     contents:
       - simplex_fast_mixed-methods
+      - print.VarCorr.simplex_fast_mixed
       - summary.simplex_fast_mixed
       - print.simplex_fast_mixed
       - predict.simplex_fast_mixed

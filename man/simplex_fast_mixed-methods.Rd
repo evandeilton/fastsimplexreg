@@ -11,7 +11,6 @@
 \alias{residuals.simplex_fast_mixed}
 \alias{ranef.simplex_fast_mixed}
 \alias{VarCorr.simplex_fast_mixed}
-\alias{print.VarCorr.simplex_fast_mixed}
 \title{Extractor Methods for Simplex Mixed-Model Fits}
 \usage{
 \method{coef}{simplex_fast_mixed}(object, model = c("all", "mean", "dispersion"), ...)
@@ -31,8 +30,6 @@
 \method{ranef}{simplex_fast_mixed}(object, postVar = FALSE, ...)
 
 \method{VarCorr}{simplex_fast_mixed}(x, sigma = 1, ...)
-
-\method{print}{VarCorr.simplex_fast_mixed}(x, digits = max(3L, getOption("digits") - 3L), ...)
 }
 \arguments{
 \item{object, x}{A fitted \code{"simplex_fast_mixed"} object.}
@@ -58,9 +55,6 @@ standard normal under a correctly specified model), \code{"response"},
 \code{\link[nlme:VarCorr]{nlme::VarCorr()}}. A simplex mixed model has no residual scale parameter,
 so the argument rescales nothing; supplying anything other than \code{1} raises
 a warning and is ignored.}
-
-\item{digits}{For the \code{VarCorr} print method, the number of significant
-digits to display.}
 }
 \value{
 \code{coef}, \code{fitted} and \code{residuals} return numeric vectors; \code{vcov}

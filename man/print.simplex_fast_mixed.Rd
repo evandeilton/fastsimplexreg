@@ -17,7 +17,10 @@
 The object \code{x}, invisibly.
 }
 \description{
-Print a Simplex Mixed-Model Fit
+Compactly prints a fitted \code{"simplex_fast_mixed"} object: the formula, the
+random-effects specification, links, number of observations and groups,
+fit statistics, the mean and dispersion coefficients, and the estimated
+random-effect covariance.
 }
 \examples{
 set.seed(1)

@@ -31,7 +31,8 @@ the Simplex Distribution.
 \doi{10.18637/jss.v071.i11}
 }
 \seealso{
-\code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{\link[=dsimplex]{dsimplex()}}, \code{\link[=rsimplex]{rsimplex()}}, \code{\link[=simplex_linkinv]{simplex_linkinv()}}
+\code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}, \code{\link[=dsimplex]{dsimplex()}},
+\code{\link[=rsimplex]{rsimplex()}}, \code{\link[=simplex_linkinv]{simplex_linkinv()}}
 }
 \author{
 \strong{Maintainer}: José Evandeilton Lopes \email{evandeilton@gmail.com}

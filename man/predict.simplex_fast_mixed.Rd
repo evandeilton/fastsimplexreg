@@ -31,7 +31,12 @@ population-level predictions (random effects set to zero).}
 A numeric vector, list or \code{data.frame}, depending on \code{type}.
 }
 \description{
-Predictions from a Simplex Mixed-Model Fit
+Computes predictions from a fitted \code{"simplex_fast_mixed"} model, either on
+the data used for fitting or on new data. Predictions are conditional on
+the estimated random effects by default; \code{re.form} requests
+population-level predictions instead. When \code{newdata} is supplied, the
+stored \code{terms}, \code{xlevels} and \code{contrasts} are reused so that the design
+matrices are built consistently with the fit.
 }
 \examples{
 set.seed(1)

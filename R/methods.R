@@ -74,7 +74,9 @@
 #' @return `coef`, `fitted`, `residuals` and `nobs` return numeric vectors;
 #'   `vcov`, `confint` and `model.matrix` return matrices; `logLik` returns a
 #'   `"logLik"` object; `deviance` returns a single number; `terms`, `formula`
-#'   and `model.frame` return the corresponding model-description objects.
+#'   and `model.frame` return the corresponding model-description objects;
+#'   `update` returns a refitted `"simplex_fast"` object, or the unevaluated
+#'   call when `evaluate = FALSE`.
 #'
 #' @references
 #' Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.

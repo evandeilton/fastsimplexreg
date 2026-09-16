@@ -74,7 +74,9 @@ either a vector of numeric indices or of names. Defaults to all.}
 \code{coef}, \code{fitted}, \code{residuals} and \code{nobs} return numeric vectors;
 \code{vcov}, \code{confint} and \code{model.matrix} return matrices; \code{logLik} returns a
 \code{"logLik"} object; \code{deviance} returns a single number; \code{terms}, \code{formula}
-and \code{model.frame} return the corresponding model-description objects.
+and \code{model.frame} return the corresponding model-description objects;
+\code{update} returns a refitted \code{"simplex_fast"} object, or the unevaluated
+call when \code{evaluate = FALSE}.
 }
 \description{
 Standard extractor methods for objects of class \code{"simplex_fast"} produced by

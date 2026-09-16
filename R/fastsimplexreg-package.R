@@ -26,7 +26,8 @@
 #' *Journal of Statistical Software*, **71**(11), 1--21.
 #' \doi{10.18637/jss.v071.i11}
 #'
-#' @seealso [fastsimplexreg()], [dsimplex()], [rsimplex()], [simplex_linkinv()]
+#' @seealso [fastsimplexreg()], [fastsimplexregmixed()], [dsimplex()],
+#'   [rsimplex()], [simplex_linkinv()]
 #'
 #' @keywords internal
 #'

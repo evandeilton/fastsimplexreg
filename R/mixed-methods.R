@@ -94,8 +94,6 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   [nlme::VarCorr()]. A simplex mixed model has no residual scale parameter,
 #'   so the argument rescales nothing; supplying anything other than `1` raises
 #'   a warning and is ignored.
-#' @param digits For the `VarCorr` print method, the number of significant
-#'   digits to display.
 #' @param ... Additional arguments, currently ignored.
 #'
 #' @return `coef`, `fitted` and `residuals` return numeric vectors; `vcov`
@@ -227,7 +225,21 @@ VarCorr.simplex_fast_mixed <- function(x, sigma = 1, ...) {
             class = "VarCorr.simplex_fast_mixed")
 }
 
-#' @rdname simplex_fast_mixed-methods
+#' Print a Simplex Mixed-Model Variance-Covariance Matrix
+#'
+#' Prints the random-effect covariance matrix returned by
+#' [VarCorr.simplex_fast_mixed()], together with the standard deviations and,
+#' for more than one random effect, the correlation matrix.
+#'
+#' @param x An object of class `"VarCorr.simplex_fast_mixed"`, as returned by
+#'   [VarCorr.simplex_fast_mixed()] -- not a fitted model, but the covariance
+#'   matrix itself, with its `stddev`/`correlation`/`group` attributes.
+#' @param digits Number of significant digits to display.
+#' @param ... Additional arguments, currently ignored.
+#'
+#' @return The object `x`, invisibly.
+#'
+#' @seealso [VarCorr.simplex_fast_mixed()]
 #' @export
 print.VarCorr.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
   sd <- attr(x, "stddev")
@@ -244,6 +256,13 @@ print.VarCorr.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
 
 
 #' Predictions from a Simplex Mixed-Model Fit
+#'
+#' Computes predictions from a fitted `"simplex_fast_mixed"` model, either on
+#' the data used for fitting or on new data. Predictions are conditional on
+#' the estimated random effects by default; `re.form` requests
+#' population-level predictions instead. When `newdata` is supplied, the
+#' stored `terms`, `xlevels` and `contrasts` are reused so that the design
+#' matrices are built consistently with the fit.
 #'
 #' @param object A fitted `"simplex_fast_mixed"` object.
 #' @param newdata Optional new data. When `NULL`, in-sample predictions are
@@ -421,6 +440,11 @@ plot.simplex_fast_mixed <- function(x, which = 1:4,
 
 #' Print a Simplex Mixed-Model Fit
 #'
+#' Compactly prints a fitted `"simplex_fast_mixed"` object: the formula, the
+#' random-effects specification, links, number of observations and groups,
+#' fit statistics, the mean and dispersion coefficients, and the estimated
+#' random-effect covariance.
+#'
 #' @param x A fitted `"simplex_fast_mixed"` object.
 #' @param digits Number of significant digits.
 #' @param ... Additional arguments, currently ignored.
@@ -458,6 +482,11 @@ print.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3
 
 
 #' Summarise a Simplex Mixed-Model Fit
+#'
+#' Produces a summary of a fitted `"simplex_fast_mixed"` object, including
+#' coefficient tables with standard errors, Wald z-statistics and p-values for
+#' the fixed-effect mean and dispersion submodels, together with the
+#' estimated random-effect covariance.
 #'
 #' @param object A fitted `"simplex_fast_mixed"` object.
 #' @param x A `"summary.simplex_fast_mixed"` object.

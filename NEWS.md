@@ -133,9 +133,13 @@ below carries a measured proof in `tests/testthat`.
 ## Packaging
 
 * `Depends: R (>= 4.0.0)` -- no R 4.1 feature is used.
-* `simplexreg`, `microbenchmark`, `parallel`, `utils` and `MASS` declared in
-  `Suggests`; the shipped benchmark script needs them.
-* Added `inst/CITATION` and a test-coverage workflow; dropped the redundant
+* Suggests now declares what is actually used: `microbenchmark` (the shipped
+  benchmark script) and `MASS` (a mixed-model test). `simplexreg` is
+  deliberately NOT declared -- it is archived on CRAN, so declaring it would
+  produce a permanent NOTE; `inst/benchmark/run_benchmark.R` guards it with
+  `requireNamespace()` and says so in its header.
+* Added `inst/CITATION`; fixed the test-coverage workflow (dropped the
+  archived `simplexreg` reference); dropped the redundant
   `SystemRequirements: C++17`; fixed a 404 badge in the README.
 
 # fastsimplexreg 0.2.3

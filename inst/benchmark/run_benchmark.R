@@ -37,10 +37,7 @@
 suppressPackageStartupMessages(library(fastsimplexreg))
 
 ## ---- output location -------------------------------------------------
-SCRATCH <- Sys.getenv(
-  "BENCH_OUTDIR",
-  "/tmp/claude-1000/-home-jlopes-Dropbox-Pacotes-Dev-fastsimplexreg/f885e592-d7ea-4441-bbf9-1953954a8f52/scratchpad"
-)
+SCRATCH <- Sys.getenv("BENCH_OUTDIR", file.path(tempdir(), "fastsimplexreg-benchmark"))
 dir.create(SCRATCH, showWarnings = FALSE, recursive = TRUE)
 
 ## ---- reproducibility -------------------------------------------------
