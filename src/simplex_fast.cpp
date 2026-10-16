@@ -339,7 +339,8 @@ inline double log1mexp(const double x) noexcept {
 // log of the Mills ratio m(x) = Phi(-x) / phi(x) for x >= 0, with m(Inf) -> 1/x.
 //
 // Below x = 3 the direct form log Phi(-x) + x^2/2 + log sqrt(2 pi) is accurate
-// to ~4e-16. Above it the rounding of log Phi(-x) itself (|log Phi| ~ x^2/2)
+// to ~1e-15 relative in m (measured up to 1.1e-15 on [2, 3), 5e-16 below 2).
+// Above it the rounding of log Phi(-x) itself (|log Phi| ~ x^2/2)
 // grows to ~2e-15 at x = 6 and worse beyond, so the Laplace continued fraction
 //   m(x) = 1 / (x + 1/(x + 2/(x + 3/(x + ...)))) = 1 / t_0,
 //   t_k = x + (k+1)/t_{k+1},
@@ -395,9 +396,12 @@ inline double log_mills(const double x) noexcept {
 // complement 1 - mu' would keep only ~16 - log10(1/mu) digits.
 //
 // Remaining limit: for mu > 1/2 and a < 0 the result is log Phi(a) + log(1 - r)
-// with r = |c| m(beta)/m(-a) < 1, and 1 - r is a genuine cancellation when mu is
-// within ~1e-8 of 1 (relative error ~ 1e-16 / (1 - mu)); the value stays finite
-// and in [0, 1], and is -Inf only if rounding makes r >= 1.
+// with r = |c| m(beta)/m(-a) < 1, and 1 - r is a genuine cancellation when
+// k = 2 / (phi mu (1-mu)) is small, i.e. phi mu (1-mu) is not small. Measured
+// against a 140-digit evaluation, the relative error of log T is about 1e-16/k
+// at worst: 1e-14 at mu = 0.999, phi = 1e6 (k = 2e-3) and 4e-10 at
+// mu = 1 - 1e-10, phi = 1e20 (k = 2e-10), but 4e-16 at phi = 1 for any mu. The
+// value stays finite and in [0, 1], and is -Inf only if rounding makes r >= 1.
 //
 // Measured: F + S = 1 to 2.2e-16 for mu from 1e-12 to 1 - 1e-12 (the previous
 // code: 1 at mu = 1e-8), and both tails match a quadrature of the density to
@@ -437,8 +441,16 @@ inline double simplex_logtail_core(const double u, const double v,
 }
 
 // log of ONE tail at a single point: lower = TRUE gives log P(Y <= q) and
-// FALSE gives log P(Y > q). Both are evaluated directly, never as log(1 - .),
-// so each keeps full relative accuracy in its own far tail.
+// FALSE gives log P(Y > q). Each tail is evaluated directly, never as
+// log(1 - other) while it is the small one, so it keeps full relative accuracy
+// in its own far tail.
+//
+// A tail above 1/2 is the exception, in the other direction: its log is a few
+// 1e-16 from 0 at best, so the log of a sum (or of Phi(a)(1 + x)) cannot resolve
+// log T = -1e-20, and the result would be wrong by O(1). There the exact
+// complement is used instead, log T = log(1 - exp(log T_other)), with the OTHER
+// tail (< 1/2, so accurate in a relative sense) from the same closed form.
+// T + T_other = 1 holds for both tails and either side of mu = 1/2.
 inline double simplex_logtail_one(const double q, const double mu, const double phi,
                                   const bool lower) noexcept {
   constexpr double NINF = -std::numeric_limits<double>::infinity();
@@ -449,8 +461,19 @@ inline double simplex_logtail_one(const double q, const double mu, const double 
   const double A = q * mubar, B = mu * qbar;
   const double diff = q - mu, c = 1.0 - 2.0 * mu;
   // Upper tail: reflection (y, mu) -> (1-y, 1-mu), i.e. A <-> B, diff -> -diff, c -> -c.
-  const double lt = lower ? simplex_logtail_core(u, v, A, B, diff, c, phi)
-                          : simplex_logtail_core(u, v, B, A, -diff, -c, phi);
+  auto tail = [&](const bool lw) {
+    return lw ? simplex_logtail_core(u, v, A, B, diff, c, phi)
+              : simplex_logtail_core(u, v, B, A, -diff, -c, phi);
+  };
+  double lt = tail(lower);
+  if (lt > -LOG_2) {
+    // lo == 0 only for a point mass at q == mu, where the direct value stands.
+    const double lo = tail(!lower);
+    if (lo < 0.0) {
+      lt = log1mexp(lo);
+      if (lt == 0.0) lt = 0.0;                  // log1mexp(-Inf) = -0 -> +0
+    }
+  }
   return (lt > 0.0) ? 0.0 : lt;                 // a log probability is <= 0; trim rounding
 }
 
@@ -481,6 +504,9 @@ inline double simplex_quantile_one(double lp, const double mu, const double phi,
   double y = mu;
   double dy_old = 1.0, dy = 1.0;
 
+  // Verified for phi <= 1e6, mu in [1e-14, 1 - 1e-12] and log p >= -1e4. Beyond
+  // that (phi >= 1e56, mu <= 1e-200, |log p| >= 1e17) the cap below can be hit
+  // and the last iterate is returned without a warning.
   for (int it = 0; it < 200; ++it) {
     const double lt = simplex_logtail_one(y, mu, phi, lower);
     const double g = lt - lp;                    // zero at the root

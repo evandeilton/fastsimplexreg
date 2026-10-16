@@ -122,12 +122,17 @@ test_that("log.p keeps full precision in the far lower tail", {
   expect_equal(psimplex(0.15, 0.5, 0.01, log.p = TRUE), -773.2159, tolerance = 1e-4)
   expect_true(is.finite(psimplex(0.4, 0.5, 1e-4, log.p = TRUE)))
   expect_lt(psimplex(0.4, 0.5, 1e-4, log.p = TRUE), -3000)
-  # Consistent with the linear scale wherever the linear scale still works.
+  # Consistent with the linear scale wherever the linear scale still works. The
+  # reference for a tail above 1/2 is log1p(-other tail): log() of a linear value
+  # that rounds to 1 has itself lost the digits (q = 0.95 has S = 3e-26, so F is
+  # exactly 1 and log(F) = 0), so the plain log(F) comparison was too weak.
   q <- c(0.05, 0.2, 0.5, 0.8, 0.95)
-  expect_equal(psimplex(q, 0.4, 1, log.p = TRUE), log(psimplex(q, 0.4, 1)),
-               tolerance = 1e-12)
+  Fq <- psimplex(q, 0.4, 1)
+  Sq <- psimplex(q, 0.4, 1, lower.tail = FALSE)
+  expect_equal(psimplex(q, 0.4, 1, log.p = TRUE),
+               ifelse(Fq < 0.5, log(Fq), log1p(-Sq)), tolerance = 1e-12)
   expect_equal(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
-               log(psimplex(q, 0.4, 1, lower.tail = FALSE)), tolerance = 1e-12)
+               ifelse(Sq < 0.5, log(Sq), log1p(-Fq)), tolerance = 1e-12)
 })
 
 test_that("both tails keep full relative accuracy", {

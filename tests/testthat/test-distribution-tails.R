@@ -9,6 +9,11 @@
 
 sd_simplex <- function(mu, phi) sqrt(phi * (mu * (1 - mu))^3)
 
+# Relative error. expect_equal() would NOT do here: like all.equal(), it switches
+# to an absolute difference once |target| is below the tolerance, which is the
+# regime (log T ~ -1e-20) these tests are about.
+rel_err <- function(got, ref) abs(got - ref) / abs(ref)
+
 # 64-point Gauss-Legendre rule (Golub-Welsch); the integrand is analytic on each
 # segment used below, so the quadrature error is ~1e-15.
 gl_rule <- local({
@@ -129,7 +134,7 @@ test_that("qsimplex upper tail keeps tiny probabilities (no 1 - p)", {
                tolerance = 1e-12)
   # p = 1e-16 used to give S(q) = 1.6e-16.
   q16 <- qsimplex(1e-16, 0.5, 1, lower.tail = FALSE)
-  expect_equal(psimplex(q16, 0.5, 1, lower.tail = FALSE), 1e-16, tolerance = 1e-10)
+  expect_lt(rel_err(psimplex(q16, 0.5, 1, lower.tail = FALSE), 1e-16), 1e-10)
   # log.p = TRUE: -100 used to return 1; -1000 underflows exp() on the lower tail.
   for (lp in c(-100, -1000)) {
     for (lower in c(TRUE, FALSE)) {
@@ -187,7 +192,99 @@ test_that("qsimplex resolves a tiny-mu law to far below one standard deviation",
     q <- qsimplex(p, mu, phi, lower.tail = lower)
     expect_equal(psimplex(q, mu, phi, lower.tail = lower), p, tolerance = 1e-9)
   }
-  # A probability close to 1 is solved on the opposite tail, with 1 - p exact.
-  q <- qsimplex(1 - 1e-10, 0.3, 1)
-  expect_equal(psimplex(q, 0.3, 1, lower.tail = FALSE), 1e-10, tolerance = 1e-8)
+  # A probability close to 1 is solved on the opposite tail, with 1 - p exact
+  # (p itself is a double, so the target is 1 - p = 1.00000008e-10, not 1e-10).
+  p1 <- 1 - 1e-10
+  q <- qsimplex(p1, 0.3, 1)
+  expect_lt(rel_err(psimplex(q, 0.3, 1, lower.tail = FALSE), 1 - p1), 1e-9)
+})
+
+# A tail above 1/2 has log T = -(the other tail) to first order, which a log of a
+# sum cannot resolve once the other tail is below ~1e-16 (psimplex(0.9, 0.1, 10,
+# log.p = TRUE) was -3.6e-21 for a true -7.97e-22, and the relative error of log F
+# was 8.5e-5 at 1e-12). The complement of the small tail is used instead.
+test_that("log F and log S near 0 are exact: 140-digit values", {
+  # Columns: q, mu, phi, lower (1/0), log T. The reference is the closed form
+  # F = Phi(a) + (1-2mu) phi(a) m(beta) in 140-digit decimal arithmetic from the
+  # exact binary inputs, kept out of this package (Python decimal); log T is
+  # about -1e-9 or -1e-20.
+  ref <- rbind(
+    c(0.0001061740146087701, 1e-4, 1, 1, -9.999999999999589e-10),
+    c(0.00010969404938580496, 1e-4, 1, 1, -1.000000000000050e-20),
+    c(0.74432148261767528, 0.01, 1000, 1, -9.999999999999893e-10),
+    c(0.8869929971826418, 0.01, 1000, 1, -9.999999999999959e-21),
+    c(0.77989779020495531, 0.1, 10, 1, -1.000000000000001e-09),
+    c(0.89474439042796905, 0.1, 10, 1, -9.999999999999887e-21),
+    c(0.79918393615010064, 0.3, 1, 1, -1.000000000000003e-09),
+    c(0.95902480694270043, 0.5, 1, 1, -9.999999999999882e-21),
+    c(0.84480956800547169, 0.7, 0.1, 1, -1.000000000000011e-09),
+    c(0.99861694574284143, 0.9, 10, 1, -9.999999999999056e-21),
+    c(0.99990582443808995, 0.9999, 1, 1, -1.000000000335342e-09),
+    c(9.115347085832443e-05, 1e-4, 1, 0, -9.999999999999820e-21),
+    c(0.0013830542571585697, 0.1, 10, 0, -9.999999999999944e-21),
+    c(0.042881553284084398, 0.3, 1, 0, -1.000000000000001e-09),
+    c(0.084021657100634348, 0.5, 1, 0, -1.000000000000002e-09),
+    c(0.39960068134110643, 0.7, 0.1, 0, -1.000000000000017e-20),
+    c(0.10525560957203102, 0.9, 10, 0, -9.999999999999966e-21),
+    c(0.99989030595061423, 0.9999, 1, 0, -1.000000000218489e-20)
+  )
+  for (k in seq_len(nrow(ref))) {
+    got <- psimplex(ref[k, 1L], ref[k, 2L], ref[k, 3L], lower.tail = ref[k, 4L] == 1,
+                    log.p = TRUE)
+    expect_lt(rel_err(got, ref[k, 5L]), 1e-11,
+              label = paste("relative error at", paste(ref[k, 1:4], collapse = ", ")))
+  }
+  # The case that was wrong by a factor 4.6.
+  expect_lt(rel_err(psimplex(0.9, 0.1, 10, log.p = TRUE), -7.96788938016e-22), 1e-10)
+})
+
+test_that("log F and log S down to |log T| = 1e-300 are minus the opposite tail", {
+  # Pick q from the small opposite tail p, so that log T = log1p(-p) = -p to 1e-16
+  # (the exact complement), and compare with the log.p value of the large tail.
+  p <- 10^c(-8, -10, -12, -16, -20, -30, -100, -300)
+  for (par in list(c(0.1, 1), c(0.5, 1), c(0.9, 10), c(1e-4, 1), c(0.3, 0.01))) {
+    for (lower in c(TRUE, FALSE)) {
+      q <- qsimplex(p, par[1L], par[2L], lower.tail = !lower)
+      small <- psimplex(q, par[1L], par[2L], lower.tail = !lower)   # linear scale, accurate
+      big <- psimplex(q, par[1L], par[2L], lower.tail = lower, log.p = TRUE)
+      expect_true(all(big <= 0 & is.finite(big)), info = paste(par, lower))
+      expect_lt(max(rel_err(big, log1p(-small))), 1e-11,
+                label = paste("relative error at", paste(par, lower, collapse = ", ")))
+    }
+  }
+})
+
+test_that("F and S are monotone in q on dense grids, mu = 0.1 and 0.9", {
+  # Near F = 1 the old log-of-a-sum made both tails move in 1-ulp steps the wrong way.
+  for (mu in c(0.1, 0.9)) {
+    for (phi in c(1e-3, 0.1, 1)) {
+      qs <- list(plogis(seq(qlogis(1e-6), qlogis(1 - 1e-6), length.out = 20001L)))
+      qs[[2L]] <- mu + seq(-8, 8, length.out = 20001L) * sd_simplex(mu, phi)
+      med <- qsimplex(0.5, mu, phi)
+      qs[[3L]] <- med * (1 + seq(-2000, 2000) * 1e-13)       # micro grid across F = 1/2
+      for (q in qs) {
+        q <- sort(unique(q[q > 0 & q < 1]))
+        info <- paste(mu, phi)
+        expect_true(all(diff(psimplex(q, mu, phi, log.p = TRUE)) >= 0), info = info)
+        expect_true(all(diff(psimplex(q, mu, phi, lower.tail = FALSE, log.p = TRUE)) <= 0),
+                    info = info)
+        expect_true(all(diff(psimplex(q, mu, phi)) >= 0), info = info)
+        expect_true(all(diff(psimplex(q, mu, phi, lower.tail = FALSE)) <= 0), info = info)
+      }
+    }
+  }
+})
+
+test_that("qsimplex round-trips log p = -1e-30 and -1e-12 on both tails", {
+  # psimplex(qsimplex(-1e-30, 0.1, 1, log.p = TRUE), log.p = TRUE) was -3.2e-30.
+  for (par in list(c(0.1, 1), c(0.5, 1), c(0.9, 1), c(0.3, 10))) {
+    for (lower in c(TRUE, FALSE)) {
+      for (lp in c(-1e-12, -1e-30)) {
+        q <- qsimplex(lp, par[1L], par[2L], lower.tail = lower, log.p = TRUE)
+        expect_true(q > 0 && q < 1, info = paste(par, lower, lp))
+        expect_lt(rel_err(psimplex(q, par[1L], par[2L], lower.tail = lower, log.p = TRUE), lp),
+                  1e-9, label = paste("relative error at", paste(par, lower, lp, collapse = ", ")))
+      }
+    }
+  }
 })
