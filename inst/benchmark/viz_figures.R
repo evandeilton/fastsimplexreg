@@ -1,17 +1,14 @@
 ## =====================================================================
-## viz_figures.R  --  Publication-quality benchmark figures
-## fastsimplexreg vignette (Dr. Viz)
+## viz_figures.R  --  Benchmark figures for the fastsimplexreg vignette
 ##
 ## Self-contained plotting code. Reads ONLY precomputed benchmark RDS
 ## files (no model fits). To repoint at the shipped package data, set:
 ##   results_path <- system.file("extdata", package = "fastsimplexreg")
 ##
 ## Dependencies: ggplot2, scales, patchwork, dplyr, tidyr
-## Palette anchored on the package diagnostic colors
-##   #1a5276 (primary) and #a93226 (accent); extended to a
-##   color-blind-safe 4-hue categorical set (CVD adjacent dE 35.4,
-##   validated). Secondary encoding (linetype + shape) backs up hue on
-##   the two lower-contrast series, per the accessibility relief rule.
+## Palette: the package colors #1a5276 (primary) and #a93226 (accent),
+##   extended to a color-blind-safe set of four hues. Linetype and shape
+##   repeat the series encoding so that hue is not the only cue.
 ## =====================================================================
 
 suppressPackageStartupMessages({
@@ -23,8 +20,9 @@ suppressPackageStartupMessages({
 })
 
 ## ---- 0. Data location -------------------------------------------------
-## Default: the scratchpad next to this script. The lead can override
-## with system.file("extdata", package = "fastsimplexreg").
+## Default: the directory of this script when run with Rscript. Set
+## `results_path` beforehand, e.g. to system.file("extdata", package =
+## "fastsimplexreg"), to read the shipped results.
 if (!exists("results_path")) {
   results_path <- tryUnwrap <- dirname(
     sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))[1]
@@ -44,7 +42,7 @@ coefs   <- read_bench("benchmark_coefs.rds")
 meta    <- read_bench("benchmark_meta.rds")
 
 ## ---- 1. Palette & theme ----------------------------------------------
-## Categorical hues (light surface, validated worst-adjacent CVD dE 35.4)
+## Categorical hues (light background)
 PAL <- c(
   "fastsimplexreg"              = "#1a5276",  # brand primary  (deep blue)
   "fastsimplexreg (4 threads)"  = "#5dade2",  # light blue  (same engine family)
@@ -55,10 +53,10 @@ PAL <- c(
 LAB <- c(
   "fastsimplexreg"             = "fastsimplexreg (1 thread)",
   "fastsimplexreg (4 threads)" = "fastsimplexreg (4 threads)",
-  "simplexreg"                 = "simplexreg (CRAN)",
+  "simplexreg"                 = "simplexreg (archived on CRAN)",
   "betareg"                    = "betareg (CRAN)"
 )
-## Secondary encodings (back up hue: relief for lower-contrast series)
+## Secondary encodings (repeat the hue so it is not the only cue)
 LTY <- c(
   "fastsimplexreg"             = "solid",
   "fastsimplexreg (4 threads)" = "22",
@@ -146,17 +144,17 @@ fig_scaling <- function() {
       caption = wrap_cap(
         "Same simulated (0,1) data and identical mean(2)+dispersion(1) model ",
         "fed to every package per n; fastsimplexreg timed single-core and at 4 ",
-        "threads. At the largest n the 4-thread build overtakes all; ",
-        "multithreading adds overhead (wider IQR) at small/medium n. ",
+        "threads. At n = 5,000, 20,000 and 100,000 four threads are slower ",
+        "than one; at the largest n the 4-thread build is the fastest. ",
         sci_source)
     ) +
     theme_bench() +
-    guides(colour = guide_legend(nrow = 1),
-           linetype = guide_legend(nrow = 1), shape = guide_legend(nrow = 1))
+    guides(colour = guide_legend(nrow = 2),
+           linetype = guide_legend(nrow = 2), shape = guide_legend(nrow = 2))
 }
 
 ## =====================================================================
-## FIGURE 2 -- Speedup of fastsimplexreg (1 thread) vs CRAN, by n
+## FIGURE 2 -- Speedup of fastsimplexreg (1 thread) vs simplexreg and betareg
 ## =====================================================================
 fig_speedup <- function() {
   base <- results %>% filter(scenario == "scaling") %>%
@@ -195,26 +193,28 @@ fig_speedup <- function() {
     scale_y_log10() +
     labs(
       title = "How many times faster is fastsimplexreg (single core)?",
-      subtitle = paste0("CRAN fit time ÷ fastsimplexreg (1 thread) fit ",
-                        "time. Above the dashed line = fastsimplexreg wins."),
+      subtitle = wrap_cap("Fit time of simplexreg or betareg ÷ fastsimplexreg ",
+                          "(1 thread) fit time. Above the dashed line = ",
+                          "fastsimplexreg wins.", width = 80),
       x = "Sample size  n", y = "Speed-up factor  (log10, ×)",
       caption = wrap_cap(
-        "Single-core, like-for-like: fastsimplexreg is ",
+        "Single-core, logit link: fastsimplexreg is ",
         fmt(rng("simplexreg")[1]), "-", fmt(rng("simplexreg")[2]),
         "× faster than simplexreg and ",
         fmt(rng("betareg")[1]), "-", fmt(rng("betareg")[2]),
-        "× faster than betareg for n up to 100,000. At n = 500,000 the gain is ",
-        fmt(top("simplexreg")), "× over simplexreg and ", fmt(top("betareg")),
-        "× over betareg (below 1 means betareg is faster); the 4-thread build ",
-        "(Fig. 1) is the fastest there. betareg fits a different (beta) ",
-        "model, so it is a speed-only comparator. ", sci_source)
+        "× faster than betareg for n up to 100,000. At n = 500,000 the gain ",
+        "over simplexreg is ", fmt(top("simplexreg")),
+        "× and fastsimplexreg takes ", fmt(1 / top("betareg")),
+        "× as long as betareg; the 4-thread build (see the scaling figure) is ",
+        "the fastest there. betareg fits a different (beta) model, so it is a ",
+        "speed-only comparator. ", sci_source)
     ) +
     theme_bench() +
     theme(panel.grid.major.x = element_blank())
 }
 
 ## =====================================================================
-## FIGURE 3 -- Accuracy: fastsimplexreg vs simplexreg estimates coincide
+## FIGURE 3 -- Accuracy: fastsimplexreg vs simplexreg estimates on simulated data
 ## =====================================================================
 fig_accuracy <- function() {
   acc <- coefs %>% filter(scenario == "accuracy")
@@ -309,14 +309,21 @@ fig_realdata <- function() {
            dataset = factor(dataset,
                             levels = c("GasolineYield","ReadingSkills",
                                        "FoodExpenditure")))
-  # Dispersion-intercept gap (fast - simplexreg) per data set, from the
-  # shipped coefficients.
+  # Dispersion-intercept gap (simplexreg - fast) per data set, from the
+  # shipped coefficients, and log(n / (n - p)) with p the number of mean
+  # coefficients.
+  pp <- coefs %>%
+    filter(scenario == "realdata", package == "fastsimplexreg",
+           grepl("^mean:", term)) %>%
+    group_by(dataset, n) %>% summarise(p = dplyr::n(), .groups = "drop")
   di <- coefs %>%
     filter(scenario == "realdata", term == "disp:(Intercept)",
            package %in% c("fastsimplexreg", "simplexreg")) %>%
     select(dataset, package, estimate) %>%
     pivot_wider(names_from = package, values_from = estimate) %>%
-    mutate(gap = abs(fastsimplexreg - simplexreg))
+    left_join(pp, by = "dataset") %>%
+    mutate(gap = simplexreg - fastsimplexreg,
+           dev = abs(gap - log(n / (n - p))))
 
   ggplot(d, aes(dataset, med, fill = package)) +
     geom_col(position = position_dodge(width = 0.78), width = 0.72) +
@@ -328,15 +335,18 @@ fig_realdata <- function() {
     scale_y_continuous(expand = expansion(mult = c(0, 0.14))) +
     labs(
       title = "Fastest on the standard beta-regression datasets",
-      subtitle = paste0("Median fit time on three betareg example datasets ",
-                        "(constant dispersion, three-way match)"),
+      subtitle = wrap_cap("Median fit time on three betareg example datasets ",
+                          "(constant dispersion, same formula in all three ",
+                          "packages)", width = 80),
       x = NULL, y = "Fit time  (seconds)",
       caption = wrap_cap(
         "fastsimplexreg vs simplexreg fitted means have cor = 1.00 on all ",
         "three datasets, but the dispersion intercepts (log scale) differ by ",
         sprintf("%.3f-%.3f", min(di$gap), max(di$gap)),
-        "; the cause was not investigated. betareg fits a different (beta) ",
-        "model — compared on speed only, not likelihood. ",
+        "; this equals log(n/(n-p)), p being the number of mean ",
+        "coefficients (largest deviation ", sprintf("%.0e", max(di$dev)),
+        "). betareg fits a different (beta) model — compared on speed only, ",
+        "not likelihood. ",
         sci_source)
     ) +
     theme_bench() +

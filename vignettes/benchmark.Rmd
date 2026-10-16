@@ -34,14 +34,14 @@ if (has_viz) {
 ## What this compares, and how to read it
 
 `fastsimplexreg` aims to be a fast, modern implementation of **simplex regression**
-for proportions in $(0, 1)$. This article benchmarks it against the two established
-CRAN packages for bounded responses, and is explicit about what each comparison
-does and does not prove:
+for proportions in $(0, 1)$. This article benchmarks it against two packages for
+bounded responses, `betareg` (on CRAN) and `simplexreg` (archived on CRAN), and is
+explicit about what each comparison does and does not prove:
 
-* **vs [`simplexreg`](https://CRAN.R-project.org/package=simplexreg)** — the *same*
-  distribution (simplex). The two therefore fit the identical likelihood and can be
-  compared on **both accuracy and speed**: the estimates must coincide, and we ask
-  how much faster we get there.
+* **vs [`simplexreg`](https://CRAN.R-project.org/package=simplexreg)** (archived
+  on CRAN) — both packages fit a simplex model, so they can be compared on
+  **both accuracy and speed**. Sections 1 and 4 show where the estimates agree and
+  where they do not.
 * **vs [`betareg`](https://CRAN.R-project.org/package=betareg)** — the *beta*
   distribution, a different model. This is a fair **speed / capability** comparator
   (both fit mean-and-dispersion regressions for $(0,1)$ data) but **not** an
@@ -52,25 +52,31 @@ does and does not prove:
 A deliberate omission: we **never** compare log-likelihoods across packages. On the
 very same fit where the coefficients agree to seven digits, the reported `logLik`
 values differ in sign and magnitude, because the packages use different additive
-conventions (and `betareg` is a different family). Accuracy is demonstrated the
-honest way — through coefficient agreement.
+conventions (and `betareg` is a different family). Accuracy is judged through
+coefficient agreement.
 
 ```{r methods-note, echo = FALSE, results = "asis"}
 if (has_viz) {
+  # Print "OpenBLAS 0.3.26" rather than the library path.
+  blas_label <- function(path) {
+    m <- regmatches(path, regexec("libopenblas[a-z]*-r([0-9.]*[0-9])\\.so", path))[[1]]
+    if (length(m) == 2L) paste("OpenBLAS", m[2]) else basename(path)
+  }
   cat(sprintf(
     paste0("*All results are precomputed with `fastsimplexreg` %s, `simplexreg` %s ",
-           "and `betareg` %s (%s, BLAS %s; %d cores; seed %s; run on %s). ",
+           "and `betareg` %s (%s, %s; %d cores; seed %s; run on %s). ",
            "They have not been re-run for later versions of `fastsimplexreg`. ",
            "Each package receives the identical data per cell; ",
            "`fastsimplexreg` is timed single-core and at 4 threads, and the ",
            "single-core number is always shown.*\n"),
     meta$versions$fastsimplexreg, meta$versions$simplexreg,
-    meta$versions$betareg, meta$r_version, meta$blas, meta$n_cores, meta$seed,
+    meta$versions$betareg, meta$r_version, blas_label(meta$blas), meta$n_cores,
+    meta$seed,
     substr(meta$date, 1, 10)))
 }
 ```
 
-## 1. Accuracy: the same maximum-likelihood estimates
+## 1. Accuracy on simulated data
 
 Fitting the identical simplex model (logit mean with two covariates, log dispersion
 with one) on simulated data, `fastsimplexreg` and `simplexreg` return the same
@@ -124,11 +130,12 @@ fig_scaling()
 | 100000  | 0.8370 | 1.4480 | 4.4300 | 1.9540 | 5.3&times;  | 2.3&times;  |
 | 500000  | 17.28  | 3.2475 | 20.94  | 8.6075 | 1.2&times;  | 0.5&times;  |
 
-With `fastsimplexreg` 0.2.1 at a single thread, the fit is
+With `fastsimplexreg` 0.2.1 at a single thread and a logit link, the fit is
 **5.3–13.4&times; faster than `simplexreg`** and
 **2.3–4.4&times; faster than `betareg`** for $n$ up to $10^5$. At
 $n = 5\times10^5$ the single-thread advantage is much smaller: **1.2&times;**
-over `simplexreg`, and `betareg` is faster (**0.5&times;**). The scaling is
+over `simplexreg`, and `fastsimplexreg` took about twice as long as `betareg`.
+The scaling is
 near-linear up to $10^5$ (log-log slope $\approx 1.0$); the competitors have
 slightly lower slopes (about 0.9) but larger constant factors.
 
@@ -136,9 +143,10 @@ slightly lower slopes (about 0.9) but larger constant factors.
 fig_speedup()
 ```
 
-Two honest points the figures make explicit. First, **multithreading is a
-scale-up story, not a free win**: at mid-$n$ (5000, 20000) four threads are
-*slower* than one, and the payoff appears at large scale (at $n = 5\times10^5$ the
+Two points to note. First, **multithreading is a scale-up story, not a free
+win**: at $n = 5000$, $20000$ and $10^5$ four threads are *slower* than one
+(0.52 s against 0.04 s, 0.60 s against 0.15 s, and 1.45 s against 0.84 s), and
+the payoff appears at large scale (at $n = 5\times10^5$ the
 4-thread run, 3.25 s, is the fastest of all four). Version 0.2.1 computed the
 linear predictors through BLAS and later versions do not (see `NEWS.md`), so
 the threaded timings here may not carry over to them.
@@ -166,28 +174,36 @@ dataset and the mean coefficients agree, but the two packages do **not** return
 the same dispersion intercept:
 
 ```{r tab-realdata, echo = FALSE, results = "asis"}
-# Built from the shipped coefficients, like the accuracy table above.
+# Built from the shipped coefficients, like the accuracy table above. n is the
+# sample size and p the number of mean coefficients of the fitted model.
 if (has_viz) {
   rd <- coefs[coefs$scenario == "realdata" &
                 coefs$package %in% c("fastsimplexreg", "simplexreg"), ]
-  cat("| data set | max &#124;mean coef diff&#124; | dispersion intercept, fastsimplexreg | dispersion intercept, simplexreg | difference (fast &minus; simplexreg) |\n")
-  cat("|:---------|:------------:|:--------:|:--------:|:--------:|\n")
+  cat("| data set | $n$ | $p$ | max &#124;mean coef diff&#124; | dispersion intercept, fastsimplexreg | dispersion intercept, simplexreg | simplexreg &minus; fastsimplexreg | $\\log\\{n/(n-p)\\}$ |\n")
+  cat("|:---------|:--:|:--:|:------------:|:--------:|:--------:|:--------:|:--------:|\n")
   for (ds in c("GasolineYield", "ReadingSkills", "FoodExpenditure")) {
     z <- rd[rd$dataset == ds, ]
-    get <- function(pk, tm) z$estimate[z$package == pk & z$term == tm]
+    est <- function(pk, tm) z$estimate[z$package == pk & z$term == tm]
     mt <- unique(z$term[grepl("^mean:", z$term)])
-    md <- max(abs(vapply(mt, function(tm) get("fastsimplexreg", tm) -
-                                         get("simplexreg", tm), numeric(1))))
-    a <- get("fastsimplexreg", "disp:(Intercept)")
-    b <- get("simplexreg", "disp:(Intercept)")
-    cat(sprintf("| %s | %.1e | %.3f | %.3f | %.3f |\n", ds, md, a, b, a - b))
+    md <- max(abs(vapply(mt, function(tm) est("fastsimplexreg", tm) -
+                                         est("simplexreg", tm), numeric(1))))
+    a <- est("fastsimplexreg", "disp:(Intercept)")
+    b <- est("simplexreg", "disp:(Intercept)")
+    n <- z$n[1L]
+    p <- length(mt)
+    cat(sprintf("| %s | %d | %d | %.1e | %.3f | %.3f | %.4f | %.4f |\n",
+                ds, n, p, md, a, b, b - a, log(n / (n - p))))
   }
 }
 ```
 
-The dispersion intercepts are on the log scale. The cause of the difference was
-not investigated, so identical estimates are shown only on the simulated data of
-Section 1. `simplexreg` is archived on CRAN and was not re-run for this article.
+The dispersion intercepts are on the log scale. The gap equals
+$\log\{n/(n-p)\}$, with $p$ the number of mean coefficients, so `simplexreg`
+appears to rescale the maximum-likelihood dispersion by $n/(n-p)$ (deviance over
+residual degrees of freedom). `simplexreg` is archived on CRAN and is not
+installed here, so its code was not read and it was not re-run for this article.
+Identical estimates are therefore shown only on the simulated data of Section 1,
+where the dispersion depends on a covariate and the estimates agree.
 
 ```{r fig-realdata, echo = FALSE, eval = has_viz, fig.width = 7.2, fig.height = 4.6}
 fig_realdata()
@@ -219,12 +235,13 @@ large $J$.
 
 * **vs `simplexreg`** (`fastsimplexreg` 0.2.1, single thread): the same
   estimates on simulated data (max coefficient difference $7.8\times10^{-7}$),
-  **5.3–13.4&times; faster** for $n$ up to $10^5$ and 1.2&times; at
-  $n = 5\times10^5$. On the real data sets the fitted means agree but the
-  dispersion intercepts differ by 0.065–0.082 (cause not investigated).
+  **5.3–13.4&times; faster** for $n$ up to $10^5$ (logit link) and 1.2&times;
+  at $n = 5\times10^5$. On the real data sets the fitted means agree but the
+  dispersion intercepts differ by 0.065–0.082, which equals $\log\{n/(n-p)\}$
+  (Section 4).
 * **vs `betareg`** (a different, beta model; speed only): **2.3–4.4&times;
-  faster** single-thread for $n$ up to $10^5$, and 0.5&times; (slower) at
-  $n = 5\times10^5$.
+  faster** single-thread for $n$ up to $10^5$ (logit link); at
+  $n = 5\times10^5$ `fastsimplexreg` took about twice as long.
 * **Mixed model:** the only tractable simplex GLMM available, linear in clusters,
   with nearly-free higher-order quadrature.
 
@@ -240,7 +257,8 @@ study that generated them is installed with the package:
 file.edit(system.file("benchmark", "run_benchmark.R", package = "fastsimplexreg"))
 file.edit(system.file("benchmark", "viz_figures.R",  package = "fastsimplexreg"))
 
-# Re-run end to end (requires simplexreg and betareg to be installed):
+# Re-run end to end (requires betareg and simplexreg; simplexreg is archived on
+# CRAN and must be installed from the CRAN archive):
 source(system.file("benchmark", "run_benchmark.R", package = "fastsimplexreg"))
 ```
 
