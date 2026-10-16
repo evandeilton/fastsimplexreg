@@ -140,8 +140,8 @@ Two honest points the figures make explicit. First, **multithreading is a
 scale-up story, not a free win**: at mid-$n$ (5000, 20000) four threads are
 *slower* than one, and the payoff appears at large scale (at $n = 5\times10^5$ the
 4-thread run, 3.25 s, is the fastest of all four). Version 0.2.1 computed the
-linear predictors through BLAS and 0.2.4 does not (see `NEWS.md`), so the
-threaded timings here may not carry over to 0.2.4.
+linear predictors through BLAS and later versions do not (see `NEWS.md`), so
+the threaded timings here may not carry over to them.
 Second, the **single-thread $n = 5\times10^5$ cell** took 17.3 s against 0.84 s
 at $n = 10^5$ (21 times longer for 5 times the data, two repetitions), and we
 draw no advantage from it — only the 4-thread result there supports a claim.

@@ -1,7 +1,7 @@
 Package: fastsimplexreg
 Type: Package
 Title: Fast Simplex Regression with Variable Dispersion
-Version: 0.2.4
+Version: 0.2.4.9000
 Authors@R:
     person(given = "José Evandeilton",
            family = "Lopes",

@@ -1,3 +1,56 @@
+# fastsimplexreg (development version)
+
+## Fixes
+
+* **`psimplex(lower.tail = FALSE)` for a small `mu`.** The upper tail lost
+  accuracy as `mu` shrank (absolute error 1e-5 at `mu = 1e-8`, 0.5 at
+  `mu = 1e-12`) because two terms of size ~1e8 were subtracted. Both tails are
+  now accurate: `F + S = 1` to 2e-16 for `mu` from 1e-12 to `1 - 1e-8`. Fits
+  were not affected.
+* **`qsimplex(lower.tail = FALSE)` for a small `p`.** It lost digits below
+  `p` = 1e-10 and returned 1 for `p` = 1e-20 (true value 0.959). Each tail is
+  now solved directly, also with `log.p = TRUE` (`p` down to 1e-300 and
+  log-probabilities down to -1000 round-trip).
+* **`logLik()`, `AIC()` and `BIC()` counted aliased coefficients**, so `AIC(fit)`
+  differed from `fit$AIC` by 2 per aliased column. Only estimable parameters
+  are counted.
+* **`fastsimplexregmixed()` detects aliased columns** in the mean and dispersion
+  designs, as `fastsimplexreg()` does: they are reported as `NA` and the model
+  is fitted on the remaining columns. It used to return an arbitrary split with
+  `NA` standard errors.
+* **A non-finite gradient is rejected.** At extreme parameters the gradient could
+  be `NaN` while the objective was reported valid.
+* **Large single-thread fits no longer stall near the optimum.** The objective
+  and score are now summed with compensated accumulation. The rounding noise of
+  a plain sum of 1e6 terms exceeded the decrease the line search was looking
+  for. At n = 1e6 with one thread the fit takes 96 objective evaluations
+  instead of 608 (3.8 s instead of 19 s) and matches the 8-thread fit; results
+  for n <= 1e5 are unchanged to 1e-15.
+
+## New
+
+* Mixed fits gain `deviance()`, `model.matrix()`, `terms()` and `simulate()`
+  (conditional on the estimated random effects). `coef(fit, "all")` now names
+  the dispersion coefficients `(phi)_*`; they repeated `(Intercept)` before.
+
+## Documentation
+
+* Removed claims the data do not support: `information = "expected"` is not
+  twenty times cheaper (the information step is 3-5 times cheaper, the whole fit
+  under 10%); the fixed-effects linear predictors do not use BLAS; quantile
+  residuals are deterministic, not randomized; the `nAGQ` by `q` values are
+  suggestions, not defaults. `grad_tol` and `rel_tol` are described as
+  implemented.
+* Benchmark figures state the version they were measured with (0.2.1). Identical
+  estimates are claimed for simulated data only; on the real data sets the
+  dispersion intercepts differ by 0.065 to 0.082.
+* Spelling is en-US throughout (`Language: en-US`).
+
+## Tests
+
+* `rsimplex()` is checked against `psimplex()` (Kolmogorov-Smirnov), and the
+  zero cross term of the expected information is checked with numeric scores.
+
 # fastsimplexreg 0.2.4
 
 Correctness release following a four-way consensus audit of 0.2.3
