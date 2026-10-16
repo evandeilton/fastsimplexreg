@@ -21,9 +21,10 @@
 #'     gives the quantile residuals of Dunn and Smyth (1996),
 #'     \eqn{\Phi^{-1}\{F(y_i;\hat\mu_i,\hat\phi_i)\}}. Dunn and Smyth
 #'     randomize only for discrete responses, so for the simplex these residuals
-#'     are deterministic. They are exactly standard normal under a correctly
-#'     specified model, which the other three types are not, so they are the
-#'     ones to read for diagnostics. `type = "response"` gives
+#'     are deterministic. They are approximately standard normal under a
+#'     correctly specified model (exactly so at the true parameters), which the
+#'     other three types are not, so they are the ones to read for diagnostics.
+#'     `type = "response"` gives
 #'     \eqn{y - \hat\mu}; `type = "pearson"` gives
 #'     \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 #'     variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order
@@ -66,9 +67,9 @@
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
 #' @param type For `residuals`, one of `"quantile"` (the default; the quantile
-#'   residuals of Dunn and Smyth, 1996, which are exactly standard normal under
-#'   a correct model), `"response"`, `"pearson"` or
-#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
+#'   residuals of Dunn and Smyth, 1996, which are approximately standard normal
+#'   under a correct model), `"response"`, `"pearson"` or `"deviance"`. For
+#'   `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param parm For `confint`, a specification of which parameters to report,
 #'   either a vector of numeric indices or of names. Defaults to all.
 #' @param level For `confint`, the confidence level.

@@ -192,10 +192,10 @@ rbind(theoretical = qsimplex(probs, mu = 0.35, phi = 0.8),
 The critical path is entirely in C++: the log-likelihood and its analytic score
 (so no numerical differentiation during optimization), a native BFGS that avoids
 repeated R/C++ crossings, and an optional OpenMP-parallelized observation loop
-(`n_threads = 0` uses all cores) in which the linear predictors are accumulated
-rather than computed through BLAS. Inference (the Hessian and standard errors)
-is computed only when `inference = TRUE`, so exploratory fits on massive data
-can skip it.
+(`n_threads = 0` uses all cores) in which the linear predictors of the objective
+and score are accumulated rather than computed through BLAS. Inference (the
+Hessian and standard errors) is computed only when `inference = TRUE`, so
+exploratory fits on massive data can skip it.
 
 ## References
 

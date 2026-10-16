@@ -318,9 +318,10 @@
 #'
 #' The mean supports the `logit`, `probit`, `cloglog` and `neglog` links; the
 #' dispersion uses a log link. The log-likelihood, the analytic score, the link
-#' inverses and the BFGS optimizer run entirely in C++. The linear predictors
-#' are accumulated inside the per-observation loop, which may use OpenMP (see
-#' `n_threads`).
+#' inverses and the BFGS optimizer run entirely in C++. In the objective and
+#' score the linear predictors are accumulated inside the per-observation loop,
+#' which may use OpenMP (see `n_threads`), not through BLAS; fitted values and
+#' [predict.simplex_fast()] use Armadillo matrix products.
 #'
 #' @param formula A multi-part formula, for example `y ~ x1 + x2 | z1 + z2`.
 #'   Each part may carry its own `offset()` term: in
@@ -352,8 +353,9 @@
 #'   `sqrt(grad_tol)` is the gradient bound in the `rel_tol` rule above.
 #' @param n_threads Integer number of OpenMP threads; the loop over observations
 #'   is parallelized. Use `0` to request all threads available to the backend.
-#'   The linear predictors are accumulated inside that loop rather than through
-#'   BLAS, so performance does not depend on how your BLAS is configured.
+#'   In the objective and score the linear predictors are accumulated inside
+#'   that loop rather than through BLAS, so the fit time does not depend on how
+#'   your BLAS is configured.
 #'   Measured end-to-end speed-ups on a 24-core machine:
 #'
 #'   \tabular{lrrrr}{
@@ -380,10 +382,11 @@
 #'   the analytic score. `"expected"` uses the exact Fisher information, which
 #'   for the simplex is available in closed form and is block diagonal in
 #'   \eqn{(\beta, \gamma)}: it needs no finite differencing and is positive
-#'   definite by construction. The information step is roughly 3 to 5 times
-#'   cheaper, but the total fit time changes by under about 10% because the
-#'   BFGS iterations dominate. The two agree asymptotically and, at
-#'   \eqn{n = 4000}, to within 0.4%. The default stays `"observed"` because
+#'   definite by construction. The information step is roughly 4 to 6 times
+#'   cheaper for a model with five parameters (more for larger models), but the
+#'   total fit time changes by under about 10% because the BFGS iterations
+#'   dominate. The two agree asymptotically and, in the case measured at
+#'   \eqn{n = 4000}, to within about 3%. The default stays `"observed"` because
 #'   Efron and Hinkley (1978) argue it is the better variance estimator for
 #'   conditional inference; `"expected"` is the more robust choice when the
 #'   observed information is ill-conditioned.

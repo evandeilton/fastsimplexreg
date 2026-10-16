@@ -36,11 +36,11 @@
 ## Documentation
 
 * Removed claims the data do not support: `information = "expected"` is not
-  twenty times cheaper (the information step is 3-5 times cheaper, the whole fit
-  under 10%); the fixed-effects linear predictors do not use BLAS; quantile
-  residuals are deterministic, not randomized; the `nAGQ` by `q` values are
-  suggestions, not defaults. `grad_tol` and `rel_tol` are described as
-  implemented.
+  twenty times cheaper (the information step is 4 to 6 times cheaper for five
+  parameters, the whole fit under 10%); the fixed-effects linear predictors in
+  the objective and score do not use BLAS; quantile residuals are deterministic,
+  not randomized; the `nAGQ` by `q` values are suggestions, not defaults.
+  `grad_tol` and `rel_tol` are described as implemented.
 * Benchmark figures state the version they were measured with (0.2.1). Identical
   estimates are claimed for simulated data only; on the real data sets the
   dispersion intercepts differ by 0.065 to 0.082.
@@ -53,9 +53,7 @@
 
 # fastsimplexreg 0.2.4
 
-Correctness release following a four-way consensus audit of 0.2.3
-(mathematical/statistical rigor, R API contracts, CRAN compliance). Every item
-below carries a measured proof in `tests/testthat`.
+Correctness fixes to 0.2.3.
 
 ## Silently wrong results (fixed)
 
@@ -134,7 +132,7 @@ below carries a measured proof in `tests/testthat`.
   rank, pseudo-inverse use, ill-conditioning, saturated observations, aliased
   coefficients, and whether inference was computed at all.
 
-## Parallelism and the C++ backend (audit of the OpenMP layer)
+## Parallelism and the C++ backend
 
 * **The linear predictors are no longer computed through BLAS.** `X %*% beta`
   and `Z %*% gamma` were two `gemv` calls, serial with respect to the package's
@@ -197,8 +195,7 @@ below carries a measured proof in `tests/testthat`.
 
 # fastsimplexreg 0.2.3
 
-Correctness release following a full surgical audit of `R/`, `src/`, `tests/`
-and `vignettes/`. All estimates, log-likelihoods, deviances, fitted values,
+Correctness release. All estimates, log-likelihoods, deviances, fitted values,
 residuals, densities and random draws are numerically unchanged from 0.2.2;
 what changed is what the package does when something is *wrong*.
 
@@ -341,12 +338,13 @@ what changed is what the package does when something is *wrong*.
 * New `benchmark` vignette comparing `fastsimplexreg` with the CRAN packages
   `simplexreg` and `betareg` on accuracy, speed (scaling to n = 5e5), the four
   mean links, real data, and the mixed model, with professional ggplot2 figures.
-  Estimates are numerically identical to `simplexreg` while fitting ~5-13x faster.
+  Estimates agree with `simplexreg` on simulated data; fits 5-13x faster at
+  n <= 1e5 (logit link).
   The full reproducible study ships in `inst/benchmark/`.
 
 # fastsimplexreg 0.2.1
 
-Stability and performance release, following a three-way audit.
+Stability and performance release.
 
 Stability / correctness:
 

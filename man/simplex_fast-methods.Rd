@@ -53,9 +53,9 @@ named \code{object}, \code{x} or \code{formula} to match the corresponding gener
 \item{...}{Additional arguments, currently ignored.}
 
 \item{type}{For \code{residuals}, one of \code{"quantile"} (the default; the quantile
-residuals of Dunn and Smyth, 1996, which are exactly standard normal under
-a correct model), \code{"response"}, \code{"pearson"} or
-\code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
+residuals of Dunn and Smyth, 1996, which are approximately standard normal
+under a correct model), \code{"response"}, \code{"pearson"} or \code{"deviance"}. For
+\code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
 
 \item{formula.}{For \code{update}, a change to the model formula, following the
 conventions of \code{\link[stats:update.formula]{stats::update.formula()}}; the two-part mean/dispersion
@@ -99,9 +99,10 @@ dispersions (\code{model = "dispersion"}).}
 gives the quantile residuals of Dunn and Smyth (1996),
 \eqn{\Phi^{-1}\{F(y_i;\hat\mu_i,\hat\phi_i)\}}. Dunn and Smyth
 randomize only for discrete responses, so for the simplex these residuals
-are deterministic. They are exactly standard normal under a correctly
-specified model, which the other three types are not, so they are the
-ones to read for diagnostics. \code{type = "response"} gives
+are deterministic. They are approximately standard normal under a
+correctly specified model (exactly so at the true parameters), which the
+other three types are not, so they are the ones to read for diagnostics.
+\code{type = "response"} gives
 \eqn{y - \hat\mu}; \code{type = "pearson"} gives
 \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order

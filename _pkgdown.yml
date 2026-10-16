@@ -2,18 +2,19 @@ url: https://evandeilton.github.io/fastsimplexreg/
 
 template:
   bootstrap: 5
-  # O logo e nativamente escuro, entao o site oferece os dois modos. O tema
-  # bootswatch foi removido: a documentacao do pkgdown avisa que temas
-  # bootswatch dificilmente funcionam junto com o light switch.
+  # The logo is natively dark, so the site offers both modes. The bootswatch
+  # theme was removed: the pkgdown documentation warns that bootswatch themes
+  # rarely work together with the light switch.
   light-switch: true
-  # Realce de codigo: o fundo do github-dark e o mesmo grafite do hexagono.
+  # Code highlighting: the github-dark background is the same graphite as the
+  # hexagon.
   theme: github-light
   theme-dark: github-dark
   bslib:
-    # Ambar do logo escurecido ate passar em contraste AA sobre fundo claro
-    # (o #f59e0b da borda do hexagono da ~2:1 sobre branco e reprovaria).
+    # Logo amber darkened until it passes AA contrast on a light background
+    # (the #f59e0b of the hexagon border gives ~2:1 on white and would fail).
     primary: "#b45309"
-    # Grafite do hexagono na navbar, igual nos dois modos.
+    # Hexagon graphite in the navbar, the same in both modes.
     navbar-bg: "#0d1117"
     base_font:
       google: "Source Sans 3"

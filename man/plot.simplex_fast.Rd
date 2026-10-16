@@ -19,7 +19,7 @@
 \code{1:4}.}
 
 \item{type}{Type of residual used in panels 1-3: \code{"quantile"} (the default;
-quantile residuals, which are exactly standard normal under a
+quantile residuals, which are approximately standard normal under a
 correctly specified model), \code{"deviance"}, \code{"pearson"} or \code{"response"}.
 See \code{\link[=residuals.simplex_fast]{residuals.simplex_fast()}}.}
 
