@@ -129,10 +129,13 @@ test_that("log.p keeps full precision in the far lower tail", {
   q <- c(0.05, 0.2, 0.5, 0.8, 0.95)
   Fq <- psimplex(q, 0.4, 1)
   Sq <- psimplex(q, 0.4, 1, lower.tail = FALSE)
-  expect_equal(psimplex(q, 0.4, 1, log.p = TRUE),
-               ifelse(Fq < 0.5, log(Fq), log1p(-Sq)), tolerance = 1e-12)
-  expect_equal(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
-               ifelse(Sq < 0.5, log(Sq), log1p(-Fq)), tolerance = 1e-12)
+  # Element-wise RELATIVE error: expect_equal() compares absolutely once the
+  # target is below its tolerance, which hides the q = 0.95 value (3e-26).
+  rel <- function(x, ref) abs(x - ref) / abs(ref)
+  expect_true(all(rel(psimplex(q, 0.4, 1, log.p = TRUE),
+                      ifelse(Fq < 0.5, log(Fq), log1p(-Sq))) < 1e-11))
+  expect_true(all(rel(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
+                      ifelse(Sq < 0.5, log(Sq), log1p(-Fq))) < 1e-11))
 })
 
 test_that("both tails keep full relative accuracy", {
