@@ -45,6 +45,18 @@ constexpr double INV_SQRT_2 = 0.707106781186547524400844362105;
 // non-portable M_PI macro).
 constexpr double SQRT_PI = 1.772453850905516027298167483341;
 
+// Error-free running-sum update (Knuth's TwoSum): s + x == t + e exactly, so
+// accumulating the error e in `c` recovers the rounding a plain `s += x` loses;
+// the compensated total is s + c. Branch-free, 6 flops, and unaffected by the
+// default -O2 (it would break under -ffast-math, which R does not use). A
+// non-finite x poisons c with NaN, so the total is non-finite as it should be.
+inline void two_sum_acc(double& s, double& c, const double x) noexcept {
+  const double t = s + x;
+  const double bv = t - s;
+  c += (s - (t - bv)) + (x - bv);
+  s = t;
+}
+
 // Integer codes for the mean link functions. These MUST match the codes used
 // on the R side: logit = 1, probit = 2, cloglog = 3, neglog = 4.
 enum MeanLink : int {

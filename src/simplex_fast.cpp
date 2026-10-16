@@ -119,13 +119,26 @@ EvalResult evaluate_impl(
 #endif
 
   // Per-thread accumulators to avoid data races; reduced after the region.
+  // The totals are blocked and compensated sums (see two_sum_acc and BLOCK
+  // below), not plain running sums. A plain sum of n = 1e6 terms reaches 8.7e5
+  // and each addition rounds at ~1e-10, so the objective was noisy in theta by
+  // ~1e-8..1e-7. At one thread the line search then could not see the ~4e-10
+  // decrease it was after: the fit stalled at a gradient of 2.7e-2 and took 608
+  // evaluations (19.2 s) against 96 (0.9 s) on eight threads, whose partial
+  // sums are 8x shorter. With this change both take 96 evaluations, and the
+  // objective is identical at 1 and 8 threads.
   std::vector<double> nll_local(static_cast<std::size_t>(threads), 0.0);
+  std::vector<double> nll_comp(static_cast<std::size_t>(threads), 0.0);
   std::vector<int> sat_local(static_cast<std::size_t>(threads), 0);
-  std::vector<vec> grad_local;
+  std::vector<vec> grad_local, grad_comp, grad_blk;
   if (need_grad) {
     grad_local.reserve(static_cast<std::size_t>(threads));
+    grad_comp.reserve(static_cast<std::size_t>(threads));
+    grad_blk.reserve(static_cast<std::size_t>(threads));
     for (int t = 0; t < threads; ++t) {
       grad_local.emplace_back(d, arma::fill::zeros);
+      grad_comp.emplace_back(d, arma::fill::zeros);
+      grad_blk.emplace_back(d, arma::fill::zeros);
     }
   }
 
@@ -139,9 +152,31 @@ EvalResult evaluate_impl(
 #ifdef _OPENMP
     tid = omp_get_thread_num();
 #endif
-    double local_nll = 0.0;
+    double local_nll = 0.0, local_nll_c = 0.0;
     int local_sat = 0;
-    vec* local_grad = need_grad ? &grad_local[static_cast<std::size_t>(tid)] : nullptr;
+    double* gs = need_grad ? grad_local[static_cast<std::size_t>(tid)].memptr() : nullptr;
+    double* gc = need_grad ? grad_comp[static_cast<std::size_t>(tid)].memptr() : nullptr;
+    double* gb = need_grad ? grad_blk[static_cast<std::size_t>(tid)].memptr() : nullptr;
+
+    // Terms go into a short plain block first (<= BLOCK of them, so its partial
+    // sums stay small and its rounding is negligible); only the block totals
+    // enter the compensated thread totals. A TwoSum on every term and component
+    // gave the same accuracy but cost +16% per evaluation at n = 1e6; this costs
+    // nothing measurable (37 ms either way).
+    constexpr uword BLOCK = 256;
+    double blk_nll = 0.0;
+    uword in_blk = 0;
+    auto flush_block = [&]() {
+      two_sum_acc(local_nll, local_nll_c, blk_nll);
+      blk_nll = 0.0;
+      if (need_grad) {
+        for (uword j = 0; j < d; ++j) {
+          two_sum_acc(gs[j], gc[j], gb[j]);
+          gb[j] = 0.0;
+        }
+      }
+      in_blk = 0;
+    };
 
 #ifdef _OPENMP
     #pragma omp for schedule(static)
@@ -203,7 +238,7 @@ EvalResult evaluate_impl(
         continue;
       }
       // Accumulate the negative log-likelihood.
-      local_nll -= loglik_i;
+      blk_nll -= loglik_i;
 
       if (need_grad) {
         // Analytic score for the mean submodel via the chain rule.
@@ -220,15 +255,18 @@ EvalResult evaluate_impl(
 
         // Gradient of the NEGATIVE log-likelihood accumulates -score * design.
         for (uword j = 0; j < p; ++j) {
-          (*local_grad)[j] -= X(i, j) * score_mu;
+          gb[j] -= X(i, j) * score_mu;
         }
         for (uword j = 0; j < q; ++j) {
-          (*local_grad)[p + j] -= Z(i, j) * score_phi;
+          gb[p + j] -= Z(i, j) * score_phi;
         }
       }
+      if (++in_blk == BLOCK) flush_block();
     }
+    flush_block();
 
     nll_local[static_cast<std::size_t>(tid)] = local_nll;
+    nll_comp[static_cast<std::size_t>(tid)] = local_nll_c;
     sat_local[static_cast<std::size_t>(tid)] = local_sat;
   }
 
@@ -236,15 +274,28 @@ EvalResult evaluate_impl(
     return {std::numeric_limits<double>::infinity(), vec(d, arma::fill::zeros), false};
   }
 
-  double nll = 0.0;
-  for (const double value : nll_local) nll += value;
+  // Cross-thread reduction, compensated as well: thread partials are summed
+  // with two_sum_acc and every thread's own error term is added at the end.
+  double nll = 0.0, nll_c = 0.0;
+  for (std::size_t t = 0; t < nll_local.size(); ++t) {
+    two_sum_acc(nll, nll_c, nll_local[t]);
+    nll_c += nll_comp[t];
+  }
+  nll += nll_c;
 
   int n_saturated = 0;
   for (const int value : sat_local) n_saturated += value;
 
   vec grad(d, arma::fill::zeros);
   if (need_grad) {
-    for (const auto& g : grad_local) grad += g;
+    vec grad_c(d, arma::fill::zeros);
+    for (std::size_t t = 0; t < grad_local.size(); ++t) {
+      for (uword j = 0; j < d; ++j) {
+        two_sum_acc(grad[j], grad_c[j], grad_local[t][j]);
+        grad_c[j] += grad_comp[t][j];
+      }
+    }
+    grad += grad_c;
   }
 
   // Only loglik_i is checked per observation, but the score can still overflow
