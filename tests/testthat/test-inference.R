@@ -1,5 +1,5 @@
 # Inference must never present a missing standard error as a confident one.
-# These tests pin the fail-safe behaviour introduced in 0.2.3 (see R/inference.R).
+# These tests pin the fail-safe behavior introduced in 0.2.3 (see R/inference.R).
 
 test_that("an exactly collinear column is dropped and reported as NA", {
   set.seed(3L)
@@ -197,6 +197,31 @@ test_that("the expected information matches high-accuracy quadrature", {
   # The small-dispersion term alone is NOT the information: it understates it by
   # a factor approaching five as phi grows.
   expect_gt((1 / (20 * 0.25^3) + 3 / 0.25) / (1 / (20 * 0.25^3)), 4)
+})
+
+# The cross term and the log(phi) entry are checked with numeric scores, not the
+# closed forms: E[s_mu s_phi] = 0 and E[s_phi^2] = 1/2 are what make the matrix
+# block diagonal, so they must hold for the density itself.
+test_that("the mean-dispersion cross term of the information is zero", {
+  skip_if_not_installed("numDeriv")
+  for (par in list(c(0.3, 1.5), c(0.7, 0.2), c(0.5, 4))) {
+    mu <- par[1]
+    phi <- par[2]
+    ld <- function(th, y) dsimplex(y, th[1], exp(th[2]), log = TRUE)
+    score <- function(y) numDeriv::grad(ld, c(mu, log(phi)), y = y)
+    expect_one <- function(h) {
+      stats::integrate(
+        function(y) vapply(y, function(yy) h(score(yy)), 0) * dsimplex(y, mu, phi),
+        0, 1, subdivisions = 2000L, rel.tol = 1e-9)$value
+    }
+    i_phi <- expect_one(function(s) s[2]^2)
+    i_mu <- expect_one(function(s) s[1]^2)
+    cross <- expect_one(function(s) s[1] * s[2])
+    expect_equal(i_phi, 0.5, tolerance = 1e-5)
+    expect_equal(i_mu, 1 / (phi * (mu * (1 - mu))^3) + 3 / (mu * (1 - mu)),
+                 tolerance = 1e-5)
+    expect_lt(abs(cross) / sqrt(i_mu * i_phi), 1e-6)
+  }
 })
 
 test_that("information = 'expected' gives an exactly block-diagonal, PD matrix", {

@@ -50,7 +50,7 @@ test_that("length-1 mu and phi are recycled against x", {
   expect_length(d_scalar, length(x))
 })
 
-test_that("vectorised mu and phi are applied element-wise", {
+test_that("vectorized mu and phi are applied element-wise", {
   x   <- c(0.2, 0.4, 0.6)
   mu  <- c(0.3, 0.5, 0.7)
   phi <- c(0.5, 1.0, 2.0)
@@ -89,6 +89,18 @@ test_that("rsimplex sample mean approximates mu", {
       tolerance = 0.02,
       info = sprintf("sample mean %g vs mu %g", mean(x), mu)
     )
+  }
+})
+
+test_that("rsimplex draws follow psimplex (Kolmogorov-Smirnov)", {
+  # The mean and quantile checks above do not test the whole law; this does.
+  # Seeded, so the p-values are fixed (0.20, 0.81, 0.39 at the time of writing).
+  set.seed(303)
+  for (par in list(c(0.3, 1.5), c(0.75, 0.3), c(0.05, 2))) {
+    x <- rsimplex(4000L, mu = par[1], phi = par[2])
+    ks <- suppressWarnings(
+      stats::ks.test(x, function(q) psimplex(q, par[1], par[2])))
+    expect_gt(ks$p.value, 0.01)
   }
 })
 
