@@ -46,7 +46,7 @@ test_that("true coefficients lie within Wald 99% confidence intervals", {
                            paste(rownames(ci)[!inside], collapse = ", ")))
 })
 
-test_that("coef() honours the model argument", {
+test_that("coef() honors the model argument", {
   sim <- make_data()
   fit <- fastsimplexreg(y ~ x1 + x2 | z1, data = sim$dat, link = "logit",
                      n_threads = 1L)
@@ -160,7 +160,7 @@ test_that("all four mean links fit and converge", {
 
 # The suite otherwise checks INTERNAL coherence -- that deviance matches the
 # residuals, that AIC matches logLik. Nothing anchored the estimates outside the
-# package. This test maximises an independently written pure-R likelihood with
+# package. This test maximizes an independently written pure-R likelihood with
 # stats::optim and requires the two to agree.
 test_that("the MLE matches an independent pure-R likelihood, for every link", {
   linkinvs <- list(

@@ -1,5 +1,5 @@
 # The simplex family must follow the base-R d/p/q/r contract. Each expectation
-# below is paired with the base-R behaviour it mirrors, so a future change that
+# below is paired with the base-R behavior it mirrors, so a future change that
 # drifts away from the convention fails here rather than surprising a user.
 
 test_that("NA propagates as NA and NaN as NaN, like dnorm/dbeta", {
@@ -9,7 +9,7 @@ test_that("NA propagates as NA and NaN as NaN, like dnorm/dbeta", {
   expect_identical(dsimplex(0.3, mu = 0.4, phi = NA), NA_real_)
   expect_identical(psimplex(c(0.3, NA), mu = 0.4, phi = 1)[2], NA_real_)
   expect_identical(qsimplex(c(0.3, NA), mu = 0.4, phi = 1)[2], NA_real_)
-  # Reference behaviour in base R.
+  # Reference behavior in base R.
   expect_identical(dnorm(NA), NA_real_)
   expect_identical(dbeta(NaN, 2, 2), NaN)
 })
@@ -92,7 +92,7 @@ test_that("qsimplex agrees with the empirical quantiles of rsimplex", {
 
 
 # The CDF is a closed form from 0.2.4 on, not adaptive quadrature. These tests
-# pin it against an INDEPENDENT route and against the tail behaviour that the
+# pin it against an INDEPENDENT route and against the tail behavior that the
 # quadrature could not deliver.
 test_that("the closed-form CDF matches seeded numerical integration", {
   ref <- function(q, mu, phi) {

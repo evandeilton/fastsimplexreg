@@ -101,7 +101,7 @@ EvalResult evaluate_impl(
   // Why not BLAS: these gemvs are memory-bound, and a threaded BLAS makes them
   // slower, not faster. Measured on a 1e6 x 2 matvec, OpenBLAS took 14.9 ms
   // across 24 threads against 5.4 ms pinned to one -- 2.8x slower FOR being
-  // parallelised. Worse, the gemvs ran serially with respect to our own OpenMP
+  // parallelized. Worse, the gemvs ran serially with respect to our own OpenMP
   // region, so they became an Amdahl ceiling: at n = 2e6 they were 24% of an
   // evaluation on one thread but 71% on sixteen, capping total speedup near 2x
   // while the observation loop itself scaled 7.5x. Folding them into the loop
@@ -593,7 +593,7 @@ Rcpp::NumericVector dsimplex_cpp(
 // Simplex distribution function in C++.
 // Evaluated from the closed form in simplex_logtail_core(); log_p is computed on
 // the log scale throughout rather than as log() of a linear value. Argument
-// conventions follow base R's p*(): `lower_tail` and `log_p` are honoured,
+// conventions follow base R's p*(): `lower_tail` and `log_p` are honored,
 // NA/NaN propagate, and invalid parameters give NaN.
 // [[Rcpp::export]]
 Rcpp::NumericVector psimplex_cpp(
@@ -662,7 +662,7 @@ Rcpp::NumericVector psimplex_cpp(
 
 // Simplex quantile function in C++.
 // Inverts psimplex_cpp() by safeguarded Newton-bisection. Argument conventions
-// follow base R's q*(): `lower_tail` and `log_p` are honoured, NA/NaN
+// follow base R's q*(): `lower_tail` and `log_p` are honored, NA/NaN
 // propagate, and a probability outside [0, 1] (or an invalid parameter) gives
 // NaN.
 // [[Rcpp::export]]

@@ -505,12 +505,12 @@ inline Rcpp::List bfgs_minimize(
       // whose magnitude is set by the units of the design. With a covariate
       // scaled by 1e5 the gradient norm reaches ~1e8, a unit step overshoots by
       // eight orders of magnitude, and the 40 halvings available bottom out at
-      // 2^-40 ~ 9.1e-13 without ever reaching a decrease -- so the optimiser
+      // 2^-40 ~ 9.1e-13 without ever reaching a decrease -- so the optimizer
       // stopped at iteration 1, reporting code 2 and a log-likelihood 155.5
       // units below the optimum that nlminb() reaches on the identical
       // objective. Scaling the first trial step so the largest parameter moves
       // by at most one closes that gap: column scales 1e5 through 1e10 all
-      // converge to the same optimum as the reference optimisers.
+      // converge to the same optimum as the reference optimizers.
       //
       // Applying this on EVERY iteration would be a serious mistake (measured:
       // +716% function evaluations) -- once H has curvature information its
@@ -545,7 +545,7 @@ inline Rcpp::List bfgs_minimize(
       // approximation, so it does not vanish at the optimum OF THE
       // APPROXIMATION and grad_tol is simply unreachable. Measured over 180
       // mixed fits, every such stop had already flattened the objective to a
-      // relative change below sqrt(rel_tol), and restarting the optimiser from
+      // relative change below sqrt(rel_tol), and restarting the optimizer from
       // that point gained ~1e-11 in log-likelihood: it is an optimum, not a
       // failure. Calling it a failure withheld the standard errors of a
       // perfectly good fit in roughly half of the nAGQ = 5 runs.

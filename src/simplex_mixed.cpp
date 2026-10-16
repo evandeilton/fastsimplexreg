@@ -267,7 +267,7 @@ EvalResult mixed_core(
       const uword nj = bb - a;
 
       // Zero-copy views over the cluster's contiguous rows (no per-cluster
-      // allocation/memcpy). Zj is kept as a materialised matrix because it is
+      // allocation/memcpy). Zj is kept as a materialized matrix because it is
       // consumed with .each_col().
       const auto Xj = X.rows(a, bb - 1);
       const mat  Zj = Z.rows(a, bb - 1);
@@ -454,7 +454,7 @@ EvalResult mixed_core(
       for (int d = 0; d < q; ++d) logdetQ += 2.0 * std::log(R(d, d));
       // Non-throwing form. arma::inv()'s value-returning overload calls
       // arma_stop_runtime_error on failure, i.e. it THROWS -- and a throw
-      // crossing an OpenMP structured block is undefined behaviour that
+      // crossing an OpenMP structured block is undefined behavior that
       // terminates the process on this toolchain (verified: SIGABRT, the outer
       // catch never runs). Every other decomposition in this region already
       // uses the bool form; this one did not. R came from a successful chol,
@@ -743,7 +743,7 @@ Rcpp::List simplex_mixed_ranef_cpp(
     if (off_mu.n_elem == y.n_elem)  eta     += off_mu.subvec(a, bb - 1);
     if (off_phi.n_elem == y.n_elem) eta_phi += off_phi.subvec(a, bb - 1);
     // Both buffers are zero-filled: arma::vec(n) leaves its memory
-    // uninitialised, and the Fisher fallback below consumes Iinfo even on the
+    // uninitialized, and the Fisher fallback below consumes Iinfo even on the
     // path where the observed loop breaks early.
     vec w2(nj, arma::fill::zeros), Iinfo(nj, arma::fill::zeros);
     // The Fisher information depends only on (mu, dmu, phi) and is always

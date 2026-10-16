@@ -35,7 +35,7 @@ test_that("the offset changes the fit rather than being ignored", {
   without <- fastsimplexreg(y ~ x1, data = d, n_threads = 1L)
 
   expect_false(isTRUE(all.equal(unname(coef(with_off)), unname(coef(without)))))
-  # The data were generated WITH the offset, so honouring it must fit better.
+  # The data were generated WITH the offset, so honoring it must fit better.
   expect_gt(with_off$logLik, without$logLik)
   # ... and must recover the generating coefficients.
   expect_equal(unname(coef(with_off)[1:2]), c(0.2, 0.7), tolerance = 0.1)
@@ -83,7 +83,7 @@ test_that("a non-finite offset that survives the model frame is refused", {
                "non-finite")
 })
 
-test_that("the mixed model honours a mean offset", {
+test_that("the mixed model honors a mean offset", {
   set.seed(5)
   J <- 40L; nj <- 8L; n <- J * nj
   d <- data.frame(g = factor(rep(seq_len(J), each = nj)),

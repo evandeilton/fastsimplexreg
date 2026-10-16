@@ -86,7 +86,7 @@ test_that("subset is evaluated inside data, not in the caller", {
   dat <- data.frame(x1 = stats::rnorm(n))
   dat$y <- rsimplex(n, simplex_linkinv(0.2 + 0.7 * dat$x1, "logit"), 1)
   # A DIFFERENT vector of the same name in the calling frame. The old code used
-  # this one; the correct behaviour is to prefer the data column.
+  # this one; the correct behavior is to prefer the data column.
   x1 <- stats::rnorm(n)
   stopifnot(sum(dat$x1 > 0) != sum(x1 > 0))   # the two must actually differ
 

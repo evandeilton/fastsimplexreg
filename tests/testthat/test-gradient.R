@@ -5,7 +5,7 @@
 #   (a) the R NLL at the fitted optimum equals -logLik(fit) (the compiled
 #       likelihood and the R reconstruction agree);
 #   (b) a finite-difference gradient of the R NLL is essentially zero at the
-#       fitted optimum (the analytic score used by the optimiser is consistent
+#       fitted optimum (the analytic score used by the optimizer is consistent
 #       with the likelihood surface);
 #   (c) at a perturbed parameter, two independent finite-difference gradients
 #       (different step sizes) agree, confirming the reconstruction is smooth
@@ -74,7 +74,7 @@ test_that("finite-difference gradient of the R NLL is ~0 at the optimum", {
   nll <- make_nll(dat$y, X, Z, "logit")
   theta_hat <- coef(fit, model = "all")
   g <- central_grad(nll, theta_hat)
-  # The optimiser converges on the analytic score; the FD gradient of the R
+  # The optimizer converges on the analytic score; the FD gradient of the R
   # NLL therefore inherits a comparably small infinity norm. A generous
   # threshold guards against finite-difference noise on n = 300 data.
   expect_lt(max(abs(g)), 1e-2)
@@ -98,7 +98,7 @@ test_that("two independent FD gradients agree at a perturbed theta", {
 
 
 # Direct check of the ANALYTIC score against numerical differentiation, for all
-# four mean links. The tests above validate the optimiser end to end but never
+# four mean links. The tests above validate the optimizer end to end but never
 # compare the analytic gradient with a numerical one; a wrong analytic score
 # typically still converges, just to the wrong point, so it deserves its own
 # direct test.

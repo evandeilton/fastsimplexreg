@@ -209,7 +209,7 @@ test_that("predict keeps the length of newdata when rows carry NA", {
 test_that("VarCorr refuses a meaningless sigma instead of ignoring it", {
   dat <- sim_mixed(J = 60L, nj = 8L)
   # Convergence is not what this test is about; this small configuration is a
-  # known hard case for the outer optimiser (unchanged from 0.2.2).
+  # known hard case for the outer optimizer (unchanged from 0.2.2).
   fit <- suppressWarnings(
     fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
                         nAGQ = 5L, n_threads = 1L, inference = FALSE))
@@ -314,7 +314,7 @@ test_that("unbalanced clusters (including singletons) are handled", {
 })
 
 
-# Convergence reporting at a modest nAGQ. Before 0.2.3 the optimiser terminated
+# Convergence reporting at a modest nAGQ. Before 0.2.3 the optimizer terminated
 # with code 2 ("line search failed") on ~26% of mixed fits over a grid of
 # 240 (J, nj, nAGQ, seed) combinations -- and, because standard errors are only
 # computed at a converged fit, those perfectly good fits silently lost their
@@ -335,7 +335,7 @@ test_that("a modest nAGQ converges instead of reporting a spurious failure", {
   expect_false(is.null(fit$vcov))
 
   # And it is a real optimum, not a stall: nudged away and refitted, the
-  # optimiser comes back to the same log-likelihood.
+  # optimizer comes back to the same log-likelihood.
   nudged <- suppressWarnings(
     fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
                         nAGQ = 5L, n_threads = 1L, inference = FALSE,
@@ -343,7 +343,7 @@ test_that("a modest nAGQ converges instead of reporting a spurious failure", {
   expect_equal(nudged$logLik, fit$logLik, tolerance = 1e-4)
 })
 
-test_that("a genuine optimiser failure is still reported as one", {
+test_that("a genuine optimizer failure is still reported as one", {
   # Softening the stopping rule must not turn every stall into a success: a run
   # that genuinely cannot take a single step keeps code 2. The stall is driven
   # through the DISPERSION here: exp(-700) underflows, so the objective is
@@ -380,7 +380,7 @@ test_that("a saturated start is escapable, and reported while it lasts", {
 
   # Escaping is only partial, and the package says so. The MEAN coefficients
   # cannot move at all from there -- their gradient is identically zero once
-  # every observation is clamped -- so the run optimises the dispersion around a
+  # every observation is clamped -- so the run optimizes the dispersion around a
   # frozen, absurd mean and lands on a genuine stationary point of the CLAMPED
   # objective, far below the real optimum. What matters is that none of that is
   # reported as a trustworthy fit.
@@ -500,7 +500,7 @@ test_that("confint on a mixed fit reports each parameter's own interval", {
   expect_error(confint(fit, level = 1.5), "strictly between 0 and 1")
 })
 
-test_that("the packed omega diagonal is labelled as a Cholesky factor when q >= 2", {
+test_that("the packed omega diagonal is labeled as a Cholesky factor when q >= 2", {
   skip_if_not_installed("MASS")
   set.seed(31)
   J <- 60L; nj <- 10L; n <- J * nj
