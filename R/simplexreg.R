@@ -318,8 +318,9 @@
 #'
 #' The mean supports the `logit`, `probit`, `cloglog` and `neglog` links; the
 #' dispersion uses a log link. The log-likelihood, the analytic score, the link
-#' inverses and the BFGS optimizer run entirely in C++. Matrix-vector products
-#' use Armadillo/BLAS and the per-observation loop may use OpenMP.
+#' inverses and the BFGS optimizer run entirely in C++. The linear predictors
+#' are accumulated inside the per-observation loop, which may use OpenMP (see
+#' `n_threads`).
 #'
 #' @param formula A multi-part formula, for example `y ~ x1 + x2 | z1 + z2`.
 #'   Each part may carry its own `offset()` term: in
@@ -334,10 +335,21 @@
 #' @param link Character string selecting the mean link: `"logit"`, `"probit"`,
 #'   `"cloglog"` or `"neglog"`.
 #' @param start Optional numeric starting vector `c(beta, gamma)`. When `NULL`,
-#'   fast link-specific starting values are used.
+#'   fast link-specific starting values are used. `beta` and `gamma` refer to the
+#'   columns that remain after aliased ones are dropped, so the length is
+#'   `ncol(X) + ncol(Z)` of the reduced designs.
 #' @param maxit Integer; the maximum number of BFGS iterations.
-#' @param rel_tol Numeric; relative tolerance on the objective function.
-#' @param grad_tol Numeric; tolerance on the infinity norm of the gradient.
+#' @param rel_tol Numeric; tolerance on the relative change of the objective
+#'   between two BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The
+#'   fit stops when this change is at most `rel_tol` and the gradient infinity
+#'   norm is at most `sqrt(grad_tol)`. It also stops, reported as converged,
+#'   when the line search can no longer find a sufficient decrease and the last
+#'   relative change was at most `sqrt(rel_tol)`.
+#' @param grad_tol Numeric; absolute tolerance on the infinity norm of the
+#'   gradient of the NEGATIVE log-likelihood. That gradient is a sum over
+#'   observations and is not scaled by `n`, so at large `n` this tolerance can
+#'   be unreachable. The fit stops as soon as the norm is at most `grad_tol`;
+#'   `sqrt(grad_tol)` is the gradient bound in the `rel_tol` rule above.
 #' @param n_threads Integer number of OpenMP threads; the loop over observations
 #'   is parallelized. Use `0` to request all threads available to the backend.
 #'   The linear predictors are accumulated inside that loop rather than through
@@ -367,12 +379,14 @@
 #'   Hessian of the negative log-likelihood obtained by central differences of
 #'   the analytic score. `"expected"` uses the exact Fisher information, which
 #'   for the simplex is available in closed form and is block diagonal in
-#'   \eqn{(\beta, \gamma)}: it needs no finite differencing, is positive
-#'   definite by construction, and is roughly twenty times cheaper. The two
-#'   agree asymptotically and, at \eqn{n = 4000}, to within 0.4\%. The default
-#'   stays `"observed"` because Efron and Hinkley (1978) argue it is the better
-#'   variance estimator for conditional inference; `"expected"` is the more
-#'   robust choice when the observed information is ill-conditioned.
+#'   \eqn{(\beta, \gamma)}: it needs no finite differencing and is positive
+#'   definite by construction. The information step is roughly 3 to 5 times
+#'   cheaper, but the total fit time changes by under about 10% because the
+#'   BFGS iterations dominate. The two agree asymptotically and, at
+#'   \eqn{n = 4000}, to within 0.4%. The default stays `"observed"` because
+#'   Efron and Hinkley (1978) argue it is the better variance estimator for
+#'   conditional inference; `"expected"` is the more robust choice when the
+#'   observed information is ill-conditioned.
 #' @param hessian_rel_step Numeric; the initial relative step for the Hessian,
 #'   obtained by central differences of the analytic gradient.
 #' @param trace Logical; if `TRUE`, prints optimizer progress.

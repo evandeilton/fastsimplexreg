@@ -24,7 +24,7 @@
 #' @param which Integer vector selecting the panels to draw, a subset of
 #'   `1:4`.
 #' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
-#'   randomized quantile residuals, which are exactly standard normal under a
+#'   quantile residuals, which are exactly standard normal under a
 #'   correctly specified model), `"deviance"`, `"pearson"` or `"response"`.
 #'   See [residuals.simplex_fast()].
 #' @param smooth Logical; if `TRUE` (the default) a LOESS smoother is added to

@@ -41,13 +41,24 @@ offset uses.}
 \code{"cloglog"} or \code{"neglog"}.}
 
 \item{start}{Optional numeric starting vector \code{c(beta, gamma)}. When \code{NULL},
-fast link-specific starting values are used.}
+fast link-specific starting values are used. \code{beta} and \code{gamma} refer to the
+columns that remain after aliased ones are dropped, so the length is
+\code{ncol(X) + ncol(Z)} of the reduced designs.}
 
 \item{maxit}{Integer; the maximum number of BFGS iterations.}
 
-\item{rel_tol}{Numeric; relative tolerance on the objective function.}
+\item{rel_tol}{Numeric; tolerance on the relative change of the objective
+between two BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The
+fit stops when this change is at most \code{rel_tol} and the gradient infinity
+norm is at most \code{sqrt(grad_tol)}. It also stops, reported as converged,
+when the line search can no longer find a sufficient decrease and the last
+relative change was at most \code{sqrt(rel_tol)}.}
 
-\item{grad_tol}{Numeric; tolerance on the infinity norm of the gradient.}
+\item{grad_tol}{Numeric; absolute tolerance on the infinity norm of the
+gradient of the NEGATIVE log-likelihood. That gradient is a sum over
+observations and is not scaled by \code{n}, so at large \code{n} this tolerance can
+be unreachable. The fit stops as soon as the norm is at most \code{grad_tol};
+\code{sqrt(grad_tol)} is the gradient bound in the \code{rel_tol} rule above.}
 
 \item{n_threads}{Integer number of OpenMP threads; the loop over observations
 is parallelized. Use \code{0} to request all threads available to the backend.
@@ -80,12 +91,14 @@ standard errors. \code{"observed"} (default) uses the observed information, the
 Hessian of the negative log-likelihood obtained by central differences of
 the analytic score. \code{"expected"} uses the exact Fisher information, which
 for the simplex is available in closed form and is block diagonal in
-\eqn{(\beta, \gamma)}: it needs no finite differencing, is positive
-definite by construction, and is roughly twenty times cheaper. The two
-agree asymptotically and, at \eqn{n = 4000}, to within 0.4\\%. The default
-stays \code{"observed"} because Efron and Hinkley (1978) argue it is the better
-variance estimator for conditional inference; \code{"expected"} is the more
-robust choice when the observed information is ill-conditioned.}
+\eqn{(\beta, \gamma)}: it needs no finite differencing and is positive
+definite by construction. The information step is roughly 3 to 5 times
+cheaper, but the total fit time changes by under about 10\% because the
+BFGS iterations dominate. The two agree asymptotically and, at
+\eqn{n = 4000}, to within 0.4\%. The default stays \code{"observed"} because
+Efron and Hinkley (1978) argue it is the better variance estimator for
+conditional inference; \code{"expected"} is the more robust choice when the
+observed information is ill-conditioned.}
 
 \item{hessian_rel_step}{Numeric; the initial relative step for the Hessian,
 obtained by central differences of the analytic gradient.}
@@ -134,8 +147,9 @@ omitted, as in \code{y ~ x1 + x2}, the dispersion is constant (equivalent to
 
 The mean supports the \code{logit}, \code{probit}, \code{cloglog} and \code{neglog} links; the
 dispersion uses a log link. The log-likelihood, the analytic score, the link
-inverses and the BFGS optimizer run entirely in C++. Matrix-vector products
-use Armadillo/BLAS and the per-observation loop may use OpenMP.
+inverses and the BFGS optimizer run entirely in C++. The linear predictors
+are accumulated inside the per-observation loop, which may use OpenMP (see
+\code{n_threads}).
 }
 \examples{
 # Simulated data with variable dispersion.

@@ -214,14 +214,27 @@
 #' @param nAGQ Number of adaptive Gauss-Hermite quadrature points per random-
 #'   effect dimension. Values below 5 are accepted but warn: the standard
 #'   errors are then unreliable (see Details). `nAGQ = 1` is the Laplace
-#'   approximation.
+#'   approximation. The default is 11 whatever the number of random effects
+#'   `q`; the tensor grid has `nAGQ^q` nodes per cluster, and the call stops
+#'   when that exceeds `1e5`.
 #' @param start Optional starting vector `c(beta, gamma, omega)`. When `NULL`,
 #'   fast link-specific values are used. As in [fastsimplexreg()], `beta` and
 #'   `gamma` refer to the columns that remain after aliased ones are dropped, so
 #'   the length is `ncol(X) + ncol(W) + q(q+1)/2` of the reduced designs.
 #' @param maxit Maximum number of BFGS iterations.
-#' @param rel_tol Relative objective tolerance.
-#' @param grad_tol Infinity-norm gradient tolerance.
+#' @param rel_tol Tolerance on the relative change of the objective between two
+#'   BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The fit stops
+#'   when this change is at most `rel_tol` and the gradient infinity norm is at
+#'   most `sqrt(grad_tol)`. It also stops, reported as converged, when the line
+#'   search can no longer find a sufficient decrease and the last relative
+#'   change was at most `sqrt(rel_tol)`; this is the usual way a fit ends at a
+#'   small `nAGQ`.
+#' @param grad_tol Absolute tolerance on the infinity norm of the gradient of
+#'   the NEGATIVE marginal log-likelihood. That gradient is a sum over clusters
+#'   and is not scaled by the number of observations, so at large sample sizes
+#'   this tolerance can be unreachable. The fit stops as soon as the norm is at
+#'   most `grad_tol`; `sqrt(grad_tol)` is the gradient bound in the `rel_tol`
+#'   rule above.
 #' @param n_threads Number of OpenMP threads; the loop over clusters is
 #'   parallelized. Zero uses all threads available to the backend. What
 #'   parallelism buys here is governed by the work per CLUSTER, not by the number
@@ -230,7 +243,7 @@
 #'   128. Eight threads is a loss for clusters smaller than about 32. If
 #'   \pkg{RhpcBLASctl} is installed it is used to pin the BLAS to one thread for
 #'   the duration of the fit and restore it afterwards, which was worth a further
-#'   34\% at four threads; installing it is optional.
+#'   34% at four threads; installing it is optional.
 #'
 #'   Results are reproducible for a fixed `n_threads`, but the per-thread
 #'   accumulators are summed in thread order, so different thread counts differ
@@ -259,9 +272,10 @@
 #'   fixed-effect parameters, `TRUE` where aliased), `omega` (the packed
 #'   log-Cholesky parameters), `D` (the Cholesky factor) and `Sigma` (the
 #'   estimated random-effect covariance), `ranef` (the empirical-Bayes modes, a
-#'   groups-by-`q` matrix) with `ranef.postvar`, `standard_errors`, `vcov` and
-#'   `hessian` (over the estimable parameters), `fitted.values` (means
-#'   conditional on the random-effect modes), `dispersion.values`,
+#'   groups-by-`q` matrix) with `ranef.postvar`, `standard_errors` (full length,
+#'   `NA` for aliased coefficients), `vcov` and `hessian` (over the estimable
+#'   parameters only), `fitted.values` (means conditional on the random-effect
+#'   modes), `dispersion.values`,
 #'   `linear.predictors`, `residuals` (response residuals), `logLik` (the
 #'   marginal log-likelihood), `AIC`, `BIC`, `nobs`, `ngrps`, `groups`, `nAGQ`,
 #'   `q`, `df` (the number of estimable parameters), `df.residual`,

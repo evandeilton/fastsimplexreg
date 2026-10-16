@@ -18,10 +18,12 @@
 #'   \item{`fitted`}{Returns the fitted means (`model = "mean"`) or fitted
 #'     dispersions (`model = "dispersion"`).}
 #'   \item{`residuals`}{Returns residuals. `type = "quantile"` (the default)
-#'     gives randomized quantile residuals in the sense of Dunn and Smyth
-#'     (1996): they are exactly standard normal under a correctly specified
-#'     model, which the other three types are not, so they are the ones to read
-#'     for diagnostics. `type = "response"` gives
+#'     gives the quantile residuals of Dunn and Smyth (1996),
+#'     \eqn{\Phi^{-1}\{F(y_i;\hat\mu_i,\hat\phi_i)\}}. Dunn and Smyth
+#'     randomize only for discrete responses, so for the simplex these residuals
+#'     are deterministic. They are exactly standard normal under a correctly
+#'     specified model, which the other three types are not, so they are the
+#'     ones to read for diagnostics. `type = "response"` gives
 #'     \eqn{y - \hat\mu}; `type = "pearson"` gives
 #'     \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 #'     variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order
@@ -63,9 +65,9 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomized
-#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-#'   standard normal under a correct model), `"response"`, `"pearson"` or
+#' @param type For `residuals`, one of `"quantile"` (the default; the quantile
+#'   residuals of Dunn and Smyth, 1996, which are exactly standard normal under
+#'   a correct model), `"response"`, `"pearson"` or
 #'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param parm For `confint`, a specification of which parameters to report,
 #'   either a vector of numeric indices or of names. Defaults to all.
@@ -183,13 +185,15 @@ deviance.simplex_fast <- function(object,
   mu <- object$fitted.values
   y <- .simplex_response(object)
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-  # The SCALED deviance carries no information whenever the dispersion submodel
-  # has an intercept: the score equation for gamma is sum(-1/2 + dev/(2 phi)) = 0
-  # over the columns of Z, so an intercept forces sum(dev_i / phi_i) = nobs
-  # EXACTLY. Measured across five different specifications on the same data it
-  # returned 250.0000 every time while the log-likelihood ranged from 70.8 to
-  # 309.1. The default is therefore the UNSCALED deviance, which does respond to
-  # the mean submodel.
+  # For the FIXED-EFFECTS fit the SCALED deviance carries no information
+  # whenever the dispersion submodel has an intercept: the score equation for
+  # gamma is sum(-1/2 + dev/(2 phi)) = 0 over the columns of Z, so an intercept
+  # forces sum(dev_i / phi_i) = nobs EXACTLY. Measured across five different
+  # specifications on the same data it returned 250.0000 every time while the
+  # log-likelihood ranged from 70.8 to 309.1. A mixed fit solves the marginal
+  # score instead, so its scaled deviance (from the conditional fitted values)
+  # is some other number: 210.4 with nobs = 240 in a simulated example. The
+  # default is the UNSCALED deviance, which does respond to the mean submodel.
   if (type == "scaled") return(sum(d / object$dispersion.values))
   sum(d)
 }

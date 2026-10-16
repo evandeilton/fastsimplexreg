@@ -188,9 +188,10 @@
   switch(
     type,
     response = y - mu,
-    # Randomized quantile residuals (Dunn and Smyth, 1996). The simplex is
-    # continuous, so no randomization is needed and these are EXACTLY standard
-    # normal under a correct model -- which neither of the other two types is.
+    # Quantile residuals (Dunn and Smyth, 1996): qnorm(F(y)), deterministic.
+    # Randomization is only needed for discrete responses; the simplex is
+    # continuous, so these are EXACTLY standard normal under a correct model --
+    # which neither of the other two types is.
     # Measured rejection rates of Shapiro-Wilk under a CORRECT model, 200
     # replicates at n = 300: quantile 0.040-0.065 against a nominal 0.05, while
     # Pearson reached 0.965, 0.975 and 1.000 as the fitted means moved away

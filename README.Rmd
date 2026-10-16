@@ -181,18 +181,21 @@ predict(fit, newdata = new_dat, type = "both")
   optimization.
 * **Native BFGS in C++**, so the optimizer does not cross the R/C++ boundary at
   each objective evaluation.
-* **Armadillo/BLAS** linear algebra for the linear predictors.
 * **OpenMP** parallelism over observations; `n_threads = 0` requests all
-  available threads.
+  available threads. The linear predictors are accumulated inside that loop,
+  not through BLAS, so threading does not depend on how your BLAS is
+  configured.
 * **A single `model.frame`** for both submodels, guaranteeing consistent
   handling of `subset`, `NA`, factors and levels.
 * **Optional inference**: pass `inference = FALSE` to skip the Hessian for
   exploratory fits on massive data.
 * **Closed-form expected information**: `information = "expected"` replaces the
   finite-differenced observed information with the exact Fisher information,
-  which is block diagonal in $(\boldsymbol\beta, \boldsymbol\gamma)$, positive
-  definite by construction and about twenty times cheaper. The default stays
-  `"observed"`, following Efron and Hinkley (1978).
+  which is block diagonal in $(\boldsymbol\beta, \boldsymbol\gamma)$ and
+  positive definite by construction. The information step is roughly 3 to 5
+  times cheaper, but the total fit time changes by under about 10% because the
+  BFGS iterations dominate. The default stays `"observed"`, following Efron and
+  Hinkley (1978).
 
 In head-to-head benchmarks, `fastsimplexreg` returns **numerically identical
 maximum-likelihood estimates** to the CRAN package `simplexreg` (fitted-mean

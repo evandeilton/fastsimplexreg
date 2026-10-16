@@ -52,9 +52,9 @@ named \code{object}, \code{x} or \code{formula} to match the corresponding gener
 
 \item{...}{Additional arguments, currently ignored.}
 
-\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomized
-quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-standard normal under a correct model), \code{"response"}, \code{"pearson"} or
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; the quantile
+residuals of Dunn and Smyth, 1996, which are exactly standard normal under
+a correct model), \code{"response"}, \code{"pearson"} or
 \code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
 
 \item{formula.}{For \code{update}, a change to the model formula, following the
@@ -96,10 +96,12 @@ and \code{nobs}, and class \code{"logLik"}.}
 \item{\code{fitted}}{Returns the fitted means (\code{model = "mean"}) or fitted
 dispersions (\code{model = "dispersion"}).}
 \item{\code{residuals}}{Returns residuals. \code{type = "quantile"} (the default)
-gives randomized quantile residuals in the sense of Dunn and Smyth
-(1996): they are exactly standard normal under a correctly specified
-model, which the other three types are not, so they are the ones to read
-for diagnostics. \code{type = "response"} gives
+gives the quantile residuals of Dunn and Smyth (1996),
+\eqn{\Phi^{-1}\{F(y_i;\hat\mu_i,\hat\phi_i)\}}. Dunn and Smyth
+randomize only for discrete responses, so for the simplex these residuals
+are deterministic. They are exactly standard normal under a correctly
+specified model, which the other three types are not, so they are the
+ones to read for diagnostics. \code{type = "response"} gives
 \eqn{y - \hat\mu}; \code{type = "pearson"} gives
 \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order

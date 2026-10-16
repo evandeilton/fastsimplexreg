@@ -71,8 +71,9 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   \item{`ngrps`}{Number of groups.}
 #'   \item{`fitted`}{Fitted means (conditional on the empirical-Bayes random
 #'     effects) or fitted dispersions.}
-#'   \item{`residuals`}{Randomized quantile (the default), response, Pearson or
-#'     deviance residuals, conditional on the empirical-Bayes random effects.}
+#'   \item{`residuals`}{Quantile (the default; Dunn and Smyth, 1996), response,
+#'     Pearson or deviance residuals, conditional on the empirical-Bayes random
+#'     effects.}
 #'   \item{`ranef`}{Empirical-Bayes random-effect modes (a groups-by-`q`
 #'     matrix); with `postVar = TRUE`, the posterior covariances are attached as
 #'     the `"postVar"` attribute.}
@@ -105,11 +106,9 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, one of `"mean"` or `"dispersion"`; for `model.matrix` and
 #'   `terms`, one of `"mean"`, `"dispersion"` or `"random"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomized
-#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-#'   standard normal under a correctly specified model), `"response"`,
-#'   `"pearson"` or `"deviance"`. For `deviance`, `"unscaled"` (default) or
-#'   `"scaled"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; the quantile
+#'   residuals of Dunn and Smyth, 1996), `"response"`, `"pearson"` or
+#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param postVar For `ranef`, logical; attach posterior covariances.
 #' @param parm For `confint`, which parameters to report: numeric positions or
 #'   names, over the full vector `c(beta, gamma, omega)`. Defaults to all.
@@ -511,7 +510,7 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
 #' @param x A fitted `"simplex_fast_mixed"` object.
 #' @param which Integer subset of `1:4` selecting panels.
 #' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
-#'   randomized quantile residuals), `"deviance"`, `"pearson"` or
+#'   quantile residuals), `"deviance"`, `"pearson"` or
 #'   `"response"`. See [residuals.simplex_fast_mixed()].
 #' @param smooth Logical; add a LOESS smoother.
 #' @param ... Additional arguments, currently ignored.

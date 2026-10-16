@@ -47,7 +47,9 @@ random intercept; \code{~ 1 + x1 | group} a random intercept and slope.}
 \item{nAGQ}{Number of adaptive Gauss-Hermite quadrature points per random-
 effect dimension. Values below 5 are accepted but warn: the standard
 errors are then unreliable (see Details). \code{nAGQ = 1} is the Laplace
-approximation.}
+approximation. The default is 11 whatever the number of random effects
+\code{q}; the tensor grid has \code{nAGQ^q} nodes per cluster, and the call stops
+when that exceeds \code{1e5}.}
 
 \item{start}{Optional starting vector \code{c(beta, gamma, omega)}. When \code{NULL},
 fast link-specific values are used. As in \code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{beta} and
@@ -56,9 +58,20 @@ the length is \code{ncol(X) + ncol(W) + q(q+1)/2} of the reduced designs.}
 
 \item{maxit}{Maximum number of BFGS iterations.}
 
-\item{rel_tol}{Relative objective tolerance.}
+\item{rel_tol}{Tolerance on the relative change of the objective between two
+BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The fit stops
+when this change is at most \code{rel_tol} and the gradient infinity norm is at
+most \code{sqrt(grad_tol)}. It also stops, reported as converged, when the line
+search can no longer find a sufficient decrease and the last relative
+change was at most \code{sqrt(rel_tol)}; this is the usual way a fit ends at a
+small \code{nAGQ}.}
 
-\item{grad_tol}{Infinity-norm gradient tolerance.}
+\item{grad_tol}{Absolute tolerance on the infinity norm of the gradient of
+the NEGATIVE marginal log-likelihood. That gradient is a sum over clusters
+and is not scaled by the number of observations, so at large sample sizes
+this tolerance can be unreachable. The fit stops as soon as the norm is at
+most \code{grad_tol}; \code{sqrt(grad_tol)} is the gradient bound in the \code{rel_tol}
+rule above.}
 
 \item{n_threads}{Number of OpenMP threads; the loop over clusters is
 parallelized. Zero uses all threads available to the backend. What
@@ -68,7 +81,7 @@ threads was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x with
 128. Eight threads is a loss for clusters smaller than about 32. If
 \pkg{RhpcBLASctl} is installed it is used to pin the BLAS to one thread for
 the duration of the fit and restore it afterwards, which was worth a further
-34\\% at four threads; installing it is optional.
+34\% at four threads; installing it is optional.
 
 Results are reproducible for a fixed \code{n_threads}, but the per-thread
 accumulators are summed in thread order, so different thread counts differ
@@ -106,9 +119,10 @@ with \code{NA} for aliased coefficients), \code{aliased} (a named logical over t
 fixed-effect parameters, \code{TRUE} where aliased), \code{omega} (the packed
 log-Cholesky parameters), \code{D} (the Cholesky factor) and \code{Sigma} (the
 estimated random-effect covariance), \code{ranef} (the empirical-Bayes modes, a
-groups-by-\code{q} matrix) with \code{ranef.postvar}, \code{standard_errors}, \code{vcov} and
-\code{hessian} (over the estimable parameters), \code{fitted.values} (means
-conditional on the random-effect modes), \code{dispersion.values},
+groups-by-\code{q} matrix) with \code{ranef.postvar}, \code{standard_errors} (full length,
+\code{NA} for aliased coefficients), \code{vcov} and \code{hessian} (over the estimable
+parameters only), \code{fitted.values} (means conditional on the random-effect
+modes), \code{dispersion.values},
 \code{linear.predictors}, \code{residuals} (response residuals), \code{logLik} (the
 marginal log-likelihood), \code{AIC}, \code{BIC}, \code{nobs}, \code{ngrps}, \code{groups}, \code{nAGQ},
 \code{q}, \code{df} (the number of estimable parameters), \code{df.residual},

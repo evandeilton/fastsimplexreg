@@ -57,11 +57,9 @@ names, over the full vector \code{c(beta, gamma, omega)}. Defaults to all.}
 
 \item{level}{For \code{confint}, the confidence level.}
 
-\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomized
-quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-standard normal under a correctly specified model), \code{"response"},
-\code{"pearson"} or \code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or
-\code{"scaled"}.}
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; the quantile
+residuals of Dunn and Smyth, 1996), \code{"response"}, \code{"pearson"} or
+\code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
 
 \item{nsim}{For \code{simulate}, the number of response vectors to draw.}
 
@@ -105,8 +103,9 @@ included) and \code{nobs}.}
 \item{\code{ngrps}}{Number of groups.}
 \item{\code{fitted}}{Fitted means (conditional on the empirical-Bayes random
 effects) or fitted dispersions.}
-\item{\code{residuals}}{Randomized quantile (the default), response, Pearson or
-deviance residuals, conditional on the empirical-Bayes random effects.}
+\item{\code{residuals}}{Quantile (the default; Dunn and Smyth, 1996), response,
+Pearson or deviance residuals, conditional on the empirical-Bayes random
+effects.}
 \item{\code{ranef}}{Empirical-Bayes random-effect modes (a groups-by-\code{q}
 matrix); with \code{postVar = TRUE}, the posterior covariances are attached as
 the \code{"postVar"} attribute.}

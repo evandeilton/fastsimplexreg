@@ -55,7 +55,7 @@ below carries a measured proof in `tests/testthat`.
   to 1.8e-13. `log.p` is now computed on the log scale throughout:
   `psimplex(0.15, 0.5, 0.01, log.p = TRUE)` returned `-Inf` where the true
   value is `-773.216`.
-* **Randomized quantile residuals, and they are now the default.** Under a
+* **Quantile residuals (Dunn and Smyth, 1996) are now the default.** Under a
   correct model, Pearson residuals rejected up to 100% of fits in a
   Shapiro-Wilk check -- and Pearson was what `summary()` printed as its
   residual summary. Quantile residuals hold their nominal rate.
