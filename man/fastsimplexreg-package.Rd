@@ -11,7 +11,7 @@ supports separate submodels for the mean and the dispersion through a
 multi-part \link[Formula:Formula]{Formula::Formula} interface (\code{y ~ x1 + x2 | z1 + z2}), four mean
 links (\code{logit}, \code{probit}, \code{cloglog}, \code{neglog}) and a log link for the
 dispersion. The entire numerical hot path -- log-likelihood, analytic score,
-native BFGS optimiser, density, random generation, prediction and link
+native BFGS optimizer, density, random generation, prediction and link
 inverses -- is implemented in C++ with RcppArmadillo, BLAS/LAPACK and
 optional OpenMP parallelism, so that models scale to large data sets.
 }

@@ -79,6 +79,32 @@ test_that("analytic AGHQ gradient matches numerical differentiation", {
   expect_equal(ga, gn, tolerance = 1e-4)
 })
 
+test_that("the AGHQ gradient also matches numDeriv with a probit link and with q = 2", {
+  skip_if_not_installed("numDeriv")
+  ns <- getNamespace("fastsimplexreg")
+  # (q, link, theta); omega = (log d11, d21, log d22) for q = 2.
+  cases <- list(
+    list(q = 1L, link = 2L, th = c(0.2, -0.5, -0.3, 0.1, log(0.4))),
+    list(q = 2L, link = 1L, th = c(0.3, -0.6, -0.2, 0.3, log(0.5), 0.1, log(0.3)))
+  )
+  for (cs in cases) {
+    dat <- sim_mixed(J = 30L, nj = 8L, q = cs$q)
+    X <- cbind(1, dat$x1); W <- cbind(1, dat$z1)
+    Z <- if (cs$q == 1L) matrix(1, nrow(dat), 1) else cbind(1, dat$x1)
+    gi <- as.integer(dat$g); ord <- order(gi)
+    starts <- as.integer(c(0, cumsum(tabulate(gi, nlevels(dat$g)))))
+    yo <- dat$y[ord]; Xo <- X[ord, , drop = FALSE]; Zo <- Z[ord, , drop = FALSE]
+    Wo <- W[ord, , drop = FALSE]
+    f <- function(p) ns$simplex_mixed_eval_cpp(p, yo, Xo, Zo, Wo, starts, cs$q, cs$link,
+                                               25L, 1L)$value
+    ga <- as.numeric(ns$simplex_mixed_eval_cpp(cs$th, yo, Xo, Zo, Wo, starts, cs$q,
+                                               cs$link, 25L, 1L)$gradient)
+    gn <- numDeriv::grad(f, cs$th)
+    # Measured 8e-11 (probit) and 2e-10 (q = 2); 1e-6 leaves room for platforms.
+    expect_lt(max(abs(ga - gn)) / max(abs(gn)), 1e-6)
+  }
+})
+
 test_that("a random intercept + slope model (q = 2) fits", {
   dat <- sim_mixed(J = 120L, nj = 12L, sigma = 0.6, q = 2L)
   fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 + x1 | g, data = dat,
@@ -183,7 +209,7 @@ test_that("predict keeps the length of newdata when rows carry NA", {
 test_that("VarCorr refuses a meaningless sigma instead of ignoring it", {
   dat <- sim_mixed(J = 60L, nj = 8L)
   # Convergence is not what this test is about; this small configuration is a
-  # known hard case for the outer optimiser (unchanged from 0.2.2).
+  # known hard case for the outer optimizer (unchanged from 0.2.2).
   fit <- suppressWarnings(
     fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
                         nAGQ = 5L, n_threads = 1L, inference = FALSE))
@@ -230,7 +256,7 @@ test_that("malformed cluster offsets error cleanly instead of crashing", {
                "0, ..., nrow", fixed = TRUE)
 })
 
-test_that("non-convergence is signalled and standard errors are withheld", {
+test_that("non-convergence is signaled and standard errors are withheld", {
   # This used to rely on cloglog happening to miss the gradient tolerance on
   # this data -- an accident that the 0.2.3 stopping rule removed. Drive the
   # failure deliberately instead: one iteration from a start far outside the
@@ -288,7 +314,7 @@ test_that("unbalanced clusters (including singletons) are handled", {
 })
 
 
-# Convergence reporting at a modest nAGQ. Before 0.2.3 the optimiser terminated
+# Convergence reporting at a modest nAGQ. Before 0.2.3 the optimizer terminated
 # with code 2 ("line search failed") on ~26% of mixed fits over a grid of
 # 240 (J, nj, nAGQ, seed) combinations -- and, because standard errors are only
 # computed at a converged fit, those perfectly good fits silently lost their
@@ -309,7 +335,7 @@ test_that("a modest nAGQ converges instead of reporting a spurious failure", {
   expect_false(is.null(fit$vcov))
 
   # And it is a real optimum, not a stall: nudged away and refitted, the
-  # optimiser comes back to the same log-likelihood.
+  # optimizer comes back to the same log-likelihood.
   nudged <- suppressWarnings(
     fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 | g, data = dat,
                         nAGQ = 5L, n_threads = 1L, inference = FALSE,
@@ -317,7 +343,7 @@ test_that("a modest nAGQ converges instead of reporting a spurious failure", {
   expect_equal(nudged$logLik, fit$logLik, tolerance = 1e-4)
 })
 
-test_that("a genuine optimiser failure is still reported as one", {
+test_that("a genuine optimizer failure is still reported as one", {
   # Softening the stopping rule must not turn every stall into a success: a run
   # that genuinely cannot take a single step keeps code 2. The stall is driven
   # through the DISPERSION here: exp(-700) underflows, so the objective is
@@ -354,7 +380,7 @@ test_that("a saturated start is escapable, and reported while it lasts", {
 
   # Escaping is only partial, and the package says so. The MEAN coefficients
   # cannot move at all from there -- their gradient is identically zero once
-  # every observation is clamped -- so the run optimises the dispersion around a
+  # every observation is clamped -- so the run optimizes the dispersion around a
   # frozen, absurd mean and lands on a genuine stationary point of the CLAMPED
   # objective, far below the real optimum. What matters is that none of that is
   # reported as a trustworthy fit.
@@ -474,7 +500,7 @@ test_that("confint on a mixed fit reports each parameter's own interval", {
   expect_error(confint(fit, level = 1.5), "strictly between 0 and 1")
 })
 
-test_that("the packed omega diagonal is labelled as a Cholesky factor when q >= 2", {
+test_that("the packed omega diagonal is labeled as a Cholesky factor when q >= 2", {
   skip_if_not_installed("MASS")
   set.seed(31)
   J <- 60L; nj <- 10L; n <- J * nj

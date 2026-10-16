@@ -1,5 +1,5 @@
 # The simplex family must follow the base-R d/p/q/r contract. Each expectation
-# below is paired with the base-R behaviour it mirrors, so a future change that
+# below is paired with the base-R behavior it mirrors, so a future change that
 # drifts away from the convention fails here rather than surprising a user.
 
 test_that("NA propagates as NA and NaN as NaN, like dnorm/dbeta", {
@@ -9,7 +9,7 @@ test_that("NA propagates as NA and NaN as NaN, like dnorm/dbeta", {
   expect_identical(dsimplex(0.3, mu = 0.4, phi = NA), NA_real_)
   expect_identical(psimplex(c(0.3, NA), mu = 0.4, phi = 1)[2], NA_real_)
   expect_identical(qsimplex(c(0.3, NA), mu = 0.4, phi = 1)[2], NA_real_)
-  # Reference behaviour in base R.
+  # Reference behavior in base R.
   expect_identical(dnorm(NA), NA_real_)
   expect_identical(dbeta(NaN, 2, 2), NaN)
 })
@@ -92,7 +92,7 @@ test_that("qsimplex agrees with the empirical quantiles of rsimplex", {
 
 
 # The CDF is a closed form from 0.2.4 on, not adaptive quadrature. These tests
-# pin it against an INDEPENDENT route and against the tail behaviour that the
+# pin it against an INDEPENDENT route and against the tail behavior that the
 # quadrature could not deliver.
 test_that("the closed-form CDF matches seeded numerical integration", {
   ref <- function(q, mu, phi) {
@@ -122,12 +122,20 @@ test_that("log.p keeps full precision in the far lower tail", {
   expect_equal(psimplex(0.15, 0.5, 0.01, log.p = TRUE), -773.2159, tolerance = 1e-4)
   expect_true(is.finite(psimplex(0.4, 0.5, 1e-4, log.p = TRUE)))
   expect_lt(psimplex(0.4, 0.5, 1e-4, log.p = TRUE), -3000)
-  # Consistent with the linear scale wherever the linear scale still works.
+  # Consistent with the linear scale wherever the linear scale still works. The
+  # reference for a tail above 1/2 is log1p(-other tail): log() of a linear value
+  # that rounds to 1 has itself lost the digits (q = 0.95 has S = 3e-26, so F is
+  # exactly 1 and log(F) = 0), so the plain log(F) comparison was too weak.
   q <- c(0.05, 0.2, 0.5, 0.8, 0.95)
-  expect_equal(psimplex(q, 0.4, 1, log.p = TRUE), log(psimplex(q, 0.4, 1)),
-               tolerance = 1e-12)
-  expect_equal(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
-               log(psimplex(q, 0.4, 1, lower.tail = FALSE)), tolerance = 1e-12)
+  Fq <- psimplex(q, 0.4, 1)
+  Sq <- psimplex(q, 0.4, 1, lower.tail = FALSE)
+  # Element-wise RELATIVE error: expect_equal() compares absolutely once the
+  # target is below its tolerance, which hides the q = 0.95 value (3e-26).
+  rel <- function(x, ref) abs(x - ref) / abs(ref)
+  expect_true(all(rel(psimplex(q, 0.4, 1, log.p = TRUE),
+                      ifelse(Fq < 0.5, log(Fq), log1p(-Sq))) < 1e-11))
+  expect_true(all(rel(psimplex(q, 0.4, 1, lower.tail = FALSE, log.p = TRUE),
+                      ifelse(Sq < 0.5, log(Sq), log1p(-Fq))) < 1e-11))
 })
 
 test_that("both tails keep full relative accuracy", {

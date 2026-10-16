@@ -45,6 +45,25 @@ test_that("the objective agrees across thread counts to floating-point noise", {
   expect_true(is.finite(ref$value))
 })
 
+test_that("the objective and score are compensated sums: thread counts agree to ~1 ulp", {
+  # A plain running sum of 2e5 terms drifts by ~1e-14 relative and differently
+  # per thread count; at n = 1e6 that noise stalled the one-thread line search
+  # (608 evaluations against 96 on eight threads). Per-observation terms are
+  # bit-identical across thread counts, so any difference here is summation.
+  set.seed(5)
+  n <- 2e5L
+  X <- cbind(1, rnorm(n), rbinom(n, 1L, 0.4)); Z <- cbind(1, rnorm(n))
+  y <- rsimplex(n, simplex_linkinv(as.numeric(X %*% c(-0.3, 0.8, -0.5)), "logit"),
+                exp(as.numeric(Z %*% c(0.5, 0.4))))
+  th <- c(-0.2, 0.7, -0.4, 0.4, 0.5)   # off the optimum, so the score entries are O(n)
+  r1 <- fastsimplexreg:::simplex_eval_cpp(th, y, X, Z, 1L, 1L)
+  for (k in c(2L, 8L)) {
+    rk <- fastsimplexreg:::simplex_eval_cpp(th, y, X, Z, 1L, k)
+    expect_lt(abs(rk$value - r1$value) / abs(r1$value), 1e-15)
+    expect_lt(max(abs(rk$gradient - r1$gradient)) / max(abs(r1$gradient)), 1e-15)
+  }
+})
+
 test_that("a fit gives the same answer at any thread count", {
   set.seed(6)
   n <- 3e4L

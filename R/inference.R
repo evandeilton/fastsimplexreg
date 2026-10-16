@@ -8,7 +8,7 @@
 # large negative variances, and the floor turns them into a standard error of
 # exactly 0 -- i.e. z = Inf and p = 0 for a parameter the data cannot identify.
 # A missing standard error must never be reported as a confident one, so this
-# helper works from the eigen-decomposition of the symmetrised Hessian and:
+# helper works from the eigen-decomposition of the symmetrized Hessian and:
 #
 #   * inverts only the strictly positive part of the spectrum (a Moore-Penrose
 #     pseudo-inverse restricted to the directions that carry real curvature);
@@ -88,7 +88,7 @@
 
   # A parameter is unidentified if it has appreciable loading on a discarded
   # eigen-direction; its variance from the pseudo-inverse is a minimum-norm
-  # artefact, not an estimate, so it is reported as NA rather than as a number.
+  # artifact, not an estimate, so it is reported as NA rather than as a number.
   affected <- rep(FALSE, d)
   if (any(!keep)) {
     loading <- sqrt(rowSums(V[, !keep, drop = FALSE]^2))
@@ -105,7 +105,7 @@
     warning(what, ": the observed information matrix is not positive definite (",
             sum(negative), " negative eigenvalue(s) on the correlation scale, ",
             "smallest = ", format(min(lambda), digits = 3),
-            "). The optimiser did not reach a maximum, so the covariance matrix ",
+            "). The optimizer did not reach a maximum, so the covariance matrix ",
             "is not a valid variance estimate; standard errors for ",
             paste(unique(par_names[affected]), collapse = ", "),
             " are reported as NA.", call. = FALSE)
@@ -188,9 +188,11 @@
   switch(
     type,
     response = y - mu,
-    # Randomized quantile residuals (Dunn and Smyth, 1996). The simplex is
-    # continuous, so no randomization is needed and these are EXACTLY standard
-    # normal under a correct model -- which neither of the other two types is.
+    # Quantile residuals (Dunn and Smyth, 1996): qnorm(F(y)), deterministic.
+    # Randomization is only needed for discrete responses; the simplex is
+    # continuous, so these are approximately standard normal under a correct
+    # model (exactly so at the true parameters) -- which neither of the other
+    # two types is.
     # Measured rejection rates of Shapiro-Wilk under a CORRECT model, 200
     # replicates at n = 300: quantile 0.040-0.065 against a nominal 0.05, while
     # Pearson reached 0.965, 0.975 and 1.000 as the fitted means moved away
@@ -239,6 +241,16 @@
 # betareg, whose coef() reads "(Intercept)", "x1", "(phi)_(Intercept)".
 .simplex_par_names <- function(mean_names, disp_names) {
   c(mean_names, paste0("(phi)_", disp_names))
+}
+
+
+# Internal: number of ESTIMABLE parameters of a fit. `par` keeps one slot per
+# column of the full design, with NA for the aliased ones (flagged in `aliased`,
+# which covers the fixed effects only), so those are subtracted from its length.
+# For a mixed fit the variance components in `par` are all estimable.
+.simplex_n_est <- function(object) {
+  al <- object[["aliased"]]
+  length(object$par) - if (is.null(al)) 0L else sum(al)
 }
 
 

@@ -3,7 +3,7 @@
 #' @description
 #' Standard extractor methods for objects of class `"simplex_fast"` produced by
 #' [fastsimplexreg()]. They mirror the conventions of the corresponding generics
-#' for linear and generalised linear models.
+#' for linear and generalized linear models.
 #'
 #' \describe{
 #'   \item{`coef`}{Returns the estimated coefficients. `model = "all"` returns
@@ -11,16 +11,20 @@
 #'     dispersion submodel.}
 #'   \item{`vcov`}{Returns the variance-covariance matrix of the estimates.
 #'     Errors if the model was fitted with `inference = FALSE`.}
-#'   \item{`logLik`}{Returns the maximised log-likelihood, with attributes `df`
-#'     (number of estimated parameters) and `nobs`, and class `"logLik"`.}
+#'   \item{`logLik`}{Returns the maximized log-likelihood, with attributes `df`
+#'     (number of estimated parameters; aliased coefficients are not counted)
+#'     and `nobs`, and class `"logLik"`.}
 #'   \item{`nobs`}{Returns the number of observations used in the fit.}
 #'   \item{`fitted`}{Returns the fitted means (`model = "mean"`) or fitted
 #'     dispersions (`model = "dispersion"`).}
 #'   \item{`residuals`}{Returns residuals. `type = "quantile"` (the default)
-#'     gives randomised quantile residuals in the sense of Dunn and Smyth
-#'     (1996): they are exactly standard normal under a correctly specified
-#'     model, which the other three types are not, so they are the ones to read
-#'     for diagnostics. `type = "response"` gives
+#'     gives the quantile residuals of Dunn and Smyth (1996),
+#'     \eqn{\Phi^{-1}\{F(y_i;\hat\mu_i,\hat\phi_i)\}}. Dunn and Smyth
+#'     randomize only for discrete responses, so for the simplex these residuals
+#'     are deterministic. They are approximately standard normal under a
+#'     correctly specified model (exactly so at the true parameters), which the
+#'     other three types are not, so they are the ones to read for diagnostics.
+#'     `type = "response"` gives
 #'     \eqn{y - \hat\mu}; `type = "pearson"` gives
 #'     \eqn{(y - \hat\mu) / \sqrt{\hat\phi\, V(\hat\mu)}} with the simplex unit
 #'     variance function \eqn{V(\mu) = \{\mu(1-\mu)\}^3}, i.e. the first-order
@@ -62,10 +66,10 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomised
-#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-#'   standard normal under a correct model), `"response"`, `"pearson"` or
-#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; the quantile
+#'   residuals of Dunn and Smyth, 1996, which are approximately standard normal
+#'   under a correct model), `"response"`, `"pearson"` or `"deviance"`. For
+#'   `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param parm For `confint`, a specification of which parameters to report,
 #'   either a vector of numeric indices or of names. Defaults to all.
 #' @param level For `confint`, the confidence level.
@@ -134,7 +138,10 @@ vcov.simplex_fast <- function(object, ...) {
 #' @export
 logLik.simplex_fast <- function(object, ...) {
   out <- object$logLik
-  attr(out, "df") <- length(object$par)
+  # Count the ESTIMABLE parameters: `par` carries NA for aliased coefficients,
+  # which were dropped before fitting and cost no degree of freedom. Counting
+  # them made AIC()/BIC() disagree with the AIC/BIC stored on the fit.
+  attr(out, "df") <- .simplex_n_est(object)
   attr(out, "nobs") <- object$nobs
   class(out) <- "logLik"
   out
@@ -169,17 +176,25 @@ residuals.simplex_fast <- function(object, type = c("quantile", "response", "pea
 #' @export
 deviance.simplex_fast <- function(object,
                                   type = c("unscaled", "scaled"), ...) {
-  type <- match.arg(type)
+  .simplex_deviance(object, match.arg(type))
+}
+
+
+# Internal: simplex deviance of a fit, from its (conditional) fitted values.
+# Shared by the fixed-effects and mixed-effects deviance() methods.
+.simplex_deviance <- function(object, type) {
   mu <- object$fitted.values
   y <- .simplex_response(object)
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
-  # The SCALED deviance carries no information whenever the dispersion submodel
-  # has an intercept: the score equation for gamma is sum(-1/2 + dev/(2 phi)) = 0
-  # over the columns of Z, so an intercept forces sum(dev_i / phi_i) = nobs
-  # EXACTLY. Measured across five different specifications on the same data it
-  # returned 250.0000 every time while the log-likelihood ranged from 70.8 to
-  # 309.1. The default is therefore the UNSCALED deviance, which does respond to
-  # the mean submodel.
+  # For the FIXED-EFFECTS fit the SCALED deviance carries no information
+  # whenever the dispersion submodel has an intercept: the score equation for
+  # gamma is sum(-1/2 + dev/(2 phi)) = 0 over the columns of Z, so an intercept
+  # forces sum(dev_i / phi_i) = nobs EXACTLY. Measured across five different
+  # specifications on the same data it returned 250.0000 every time while the
+  # log-likelihood ranged from 70.8 to 309.1. A mixed fit solves the marginal
+  # score instead, so its scaled deviance (from the conditional fitted values)
+  # is some other number: 210.4 with nobs = 240 in a simulated example. The
+  # default is the UNSCALED deviance, which does respond to the mean submodel.
   if (type == "scaled") return(sum(d / object$dispersion.values))
   sum(d)
 }
@@ -455,7 +470,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 }
 
 
-#' @title Summarise a Simplex Regression Fit
+#' @title Summarize a Simplex Regression Fit
 #'
 #' @description
 #' Produces a summary of a fitted `"simplex_fast"` object, including coefficient
@@ -471,7 +486,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 #'   component `coefficients` is itself a list with the `mean` and `dispersion`
 #'   coefficient tables (each with columns `Estimate`, `Std. Error`, `z value`
 #'   and `Pr(>|z|)`), together with the quantile residuals, the links, fit
-#'   statistics (log-likelihood, AIC, BIC, deviance) and optimiser diagnostics.
+#'   statistics (log-likelihood, AIC, BIC, deviance) and optimizer diagnostics.
 #'   The `print` method returns its argument invisibly.
 #'
 #' @seealso [fastsimplexreg()], [print.simplex_fast()]
@@ -528,7 +543,7 @@ summary.simplex_fast <- function(object, ...) {
       vcov_condition = object$vcov_condition,
       n_saturated = object$n_saturated,
       aliased = object$aliased,
-      npar = length(object$par),
+      npar = .simplex_n_est(object),   # estimable parameters, as in the vcov
       no_inference = is.null(object$vcov),
       convergence = object$convergence,
       message = object$message,
@@ -603,6 +618,14 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
 #'
 #' @export
 simulate.simplex_fast <- function(object, nsim = 1, seed = NULL, ...) {
+  .simplex_simulate(object, nsim, seed)
+}
+
+
+# Internal: RNG bookkeeping and drawing shared by the simulate() methods of both
+# fit classes. Draws from the stored fitted means (conditional on the
+# empirical-Bayes random effects for a mixed fit) and dispersions.
+.simplex_simulate <- function(object, nsim, seed) {
   nsim <- as.integer(nsim)
   if (length(nsim) != 1L || is.na(nsim) || nsim < 1L) {
     stop("'nsim' must be a single positive integer.", call. = FALSE)

@@ -1,5 +1,5 @@
 # Inference must never present a missing standard error as a confident one.
-# These tests pin the fail-safe behaviour introduced in 0.2.3 (see R/inference.R).
+# These tests pin the fail-safe behavior introduced in 0.2.3 (see R/inference.R).
 
 test_that("an exactly collinear column is dropped and reported as NA", {
   set.seed(3L)
@@ -37,6 +37,41 @@ test_that("an exactly collinear column is dropped and reported as NA", {
   expect_length(fitted(fit), n)
   expect_equal(unname(predict(fit, newdata = dat[1:5, ])),
                unname(predict(fit)[1:5]))
+})
+
+test_that("logLik, AIC and BIC count the estimable parameters only", {
+  set.seed(5L)
+  n <- 250L
+  dat <- data.frame(x1 = rnorm(n), z1 = rnorm(n))
+  dat$x2 <- 2 * dat$x1                   # aliased with x1
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"),
+                    exp(-0.4 + 0.3 * dat$z1))
+
+  fit <- suppressWarnings(
+    fastsimplexreg(y ~ x1 + x2 | z1, data = dat, n_threads = 1L))
+  reduced <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L)
+
+  # `par` has 5 slots (one is NA) but only 4 parameters were estimated.
+  k <- sum(!is.na(fit$par))
+  expect_identical(k, 4L)
+  expect_identical(length(fit$par), 5L)
+  expect_equal(attr(logLik(fit), "df"), k)
+  expect_equal(AIC(fit), fit$AIC)
+  expect_equal(BIC(fit), fit$BIC)
+  expect_equal(AIC(fit), AIC(reduced), tolerance = 1e-8)
+  expect_equal(BIC(fit), BIC(reduced), tolerance = 1e-8)
+  expect_equal(fit$df.residual, n - k)
+
+  # summary() reports the same count, so its rank line is not off by one.
+  expect_equal(summary(fit)$npar, k)
+  out <- capture.output(print(summary(fit)))
+  expect_false(any(grepl("Moore-Penrose", out)))
+
+  # Without aliasing nothing changes: df is the whole parameter vector.
+  expect_equal(attr(logLik(reduced), "df"), length(reduced$par))
+  expect_equal(AIC(reduced), reduced$AIC)
+  expect_equal(BIC(reduced), reduced$BIC)
+  expect_equal(summary(reduced)$npar, length(reduced$par))
 })
 
 test_that(".simplex_vcov withholds the standard error of a singular direction", {
@@ -162,6 +197,31 @@ test_that("the expected information matches high-accuracy quadrature", {
   # The small-dispersion term alone is NOT the information: it understates it by
   # a factor approaching five as phi grows.
   expect_gt((1 / (20 * 0.25^3) + 3 / 0.25) / (1 / (20 * 0.25^3)), 4)
+})
+
+# The cross term and the log(phi) entry are checked with numeric scores, not the
+# closed forms: E[s_mu s_phi] = 0 and E[s_phi^2] = 1/2 are what make the matrix
+# block diagonal, so they must hold for the density itself.
+test_that("the mean-dispersion cross term of the information is zero", {
+  skip_if_not_installed("numDeriv")
+  for (par in list(c(0.3, 1.5), c(0.7, 0.2), c(0.5, 4))) {
+    mu <- par[1]
+    phi <- par[2]
+    ld <- function(th, y) dsimplex(y, th[1], exp(th[2]), log = TRUE)
+    score <- function(y) numDeriv::grad(ld, c(mu, log(phi)), y = y)
+    expect_one <- function(h) {
+      stats::integrate(
+        function(y) vapply(y, function(yy) h(score(yy)), 0) * dsimplex(y, mu, phi),
+        0, 1, subdivisions = 2000L, rel.tol = 1e-9)$value
+    }
+    i_phi <- expect_one(function(s) s[2]^2)
+    i_mu <- expect_one(function(s) s[1]^2)
+    cross <- expect_one(function(s) s[1] * s[2])
+    expect_equal(i_phi, 0.5, tolerance = 1e-5)
+    expect_equal(i_mu, 1 / (phi * (mu * (1 - mu))^3) + 3 / (mu * (1 - mu)),
+                 tolerance = 1e-5)
+    expect_lt(abs(cross) / sqrt(i_mu * i_phi), 1e-6)
+  }
 })
 
 test_that("information = 'expected' gives an exactly block-diagonal, PD matrix", {

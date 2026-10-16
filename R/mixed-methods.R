@@ -56,36 +56,59 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'
 #' \describe{
 #'   \item{`coef`}{Fixed-effect coefficients (`model = "all"`, `"mean"` or
-#'     `"dispersion"`). Random effects are obtained with `ranef()`.}
+#'     `"dispersion"`). `"all"` is the mean block followed by the dispersion
+#'     block, whose names carry the `(phi)_` prefix of the parameter vector, so
+#'     that no name repeats; it holds the fixed effects only, not the variance
+#'     components. Aliased coefficients are `NA`. Random effects are obtained
+#'     with `ranef()`.}
 #'   \item{`vcov`}{Covariance matrix of the estimated parameters
-#'     `c(beta, gamma, omega)`.}
-#'   \item{`logLik`}{Maximised marginal log-likelihood, with `df = p + r +
-#'     q(q+1)/2` and `nobs`.}
+#'     `c(beta, gamma, omega)`. Aliased coefficients are not estimated and have
+#'     no row or column.}
+#'   \item{`logLik`}{Maximized marginal log-likelihood, with `df` the number of
+#'     estimable parameters (aliased coefficients excluded, variance components
+#'     included) and `nobs`.}
 #'   \item{`nobs`}{Number of observations.}
 #'   \item{`ngrps`}{Number of groups.}
 #'   \item{`fitted`}{Fitted means (conditional on the empirical-Bayes random
 #'     effects) or fitted dispersions.}
-#'   \item{`residuals`}{Randomised quantile (the default), response, Pearson or
-#'     deviance residuals, conditional on the empirical-Bayes random effects.}
+#'   \item{`residuals`}{Quantile (the default; Dunn and Smyth, 1996), response,
+#'     Pearson or deviance residuals, conditional on the empirical-Bayes random
+#'     effects.}
 #'   \item{`ranef`}{Empirical-Bayes random-effect modes (a groups-by-`q`
 #'     matrix); with `postVar = TRUE`, the posterior covariances are attached as
 #'     the `"postVar"` attribute.}
 #'   \item{`VarCorr`}{The estimated random-effect covariance matrix
 #'     \eqn{\Sigma}, with standard deviations and correlations.}
 #'   \item{`confint`}{Wald confidence intervals over the full parameter vector
-#'     `c(beta, gamma, omega)`. Note that the intervals for the variance
-#'     components are on the unconstrained log-Cholesky scale, where a Wald
-#'     interval is defensible; on the variance scale it would not be, because
-#'     the null lies on the boundary.}
+#'     `c(beta, gamma, omega)`; the rows of aliased coefficients are `NA`. Note
+#'     that the intervals for the variance components are on the unconstrained
+#'     log-Cholesky scale, where a Wald interval is defensible; on the variance
+#'     scale it would not be, because the null lies on the boundary.}
+#'   \item{`deviance`}{The unscaled deviance \eqn{\sum_i d(y_i;\hat\mu_i)} with
+#'     the simplex unit deviance
+#'     \eqn{d(y;\mu) = (y-\mu)^2 / \{y(1-y)\mu^2(1-\mu)^2\}}, evaluated at the
+#'     fitted means conditional on the empirical-Bayes random effects.
+#'     `type = "scaled"` gives \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}.}
+#'   \item{`model.matrix`}{The mean (`model = "mean"`), dispersion
+#'     (`"dispersion"`) or random-effects (`"random"`) design matrix. Requires
+#'     the fit to have stored the design (`x = TRUE`) or the model frame
+#'     (`model = TRUE`). The mean and dispersion matrices include any aliased
+#'     columns.}
+#'   \item{`terms`}{The `"terms"` object of the mean, dispersion or
+#'     random-effects part.}
+#'   \item{`simulate`}{Draws `nsim` response vectors with [rsimplex()] at the
+#'     fitted means and dispersions. The means are CONDITIONAL on the estimated
+#'     random effects, which are held fixed: new clusters are not drawn, so
+#'     this is a parametric bootstrap of the within-cluster noise only.}
 #' }
 #'
 #' @param object,x A fitted `"simplex_fast_mixed"` object.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
-#'   `fitted`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomised
-#'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
-#'   standard normal under a correctly specified model), `"response"`,
-#'   `"pearson"` or `"deviance"`.
+#'   `fitted`, one of `"mean"` or `"dispersion"`; for `model.matrix` and
+#'   `terms`, one of `"mean"`, `"dispersion"` or `"random"`.
+#' @param type For `residuals`, one of `"quantile"` (the default; the quantile
+#'   residuals of Dunn and Smyth, 1996), `"response"`, `"pearson"` or
+#'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
 #' @param postVar For `ranef`, logical; attach posterior covariances.
 #' @param parm For `confint`, which parameters to report: numeric positions or
 #'   names, over the full vector `c(beta, gamma, omega)`. Defaults to all.
@@ -94,12 +117,18 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   [nlme::VarCorr()]. A simplex mixed model has no residual scale parameter,
 #'   so the argument rescales nothing; supplying anything other than `1` raises
 #'   a warning and is ignored.
+#' @param nsim For `simulate`, the number of response vectors to draw.
+#' @param seed For `simulate`, an optional seed, handled as in
+#'   [stats::simulate()]: when supplied, the current RNG state is restored on
+#'   exit and the seed is recorded in the `"seed"` attribute of the result.
 #' @param ... Additional arguments, currently ignored.
 #'
-#' @return `coef`, `fitted` and `residuals` return numeric vectors; `vcov`
-#'   returns a matrix; `ranef` returns a matrix; `VarCorr` returns the
-#'   covariance matrix with `stddev`/`correlation` attributes; `logLik` returns
-#'   a `"logLik"` object.
+#' @return `coef`, `fitted` and `residuals` return numeric vectors; `vcov` and
+#'   `model.matrix` return matrices; `ranef` returns a matrix; `VarCorr` returns
+#'   the covariance matrix with `stddev`/`correlation` attributes; `logLik`
+#'   returns a `"logLik"` object; `deviance` returns a single number; `terms`
+#'   returns a `"terms"` object; `simulate` returns a `data.frame` with `nsim`
+#'   columns (`sim_1`, `sim_2`, ...), each of length `nobs(object)`.
 #'
 #' @references
 #' Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.
@@ -118,20 +147,29 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'                            nAGQ = 7, n_threads = 1)
 #'
 #' coef(fit)
+#' coef(fit, "all")
 #' VarCorr(fit)
 #' head(ranef(fit))
 #' confint(fit)
 #' ngrps(fit)
+#' deviance(fit)
+#' head(model.matrix(fit, "random"))
+#' head(simulate(fit, nsim = 2, seed = 1))
 #' @name simplex_fast_mixed-methods
 #' @rdname simplex_fast_mixed-methods
 #' @export
 coef.simplex_fast_mixed <- function(object, model = c("all", "mean", "dispersion"), ...) {
   model <- match.arg(model)
+  mean_coef <- object$coefficients$mean
+  disp_coef <- object$coefficients$dispersion
   switch(
     model,
-    all = c(object$coefficients$mean, object$coefficients$dispersion),
-    mean = object$coefficients$mean,
-    dispersion = object$coefficients$dispersion
+    # Dispersion names get the "(phi)_" prefix of the parameter vector, so that
+    # the two "(Intercept)" entries stay distinguishable. Fixed effects only.
+    all = stats::setNames(c(mean_coef, disp_coef),
+                          .simplex_par_names(names(mean_coef), names(disp_coef))),
+    mean = mean_coef,
+    dispersion = disp_coef
   )
 }
 
@@ -191,6 +229,51 @@ fitted.simplex_fast_mixed <- function(object, model = c("mean", "dispersion"), .
 residuals.simplex_fast_mixed <- function(object, type = c("quantile", "response", "pearson", "deviance"), ...) {
   type <- match.arg(type)
   .simplex_pad(object, .simplex_resid_raw(object, type))
+}
+
+#' @rdname simplex_fast_mixed-methods
+#' @export
+deviance.simplex_fast_mixed <- function(object, type = c("unscaled", "scaled"), ...) {
+  # Same unit deviance as deviance.simplex_fast(), at the CONDITIONAL fitted
+  # means (empirical-Bayes random effects held fixed).
+  .simplex_deviance(object, match.arg(type))
+}
+
+#' @rdname simplex_fast_mixed-methods
+#' @export
+model.matrix.simplex_fast_mixed <- function(object,
+                                            model = c("mean", "dispersion", "random"),
+                                            ...) {
+  model <- match.arg(model)
+  if (!is.null(object$x)) {
+    return(object$x[[model]])
+  }
+  if (is.null(object$model)) {
+    stop("Design matrix not stored. Refit with x = TRUE or model = TRUE.",
+         call. = FALSE)
+  }
+  # Rebuilt from the stored model frame exactly as predict() does for the
+  # population-level, in-sample case; the response is not needed.
+  d <- object$design
+  stats::model.matrix(stats::delete.response(d[[paste0("terms_", model)]]),
+                      data = object$model,
+                      contrasts.arg = d[[paste0("contrasts_", model)]],
+                      xlev = d[[paste0("xlevels_", model)]])
+}
+
+#' @rdname simplex_fast_mixed-methods
+#' @export
+terms.simplex_fast_mixed <- function(x, model = c("mean", "dispersion", "random"), ...) {
+  model <- match.arg(model)
+  x$terms[[model]]
+}
+
+#' @rdname simplex_fast_mixed-methods
+#' @export
+simulate.simplex_fast_mixed <- function(object, nsim = 1, seed = NULL, ...) {
+  # Conditional simulation: the fitted means include the empirical-Bayes random
+  # effects, which are held fixed rather than redrawn.
+  .simplex_simulate(object, nsim, seed)
 }
 
 
@@ -255,6 +338,17 @@ print.VarCorr.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
 }
 
 
+# Internal: logical masks of the NON-aliased columns of the mean (x) and
+# dispersion (w) designs of a mixed fit. `aliased` spans the fixed effects only.
+.simplex_mixed_keep <- function(object) {
+  p <- length(object$coefficients$mean)
+  r <- length(object$coefficients$dispersion)
+  al <- object[["aliased"]]
+  if (is.null(al)) al <- rep(FALSE, p + r)
+  list(x = !al[seq_len(p)], w = !al[p + seq_len(r)])
+}
+
+
 #' Predictions from a Simplex Mixed-Model Fit
 #'
 #' Computes predictions from a fitted `"simplex_fast_mixed"` model, either on
@@ -296,6 +390,9 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
   population <- (length(re.form) == 1L && is.na(re.form)) ||
     (inherits(re.form, "formula") && identical(all.vars(re.form), character(0)))
   d <- object$design
+  # Aliased columns were never estimated and their coefficients are NA, so they
+  # are dropped from the design before it is multiplied (as predict.simplex_fast()).
+  keep <- .simplex_mixed_keep(object)
 
   if (is.null(newdata)) {
     if (population) {
@@ -321,10 +418,10 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
         stop("Population-level predictions need the design. Refit with ",
              "model = TRUE or x = TRUE, or supply 'newdata'.", call. = FALSE)
       }
-      beta <- object$coefficients$mean
-      gamma <- object$coefficients$dispersion
-      eta_mu <- as.numeric(X %*% beta)
-      eta_phi <- as.numeric(W %*% gamma)
+      beta <- object$coefficients$mean[keep$x]
+      gamma <- object$coefficients$dispersion[keep$w]
+      eta_mu <- as.numeric(X[, keep$x, drop = FALSE] %*% beta)
+      eta_phi <- as.numeric(W[, keep$w, drop = FALSE] %*% gamma)
       if (!is.null(object$offset$mean)) eta_mu <- eta_mu + object$offset$mean
       if (!is.null(object$offset$dispersion)) {
         eta_phi <- eta_phi + object$offset$dispersion
@@ -355,10 +452,10 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
     W <- des$matrices$dispersion
     Z <- des$matrices$random
 
-    beta <- object$coefficients$mean
-    gamma <- object$coefficients$dispersion
-    eta_mu <- as.numeric(X %*% beta)
-    eta_phi <- as.numeric(W %*% gamma)
+    beta <- object$coefficients$mean[keep$x]
+    gamma <- object$coefficients$dispersion[keep$w]
+    eta_mu <- as.numeric(X[, keep$x, drop = FALSE] %*% beta)
+    eta_phi <- as.numeric(W[, keep$w, drop = FALSE] %*% gamma)
 
     # Offsets belong to the linear predictor and must be rebuilt from newdata.
     nd_keep <- newdata[des$keep, , drop = FALSE]
@@ -413,7 +510,7 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
 #' @param x A fitted `"simplex_fast_mixed"` object.
 #' @param which Integer subset of `1:4` selecting panels.
 #' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
-#'   randomised quantile residuals), `"deviance"`, `"pearson"` or
+#'   quantile residuals), `"deviance"`, `"pearson"` or
 #'   `"response"`. See [residuals.simplex_fast_mixed()].
 #' @param smooth Logical; add a LOESS smoother.
 #' @param ... Additional arguments, currently ignored.
@@ -481,7 +578,7 @@ print.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digits") - 3
 }
 
 
-#' Summarise a Simplex Mixed-Model Fit
+#' Summarize a Simplex Mixed-Model Fit
 #'
 #' Produces a summary of a fitted `"simplex_fast_mixed"` object, including
 #' coefficient tables with standard errors, Wald z-statistics and p-values for
@@ -537,7 +634,7 @@ summary.simplex_fast_mixed <- function(object, ...) {
       vcov_condition = object$vcov_condition,
       n_saturated = object$n_saturated,
       aliased = object$aliased,
-      npar = length(object$par),
+      npar = .simplex_n_est(object),   # estimable parameters, as in the vcov
       no_inference = is.null(object$vcov),
       convergence = object$convergence, message = object$message,
       iterations = object$iterations

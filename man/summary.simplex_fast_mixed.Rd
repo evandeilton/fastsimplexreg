@@ -3,7 +3,7 @@
 \name{summary.simplex_fast_mixed}
 \alias{summary.simplex_fast_mixed}
 \alias{print.summary.simplex_fast_mixed}
-\title{Summarise a Simplex Mixed-Model Fit}
+\title{Summarize a Simplex Mixed-Model Fit}
 \usage{
 \method{summary}{simplex_fast_mixed}(object, ...)
 

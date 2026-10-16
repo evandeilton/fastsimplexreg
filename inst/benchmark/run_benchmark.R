@@ -12,8 +12,8 @@
 ## run_benchmark.R
 ## Reproducible benchmark: fastsimplexreg vs simplexreg vs betareg.
 ##
-## Produced by "Dr. Bench". Fair, cold-fit, guarded benchmark covering
-## five scenarios (accuracy, scaling, links, realdata, mixed).
+## Cold-fit, guarded benchmark covering five scenarios (accuracy, scaling,
+## links, realdata, mixed).
 ##
 ## Fairness:
 ##  * identical simulated / real data fed to every package in a cell;

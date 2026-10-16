@@ -3,7 +3,7 @@
 \name{summary.simplex_fast}
 \alias{summary.simplex_fast}
 \alias{print.summary.simplex_fast}
-\title{Summarise a Simplex Regression Fit}
+\title{Summarize a Simplex Regression Fit}
 \usage{
 \method{summary}{simplex_fast}(object, ...)
 
@@ -23,7 +23,7 @@ An object of class \code{"summary.simplex_fast"}, a list whose main
 component \code{coefficients} is itself a list with the \code{mean} and \code{dispersion}
 coefficient tables (each with columns \code{Estimate}, \verb{Std. Error}, \verb{z value}
 and \verb{Pr(>|z|)}), together with the quantile residuals, the links, fit
-statistics (log-likelihood, AIC, BIC, deviance) and optimiser diagnostics.
+statistics (log-likelihood, AIC, BIC, deviance) and optimizer diagnostics.
 The \code{print} method returns its argument invisibly.
 }
 \description{

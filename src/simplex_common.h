@@ -45,6 +45,18 @@ constexpr double INV_SQRT_2 = 0.707106781186547524400844362105;
 // non-portable M_PI macro).
 constexpr double SQRT_PI = 1.772453850905516027298167483341;
 
+// Error-free running-sum update (Knuth's TwoSum): s + x == t + e exactly, so
+// accumulating the error e in `c` recovers the rounding a plain `s += x` loses;
+// the compensated total is s + c. Branch-free, 6 flops, and unaffected by the
+// default -O2 (it would break under -ffast-math, which R does not use). A
+// non-finite x poisons c with NaN, so the total is non-finite as it should be.
+inline void two_sum_acc(double& s, double& c, const double x) noexcept {
+  const double t = s + x;
+  const double bv = t - s;
+  c += (s - (t - bv)) + (x - bv);
+  s = t;
+}
+
 // Integer codes for the mean link functions. These MUST match the codes used
 // on the R side: logit = 1, probit = 2, cloglog = 3, neglog = 4.
 enum MeanLink : int {
@@ -422,7 +434,7 @@ inline Rcpp::List bfgs_minimize(
 
   EvalResult current = eval(theta);
   if (!current.valid || !std::isfinite(current.nll)) {
-    Rcpp::stop("Initial parameter vector produces a non-finite objective.");
+    Rcpp::stop("Initial parameter vector produces a non-finite objective or gradient.");
   }
 
   int convergence = 1;
@@ -493,12 +505,12 @@ inline Rcpp::List bfgs_minimize(
       // whose magnitude is set by the units of the design. With a covariate
       // scaled by 1e5 the gradient norm reaches ~1e8, a unit step overshoots by
       // eight orders of magnitude, and the 40 halvings available bottom out at
-      // 2^-40 ~ 9.1e-13 without ever reaching a decrease -- so the optimiser
+      // 2^-40 ~ 9.1e-13 without ever reaching a decrease -- so the optimizer
       // stopped at iteration 1, reporting code 2 and a log-likelihood 155.5
       // units below the optimum that nlminb() reaches on the identical
       // objective. Scaling the first trial step so the largest parameter moves
       // by at most one closes that gap: column scales 1e5 through 1e10 all
-      // converge to the same optimum as the reference optimisers.
+      // converge to the same optimum as the reference optimizers.
       //
       // Applying this on EVERY iteration would be a serious mistake (measured:
       // +716% function evaluations) -- once H has curvature information its
@@ -533,7 +545,7 @@ inline Rcpp::List bfgs_minimize(
       // approximation, so it does not vanish at the optimum OF THE
       // APPROXIMATION and grad_tol is simply unreachable. Measured over 180
       // mixed fits, every such stop had already flattened the objective to a
-      // relative change below sqrt(rel_tol), and restarting the optimiser from
+      // relative change below sqrt(rel_tol), and restarting the optimizer from
       // that point gained ~1e-11 in log-likelihood: it is an optimum, not a
       // failure. Calling it a failure withheld the standard errors of a
       // perfectly good fit in roughly half of the nAGQ = 5 runs.

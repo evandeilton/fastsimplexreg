@@ -144,7 +144,7 @@
     # The diagonal entry is log D[j, j], where Sigma = D D'. That is the
     # marginal standard deviation ONLY for j = 1; for j >= 2 it is the
     # CONDITIONAL standard deviation of random effect j given effects 1..j-1.
-    # Labelling it "logsd." understated a random slope's SD by a factor of
+    # Labeling it "logsd." understated a random slope's SD by a factor of
     # nearly two in a measured q = 2 fit (0.389 against a true 0.758), read
     # straight off fit$omega. "logchol." names what the number actually is;
     # VarCorr() remains the only supported route to marginal SDs.
@@ -181,13 +181,23 @@
 #' cover 57% rather than 95%. Use `nAGQ >= 5`, and `nAGQ >= 11` when
 #' reporting inference.
 #' The per-cluster inner mode-finding, the quadrature and the analytic score are
-#' implemented in C++ (RcppArmadillo, BLAS) and parallelised over clusters with
+#' implemented in C++ (RcppArmadillo, BLAS) and parallelized over clusters with
 #' OpenMP, so the fit scales to large nested data sets. The random-effect
 #' covariance \eqn{\Sigma = D D^\top} is estimated on an unconstrained
 #' log-Cholesky scale, guaranteeing a positive-definite estimate.
 #'
 #' This version supports a single grouping factor (two-level nesting), Gaussian
 #' random effects in the mean submodel, and fixed-effect (variable) dispersion.
+#'
+#' Columns of the mean or dispersion design that are linear combinations of
+#' earlier columns (aliased) are detected with the same pivoted QR as
+#' [stats::lm()], reported in a warning and left out of the fit, as in
+#' [fastsimplexreg()]. Their coefficients and standard errors are `NA`; the
+#' model is fitted on the reduced designs, so the estimates, the
+#' log-likelihood, `AIC` and `BIC` equal those of the equivalent reduced model.
+#' `vcov` and `hessian` cover the estimable parameters only. The random-effects
+#' design is not checked. If every column of the mean (or dispersion) design is
+#' aliased the function stops.
 #'
 #' @param formula A multi-part formula `y ~ mean_terms | dispersion_terms`. When
 #'   the dispersion part is omitted the dispersion is constant. Each part may
@@ -204,21 +214,36 @@
 #' @param nAGQ Number of adaptive Gauss-Hermite quadrature points per random-
 #'   effect dimension. Values below 5 are accepted but warn: the standard
 #'   errors are then unreliable (see Details). `nAGQ = 1` is the Laplace
-#'   approximation.
+#'   approximation. The default is 11 whatever the number of random effects
+#'   `q`; the tensor grid has `nAGQ^q` nodes per cluster, and the call stops
+#'   when that exceeds `1e5`.
 #' @param start Optional starting vector `c(beta, gamma, omega)`. When `NULL`,
-#'   fast link-specific values are used.
+#'   fast link-specific values are used. As in [fastsimplexreg()], `beta` and
+#'   `gamma` refer to the columns that remain after aliased ones are dropped, so
+#'   the length is `ncol(X) + ncol(W) + q(q+1)/2` of the reduced designs.
 #' @param maxit Maximum number of BFGS iterations.
-#' @param rel_tol Relative objective tolerance.
-#' @param grad_tol Infinity-norm gradient tolerance.
+#' @param rel_tol Tolerance on the relative change of the objective between two
+#'   BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The fit stops
+#'   when this change is at most `rel_tol` and the gradient infinity norm is at
+#'   most `sqrt(grad_tol)`. It also stops, reported as converged, when the line
+#'   search can no longer find a sufficient decrease and the last relative
+#'   change was at most `sqrt(rel_tol)`; this is the usual way a fit ends at a
+#'   small `nAGQ`.
+#' @param grad_tol Absolute tolerance on the infinity norm of the gradient of
+#'   the NEGATIVE marginal log-likelihood. That gradient is a sum over clusters
+#'   and is not scaled by the number of observations, so at large sample sizes
+#'   this tolerance can be unreachable. The fit stops as soon as the norm is at
+#'   most `grad_tol`; `sqrt(grad_tol)` is the gradient bound in the `rel_tol`
+#'   rule above.
 #' @param n_threads Number of OpenMP threads; the loop over clusters is
-#'   parallelised. Zero uses all threads available to the backend. What
+#'   parallelized. Zero uses all threads available to the backend. What
 #'   parallelism buys here is governed by the work per CLUSTER, not by the number
 #'   of clusters: measured on this design at 64000 observations, speed-up at 4
 #'   threads was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x with
 #'   128. Eight threads is a loss for clusters smaller than about 32. If
 #'   \pkg{RhpcBLASctl} is installed it is used to pin the BLAS to one thread for
 #'   the duration of the fit and restore it afterwards, which was worth a further
-#'   34\% at four threads; installing it is optional.
+#'   34% at four threads; installing it is optional.
 #'
 #'   Results are reproducible for a fixed `n_threads`, but the per-thread
 #'   accumulators are summed in thread order, so different thread counts differ
@@ -231,28 +256,34 @@
 #'   Must be at least 10: the AGHQ expansion is taken at the posterior mode,
 #'   so a truncated inner solve expands around the wrong point.
 #' @param inner_tol Convergence tolerance of the inner solver.
-#' @param trace Logical; print optimiser progress.
+#' @param trace Logical; print optimizer progress.
 #' @param subset Optional expression selecting a subset of observations,
 #'   evaluated inside `data` as in [stats::lm()] -- for example
 #'   `subset = x1 > 0`. A plain index, logical or row-name vector also works.
 #' @param na.action Missing-data handler.
 #' @param model,x,y Logical; store the model frame, the design matrices, and the
-#'   response in the fitted object.
+#'   response in the fitted object. The stored mean and dispersion designs are
+#'   the full ones, aliased columns included.
 #'
 #' @return An object of S3 class `"simplex_fast_mixed"`: a list whose main
 #'   components are `coefficients` (a list with the `mean` and `dispersion`
-#'   fixed-effect estimates), `par` (the full vector `c(beta, gamma, omega)`),
-#'   `omega` (the packed log-Cholesky parameters), `D` (the Cholesky factor) and
-#'   `Sigma` (the estimated random-effect covariance), `ranef` (the
-#'   empirical-Bayes modes, a groups-by-`q` matrix) with `ranef.postvar`,
-#'   `standard_errors`, `vcov`, `fitted.values` (means conditional on the
-#'   random-effect modes), `dispersion.values`, `linear.predictors`, `residuals`
-#'   (response residuals), `logLik` (the marginal log-likelihood), `AIC`, `BIC`,
-#'   `nobs`, `ngrps`, `groups`, `nAGQ`, `q`, `df`, `df.residual`, `convergence`,
-#'   `message`, `iterations`, the `offset` actually applied to each submodel and
-#'   the stored `terms`/`design` metadata used for prediction. The same
-#'   inference diagnostics as [fastsimplexreg()] are stored -- `vcov_rank`,
-#'   `vcov_pseudo`, `vcov_eigenvalues`, `vcov_condition` and `n_saturated`.
+#'   fixed-effect estimates), `par` (the full vector `c(beta, gamma, omega)`,
+#'   with `NA` for aliased coefficients), `aliased` (a named logical over the
+#'   fixed-effect parameters, `TRUE` where aliased), `omega` (the packed
+#'   log-Cholesky parameters), `D` (the Cholesky factor) and `Sigma` (the
+#'   estimated random-effect covariance), `ranef` (the empirical-Bayes modes, a
+#'   groups-by-`q` matrix) with `ranef.postvar`, `standard_errors` (full length,
+#'   `NA` for aliased coefficients), `vcov` and `hessian` (over the estimable
+#'   parameters only), `fitted.values` (means conditional on the random-effect
+#'   modes), `dispersion.values`,
+#'   `linear.predictors`, `residuals` (response residuals), `logLik` (the
+#'   marginal log-likelihood), `AIC`, `BIC`, `nobs`, `ngrps`, `groups`, `nAGQ`,
+#'   `q`, `df` (the number of estimable parameters), `df.residual`,
+#'   `convergence`, `message`, `iterations`, the `offset` actually applied to
+#'   each submodel and the stored `terms`/`design` metadata used for
+#'   prediction. The same inference diagnostics as [fastsimplexreg()] are
+#'   stored -- `vcov_rank`, `vcov_pseudo`, `vcov_eigenvalues`, `vcov_condition`
+#'   and `n_saturated`.
 #'
 #' @references
 #' Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on
@@ -339,7 +370,7 @@ fastsimplexregmixed <- function(
     warning("nAGQ = ", nAGQ, " is below the supported minimum of 5. The ",
             "analytic gradient approximates the score of the exact marginal ",
             "likelihood, not of the ", nAGQ, "-point quadrature, so the ",
-            "optimiser may stop early and the standard errors are not ",
+            "optimizer may stop early and the standard errors are not ",
             "reliable (measured coverage at nAGQ = 1 is 57%, not 95%). Use ",
             "nAGQ >= 5, and nAGQ >= 11 when reporting inference.",
             call. = FALSE)
@@ -372,6 +403,18 @@ fastsimplexregmixed <- function(
   W <- design$W
   Z <- design$Z
   group <- design$group
+
+  # Drop aliased columns of the mean (X) and dispersion (W) designs before
+  # fitting and put NA back afterwards, exactly as fastsimplexreg() does. The
+  # random-effects design Z is not touched: its columns are not fixed-effect
+  # coefficients, and its variance components are estimated, not solved for.
+  alias <- .simplex_check_alias(X, W)
+  alias_x <- alias$x
+  alias_w <- alias$z
+  X_full <- X
+  W_full <- W
+  X <- X[, !alias_x, drop = FALSE]
+  W <- W[, !alias_w, drop = FALSE]
   p <- ncol(X); r <- ncol(W); q <- ncol(Z)
   J <- nlevels(group)
   m <- q * (q + 1L) / 2L
@@ -435,13 +478,13 @@ fastsimplexregmixed <- function(
     start <- as.numeric(start)
   }
   if (length(start) != p + r + m || any(!is.finite(start))) {
-    stop("'start' must be a finite numeric vector of length ncol(X) + ncol(W) + q(q+1)/2.",
-         call. = FALSE)
+    stop("'start' must be a finite numeric vector of length ncol(X) + ncol(W) + q(q+1)/2, ",
+         "counting only the non-aliased columns of X and W.", call. = FALSE)
   }
 
   # BLAS thread pinning, for the duration of this call only.
   #
-  # The mixed backend parallelises over CLUSTERS and each cluster does several
+  # The mixed backend parallelizes over CLUSTERS and each cluster does several
   # small Armadillo products and decompositions. A threaded BLAS then layers its
   # own team under ours -- 8 OpenMP threads times up to 24 BLAS threads on a
   # 24-core box -- and the machine spends its time on scheduling. Measured on a
@@ -476,11 +519,7 @@ fastsimplexregmixed <- function(
   )
 
   theta <- as.numeric(opt$par)
-  beta <- theta[seq_len(p)]
-  gamma <- theta[p + seq_len(r)]
   omega <- theta[p + r + seq_len(m)]
-  names(beta) <- colnames(X)
-  names(gamma) <- colnames(W)
 
   re_names <- colnames(Z)
   D <- simplex_mixed_D_from_omega_cpp(omega, as.integer(q))
@@ -512,9 +551,19 @@ fastsimplexregmixed <- function(
   k <- length(theta)
   n <- length(response)
 
+  # `theta`, `par_names` and the Hessian span the ESTIMABLE parameters only
+  # (aliased columns were dropped above). The NA-padded full-design vectors are
+  # built after inference, for reporting.
   par_names <- c(.simplex_par_names(colnames(X), colnames(W)),
                  .omega_labels(re_names))
   names(theta) <- par_names
+  # Flag aliased fixed effects over the FULL designs; omega is never aliased.
+  aliased <- c(alias_x, alias_w)
+  names(aliased) <- .simplex_par_names(colnames(X_full), colnames(W_full))
+  par_names_full <- c(names(aliased), .omega_labels(re_names))
+  est_mask <- c(!aliased, rep(TRUE, m))
+  p_full <- ncol(X_full)
+  r_full <- ncol(W_full)
 
   converged <- as.integer(opt$convergence) == 0L
   if (!converged) {
@@ -551,6 +600,14 @@ fastsimplexregmixed <- function(
     vcov_condition <- inf$condition
   }
 
+  # Re-expand to the FULL design: aliased coefficients are reported as NA, like
+  # lm(), never as an arbitrary share of an identified effect. vcov and the
+  # Hessian stay over the ESTIMABLE parameters only.
+  theta_full <- stats::setNames(rep(NA_real_, length(par_names_full)), par_names_full)
+  theta_full[est_mask] <- theta
+  se_full <- stats::setNames(rep(NA_real_, length(par_names_full)), par_names_full)
+  se_full[est_mask] <- se
+
   .warn_saturated(opt$n_saturated, n, what = "fastsimplexregmixed()")
 
   obs_names <- rownames(design$model)
@@ -562,16 +619,18 @@ fastsimplexregmixed <- function(
     random = random,
     link = list(mean = link_spec$name, dispersion = "log"),
     coefficients = list(
-      mean = stats::setNames(beta, colnames(X)),
-      dispersion = stats::setNames(gamma, colnames(W))
+      mean = stats::setNames(theta_full[seq_len(p_full)], colnames(X_full)),
+      dispersion = stats::setNames(theta_full[p_full + seq_len(r_full)],
+                                   colnames(W_full))
     ),
-    par = theta,
+    par = theta_full,
+    aliased = aliased,
     omega = stats::setNames(omega, .omega_labels(re_names)),
     D = D,
     Sigma = Sigma,
     ranef = ranef_mat,
     ranef.postvar = re$postvar,
-    standard_errors = stats::setNames(se, par_names),
+    standard_errors = se_full,
     vcov = vc,
     vcov_rank = vcov_rank,
     vcov_pseudo = vcov_pseudo,
@@ -616,7 +675,7 @@ fastsimplexregmixed <- function(
   )
 
   if (isTRUE(model)) out$model <- design$model
-  if (isTRUE(x)) out$x <- list(mean = X, dispersion = W, random = Z)
+  if (isTRUE(x)) out$x <- list(mean = X_full, dispersion = W_full, random = Z)
   if (isTRUE(y)) out$y <- response
 
   structure(out, class = "simplex_fast_mixed")

@@ -188,7 +188,7 @@ test_that("predict keeps the length of newdata when rows carry NA", {
   fit <- make_fit()$fit
   nd <- data.frame(x1 = c(0.1, NA, 0.3), x2 = c(0, 1, 1), z1 = c(0, 0.2, NA))
   p <- predict(fit, newdata = nd, type = "response")
-  # A shorter, unaligned vector was the old behaviour; predict.lm keeps length.
+  # A shorter, unaligned vector was the old behavior; predict.lm keeps length.
   expect_length(p, 3L)
   expect_equal(unname(which(is.na(p))), c(2L, 3L))
 
@@ -265,9 +265,10 @@ test_that("fitted, residuals and predict carry the observation labels", {
 })
 
 
-# Randomized quantile residuals (Dunn and Smyth, 1996). Under a correct model
-# these are EXACTLY standard normal, which neither Pearson nor deviance
-# residuals are once the fitted means move away from 1/2.
+# Quantile residuals (Dunn and Smyth, 1996). Under a correct model
+# these are approximately standard normal (exactly so at the true parameters),
+# which neither Pearson nor deviance residuals are once the fitted means move
+# away from 1/2.
 test_that("quantile residuals are standard normal under a correct model", {
   set.seed(505)
   rate <- function(b0, phi0, B = 60L, n = 300L) {
@@ -283,8 +284,8 @@ test_that("quantile residuals are standard normal under a correct model", {
   }
 
   # Means near 1/2: both behave.
-  centred <- rate(0.0, 1)
-  expect_lt(centred[["quantile"]], 0.20)
+  centered <- rate(0.0, 1)
+  expect_lt(centered[["quantile"]], 0.20)
   # Means away from 1/2: Pearson rejects almost every CORRECT model, quantile
   # residuals hold their nominal rate.
   skewed <- rate(-1.4, 1)

@@ -1,8 +1,63 @@
+# fastsimplexreg (development version)
+
+## Fixes
+
+* **`psimplex(lower.tail = FALSE)` for a small `mu`.** The upper tail lost
+  accuracy as `mu` shrank (an absolute error of 1e-5 or more at `mu = 1e-8`,
+  up to 0.8 for `mu <= 1e-10`) because two terms of size ~1e8 were subtracted.
+  Both tails are now accurate: lower plus upper tail equals 1 to 2e-16 for `mu`
+  from 1e-12 to `1 - 1e-8`, and `log.p = TRUE` is accurate also when the
+  probability is close to 1. Fits were not affected.
+* **`qsimplex(lower.tail = FALSE)` for a small `p`.** It lost digits below
+  `p` = 1e-10 and returned 1 for `p` = 1e-20 (true value 0.959). Each tail is
+  now solved directly, also with `log.p = TRUE` (`p` down to 1e-300 and
+  log-probabilities down to -1000 round-trip).
+* **`logLik()`, `AIC()` and `BIC()` counted aliased coefficients**, so `AIC(fit)`
+  differed from `fit$AIC` by 2 per aliased column. Only estimable parameters
+  are counted.
+* **`fastsimplexregmixed()` detects aliased columns** in the mean and dispersion
+  designs, as `fastsimplexreg()` does: they are reported as `NA` and the model
+  is fitted on the remaining columns. It used to return an arbitrary split with
+  `NA` standard errors.
+* **A non-finite gradient is rejected.** At extreme parameters the gradient could
+  be `NaN` while the objective was reported valid.
+* **Large single-thread fits no longer stall near the optimum.** The objective
+  and score are now summed with compensated accumulation. The rounding noise of
+  a plain sum of 1e6 terms exceeded the decrease the line search was looking
+  for. In a simulated example with n = 1e6 and one thread the fit takes about
+  100 objective evaluations instead of about 600 (about 4 s instead of 20 s)
+  and matches the 8-thread fit. For n <= 1e5 the objective and score agree to
+  about 1e-14 and the estimates are identical or within the optimizer
+  tolerance (up to 2e-8 observed).
+
+## New
+
+* Mixed fits gain `deviance()`, `model.matrix()`, `terms()` and `simulate()`
+  (conditional on the estimated random effects). `coef(fit, "all")` now names
+  the dispersion coefficients `(phi)_*`; they repeated `(Intercept)` before.
+
+## Documentation
+
+* Removed claims the data do not support: `information = "expected"` is not
+  twenty times cheaper (the information step is 4 to 6 times cheaper for five
+  parameters, the whole fit under 10%); the fixed-effects linear predictors in
+  the objective and score do not use BLAS; quantile residuals are deterministic,
+  not randomized; the `nAGQ` by `q` values are suggestions, not defaults.
+  `grad_tol` and `rel_tol` are described as implemented.
+* Benchmark figures state the version they were measured with (0.2.1). Identical
+  estimates are claimed for simulated data only; on the real data sets the
+  dispersion intercepts differ by 0.065 to 0.082, which equals log(n/(n - p)):
+  simplexreg appears to rescale the dispersion by n/(n - p).
+* Spelling is en-US throughout (`Language: en-US`).
+
+## Tests
+
+* `rsimplex()` is checked against `psimplex()` (Kolmogorov-Smirnov), and the
+  zero cross term of the expected information is checked with numeric scores.
+
 # fastsimplexreg 0.2.4
 
-Correctness release following a four-way consensus audit of 0.2.3
-(mathematical/statistical rigour, R API contracts, CRAN compliance). Every item
-below carries a measured proof in `tests/testthat`.
+Correctness fixes to 0.2.3.
 
 ## Silently wrong results (fixed)
 
@@ -17,7 +72,7 @@ below carries a measured proof in `tests/testthat`.
   vector.
 * **`offset()` in the formula was silently dropped.** The `terms` object
   recorded it, the design matrix omitted it, and nothing warned, so the fitted
-  model was not the model the user wrote. Offsets are now honoured in both
+  model was not the model the user wrote. Offsets are now honored in both
   fitters, kept separate per submodel, and rebuilt from `newdata` in
   `predict()`.
 * **`subset` was an index vector, not an expression.** The documentation
@@ -55,7 +110,7 @@ below carries a measured proof in `tests/testthat`.
   to 1.8e-13. `log.p` is now computed on the log scale throughout:
   `psimplex(0.15, 0.5, 0.01, log.p = TRUE)` returned `-Inf` where the true
   value is `-773.216`.
-* **Randomized quantile residuals, and they are now the default.** Under a
+* **Quantile residuals (Dunn and Smyth, 1996) are now the default.** Under a
   correct model, Pearson residuals rejected up to 100% of fits in a
   Shapiro-Wilk check -- and Pearson was what `summary()` printed as its
   residual summary. Quantile residuals hold their nominal rate.
@@ -70,7 +125,7 @@ below carries a measured proof in `tests/testthat`.
 * Dispersion coefficients are named `(phi)_*` in the full parameter vector, as
   in **betareg**, so `vcov()` and `confint()` can be indexed by name
   unambiguously. The per-submodel tables in `summary()` keep bare names.
-* The packed `omega` diagonal is labelled `logchol.*` for `q >= 2`: it is the
+* The packed `omega` diagonal is labeled `logchol.*` for `q >= 2`: it is the
   *conditional* standard deviation there, not the marginal one, and reading it
   as an SD understated a random slope by a factor of 1.95.
 * `fitted()`, `residuals()` and `predict()` carry the observation labels.
@@ -81,7 +136,7 @@ below carries a measured proof in `tests/testthat`.
   rank, pseudo-inverse use, ill-conditioning, saturated observations, aliased
   coefficients, and whether inference was computed at all.
 
-## Parallelism and the C++ backend (audit of the OpenMP layer)
+## Parallelism and the C++ backend
 
 * **The linear predictors are no longer computed through BLAS.** `X %*% beta`
   and `Z %*% gamma` were two `gemv` calls, serial with respect to the package's
@@ -124,7 +179,7 @@ below carries a measured proof in `tests/testthat`.
   ordinary fits.
 * **`RhpcBLASctl` (Suggests) is used to pin the BLAS** for the duration of a
   mixed fit and restore it afterwards, worth a further 34% at four threads.
-* Parallel behaviour is now tested (`tests/testthat/test-parallel.R`): the
+* Parallel behavior is now tested (`tests/testthat/test-parallel.R`): the
   distribution functions are bit-identical across thread counts, fits agree to
   floating-point noise, and interruptibility has a regression test.
 * Removed the adaptive Gauss-Legendre quadrature, dead since the CDF became a
@@ -144,8 +199,7 @@ below carries a measured proof in `tests/testthat`.
 
 # fastsimplexreg 0.2.3
 
-Correctness release following a full surgical audit of `R/`, `src/`, `tests/`
-and `vignettes/`. All estimates, log-likelihoods, deviances, fitted values,
+Correctness release. All estimates, log-likelihoods, deviances, fitted values,
 residuals, densities and random draws are numerically unchanged from 0.2.2;
 what changed is what the package does when something is *wrong*.
 
@@ -214,7 +268,7 @@ what changed is what the package does when something is *wrong*.
   (`simplex_linkinv(-40, "logit")` is `4.2e-18`, not `1e-12`) while remaining
   strictly inside the open support `(0, 1)` that the density and the residual
   formulas require.
-* `simplex_mixed_ranef_cpp()` no longer reads uninitialised memory: the Fisher
+* `simplex_mixed_ranef_cpp()` no longer reads uninitialized memory: the Fisher
   fallback for the posterior covariance consumed a buffer that the observed
   loop could leave partially filled, and the return value of the link map was
   discarded.
@@ -228,11 +282,11 @@ what changed is what the package does when something is *wrong*.
 
 ## Mixed-model convergence
 
-* **Roughly a quarter of mixed fits were reported as optimiser failures when
+* **Roughly a quarter of mixed fits were reported as optimizer failures when
   they had in fact converged**, and because standard errors are only computed at
   a converged fit, those perfectly good fits silently lost their inference.
   Measured over a grid of 240 `(J, nj, nAGQ, seed)` combinations, 26.2% ended
-  with code 2; restarting the optimiser from the reported stopping point gained
+  with code 2; restarting the optimizer from the reported stopping point gained
   a median of 1.6e-11 in log-likelihood -- it was an optimum, not a failure.
   The failure rate is now 0% over the same grid.
 
@@ -259,10 +313,10 @@ what changed is what the package does when something is *wrong*.
   that used to abort naturally cost more now that they run to completion.
 
 * Known limitation: supplying `start` equal to the optimum itself gives the
-  optimiser no iteration history from which to judge stationarity, so it
-  conservatively reports code 2 rather than risk labelling a stall as success.
+  optimizer no iteration history from which to judge stationarity, so it
+  conservatively reports code 2 rather than risk labeling a stall as success.
 
-* The optimiser trace (`trace = TRUE`) now prints the objective at full double
+* The optimizer trace (`trace = TRUE`) now prints the objective at full double
   precision and reports the relative change per iteration. At the previous six
   significant digits, successive iterations near the optimum printed
   identically -- exactly the regime the trace exists to diagnose.
@@ -270,7 +324,7 @@ what changed is what the package does when something is *wrong*.
 ## Testing and documentation
 
 * New `test-inference.R` and `test-distribution-conventions.R`, plus regression
-  tests pinning the convergence-reporting behaviour in both directions.
+  tests pinning the convergence-reporting behavior in both directions.
 * The rank cut-off used by the fail-safe covariance is derived from the accuracy
   of the finite-difference Hessian (`sqrt(eps)` on the correlation scale) rather
   than from machine epsilon. With the tighter cut the verdict depended on which
@@ -288,18 +342,19 @@ what changed is what the package does when something is *wrong*.
 * New `benchmark` vignette comparing `fastsimplexreg` with the CRAN packages
   `simplexreg` and `betareg` on accuracy, speed (scaling to n = 5e5), the four
   mean links, real data, and the mixed model, with professional ggplot2 figures.
-  Estimates are numerically identical to `simplexreg` while fitting ~5-13x faster.
+  Estimates agree with `simplexreg` on simulated data; fits 5-13x faster at
+  n <= 1e5 (logit link).
   The full reproducible study ships in `inst/benchmark/`.
 
 # fastsimplexreg 0.2.1
 
-Stability and performance release, following a three-way audit.
+Stability and performance release.
 
 Stability / correctness:
 
-* Non-convergence is now signalled: `fastsimplexreg()` and
+* Non-convergence is now signaled: `fastsimplexreg()` and
   `fastsimplexregmixed()` emit a warning and withhold (NA) standard errors when
-  the optimiser does not converge, and `summary()` prints a prominent banner.
+  the optimizer does not converge, and `summary()` prints a prominent banner.
   Previously a non-converged fit could return a confident-looking coefficient
   table.
 * The mean-link inverse now keeps the analytic score and Hessian consistent with
@@ -317,7 +372,7 @@ Performance (mixed model):
 * Single-pass adaptive quadrature with cached scores and hoisted constant terms,
   and tensor-weight pruning for `q >= 2`. A random-slope (`q = 2`) fit that took
   ~2 minutes now runs in a few seconds.
-* Exact symmetrisation of the curvature matrix removes spurious Cholesky
+* Exact symmetrization of the curvature matrix removes spurious Cholesky
   failures and redundant recomputation.
 
 # fastsimplexreg 0.2.0
@@ -328,11 +383,11 @@ Performance (mixed model):
   mean submodel are specified with an lme4-style `random = ~ terms | group`
   bar; the covariance is estimated on an unconstrained log-Cholesky scale. The
   per-cluster inner mode-finding, quadrature and analytic score run in C++ and
-  are parallelised over clusters with OpenMP.
+  are parallelized over clusters with OpenMP.
 * S3 methods for class `"simplex_fast_mixed"`: `print`, `summary`, `coef`,
   `ranef`, `VarCorr` (re-exported from `nlme`), `vcov`, `logLik`, `nobs`,
   `ngrps`, `fitted`, `residuals`, `predict` (with `re.form`) and `plot`.
-* The vignettes now analyse real data: the `sdac` (CD34+ cell recovery) and
+* The vignettes now analyze real data: the `sdac` (CD34+ cell recovery) and
   `retinal` (longitudinal intraocular gas) data sets from `simplexreg`.
 * A `pkgdown` documentation website, GitHub Actions workflows (R-CMD-check,
   pkgdown, test-coverage), and an MIT license.
@@ -346,7 +401,7 @@ Initial release.
   (`y ~ x1 + x2 | z1 + z2`), with `logit`, `probit`, `cloglog` and `neglog`
   mean links and a log dispersion link.
 * Maximum-likelihood estimation uses an analytic score and a native BFGS
-  optimiser implemented in C++ with `RcppArmadillo`, `BLAS`/`LAPACK` and
+  optimizer implemented in C++ with `RcppArmadillo`, `BLAS`/`LAPACK` and
   optional `OpenMP` parallelism.
 * `dsimplex()` and `rsimplex()` provide the density and random generation for
   the simplex distribution; `simplex_linkinv()` exposes the mean link inverses.

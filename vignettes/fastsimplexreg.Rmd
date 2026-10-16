@@ -80,7 +80,7 @@ The dispersion always uses a log link (so $\phi_i > 0$). The mean link $g$ can b
 | neglog | $-\log\{-\log\mu\}$ | $\exp(-e^{-\eta})$ |
 
 Estimation is by maximum likelihood. The log-likelihood, the **analytic score**,
-a native **BFGS** optimiser, and the link inverses all run in C++; the
+a native **BFGS** optimizer, and the link inverses all run in C++; the
 per-observation loop can use OpenMP, so the fit scales to very large data sets.
 
 ### The multi-part formula interface
@@ -99,7 +99,7 @@ the second part, `y ~ x1 + x2`, gives constant dispersion.
 
 We use the `ReadingSkills` data from the **betareg** package: the response
 `accuracy` is a reading-accuracy score in $(0, 1)$ for 44 children, `dyslexia`
-indicates a diagnosis of dyslexia, and `iq` is a standardised nonverbal IQ score.
+indicates a diagnosis of dyslexia, and `iq` is a standardized nonverbal IQ score.
 
 ```{r data}
 if (has_betareg) {
@@ -190,11 +190,12 @@ rbind(theoretical = qsimplex(probs, mu = 0.35, phi = 0.8),
 ## 5. Performance notes
 
 The critical path is entirely in C++: the log-likelihood and its analytic score
-(so no numerical differentiation during optimisation), a native BFGS that avoids
-repeated R/C++ crossings, BLAS matrix-vector products for the linear predictors,
-and an optional OpenMP-parallelised observation loop (`n_threads = 0` uses all
-cores). Inference (the Hessian and standard errors) is computed only when
-`inference = TRUE`, so exploratory fits on massive data can skip it.
+(so no numerical differentiation during optimization), a native BFGS that avoids
+repeated R/C++ crossings, and an optional OpenMP-parallelized observation loop
+(`n_threads = 0` uses all cores) in which the linear predictors of the objective
+and score are accumulated rather than computed through BLAS. Inference (the
+Hessian and standard errors) is computed only when `inference = TRUE`, so
+exploratory fits on massive data can skip it.
 
 ## References
 

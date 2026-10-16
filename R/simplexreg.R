@@ -226,7 +226,7 @@
 # Internal: detect columns of a design matrix that are aliased (linearly
 # dependent on earlier columns), using the same pivoted QR that lm() uses.
 #
-# Without this the optimiser happily converges on a rank-deficient design and
+# Without this the optimizer happily converges on a rank-deficient design and
 # reports a finite estimate for EVERY column, splitting one identified effect
 # arbitrarily across the collinear group. With x2 = 2 * x1 it returned
 # x1 = 0.105 and x2 = 0.210, two numbers that mean nothing individually --
@@ -240,6 +240,31 @@
   aliased <- rep(TRUE, ncol(M))
   if (qrM$rank > 0L) aliased[qrM$pivot[seq_len(qrM$rank)]] <- FALSE
   aliased
+}
+
+
+# Internal: detect the aliased columns of the mean design X and the dispersion
+# design Z, warn naming them, and stop when a whole design is aliased. Shared by
+# fastsimplexreg() and fastsimplexregmixed() so both treat rank deficiency alike.
+# Returns list(x, z): logical vectors over the columns, TRUE where aliased.
+.simplex_check_alias <- function(X, Z) {
+  alias_x <- .simplex_aliased(X)
+  alias_z <- .simplex_aliased(Z)
+  if (any(alias_x) || any(alias_z)) {
+    warning("Design is rank deficient: ",
+            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
+                  collapse = ", "),
+            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
+            " a linear combination of the other columns and cannot be ",
+            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
+  }
+  # With every column aliased there is nothing left to fit.
+  if (all(alias_x) || all(alias_z)) {
+    stop("Every column of the ", if (all(alias_x)) "mean" else "dispersion",
+         " design is aliased; the model has no estimable parameters.",
+         call. = FALSE)
+  }
+  list(x = alias_x, z = alias_z)
 }
 
 
@@ -293,8 +318,10 @@
 #'
 #' The mean supports the `logit`, `probit`, `cloglog` and `neglog` links; the
 #' dispersion uses a log link. The log-likelihood, the analytic score, the link
-#' inverses and the BFGS optimiser run entirely in C++. Matrix-vector products
-#' use Armadillo/BLAS and the per-observation loop may use OpenMP.
+#' inverses and the BFGS optimizer run entirely in C++. In the objective and
+#' score the linear predictors are accumulated inside the per-observation loop,
+#' which may use OpenMP (see `n_threads`), not through BLAS; fitted values and
+#' [predict.simplex_fast()] use Armadillo matrix products.
 #'
 #' @param formula A multi-part formula, for example `y ~ x1 + x2 | z1 + z2`.
 #'   Each part may carry its own `offset()` term: in
@@ -309,14 +336,26 @@
 #' @param link Character string selecting the mean link: `"logit"`, `"probit"`,
 #'   `"cloglog"` or `"neglog"`.
 #' @param start Optional numeric starting vector `c(beta, gamma)`. When `NULL`,
-#'   fast link-specific starting values are used.
+#'   fast link-specific starting values are used. `beta` and `gamma` refer to the
+#'   columns that remain after aliased ones are dropped, so the length is
+#'   `ncol(X) + ncol(Z)` of the reduced designs.
 #' @param maxit Integer; the maximum number of BFGS iterations.
-#' @param rel_tol Numeric; relative tolerance on the objective function.
-#' @param grad_tol Numeric; tolerance on the infinity norm of the gradient.
+#' @param rel_tol Numeric; tolerance on the relative change of the objective
+#'   between two BFGS iterations, \eqn{|f_{k-1} - f_k| / (1 + |f_{k-1}|)}. The
+#'   fit stops when this change is at most `rel_tol` and the gradient infinity
+#'   norm is at most `sqrt(grad_tol)`. It also stops, reported as converged,
+#'   when the line search can no longer find a sufficient decrease and the last
+#'   relative change was at most `sqrt(rel_tol)`.
+#' @param grad_tol Numeric; absolute tolerance on the infinity norm of the
+#'   gradient of the NEGATIVE log-likelihood. That gradient is a sum over
+#'   observations and is not scaled by `n`, so at large `n` this tolerance can
+#'   be unreachable. The fit stops as soon as the norm is at most `grad_tol`;
+#'   `sqrt(grad_tol)` is the gradient bound in the `rel_tol` rule above.
 #' @param n_threads Integer number of OpenMP threads; the loop over observations
-#'   is parallelised. Use `0` to request all threads available to the backend.
-#'   The linear predictors are accumulated inside that loop rather than through
-#'   BLAS, so performance does not depend on how your BLAS is configured.
+#'   is parallelized. Use `0` to request all threads available to the backend.
+#'   In the objective and score the linear predictors are accumulated inside
+#'   that loop rather than through BLAS, so the fit time does not depend on how
+#'   your BLAS is configured.
 #'   Measured end-to-end speed-ups on a 24-core machine:
 #'
 #'   \tabular{lrrrr}{
@@ -342,15 +381,18 @@
 #'   Hessian of the negative log-likelihood obtained by central differences of
 #'   the analytic score. `"expected"` uses the exact Fisher information, which
 #'   for the simplex is available in closed form and is block diagonal in
-#'   \eqn{(\beta, \gamma)}: it needs no finite differencing, is positive
-#'   definite by construction, and is roughly twenty times cheaper. The two
-#'   agree asymptotically and, at \eqn{n = 4000}, to within 0.4\%. The default
-#'   stays `"observed"` because Efron and Hinkley (1978) argue it is the better
-#'   variance estimator for conditional inference; `"expected"` is the more
-#'   robust choice when the observed information is ill-conditioned.
+#'   \eqn{(\beta, \gamma)}: it needs no finite differencing and is positive
+#'   definite by construction. The information step is roughly 4 to 6 times
+#'   cheaper for a model with five parameters (more for larger models), but the
+#'   total fit time changes by under about 10% because the BFGS iterations
+#'   dominate. The two agree asymptotically and, for a model with one mean and
+#'   one dispersion covariate at \eqn{n = 4000}, to within about 3%. The default stays `"observed"` because
+#'   Efron and Hinkley (1978) argue it is the better variance estimator for
+#'   conditional inference; `"expected"` is the more robust choice when the
+#'   observed information is ill-conditioned.
 #' @param hessian_rel_step Numeric; the initial relative step for the Hessian,
 #'   obtained by central differences of the analytic gradient.
-#' @param trace Logical; if `TRUE`, prints optimiser progress.
+#' @param trace Logical; if `TRUE`, prints optimizer progress.
 #' @param subset Optional expression selecting a subset of observations,
 #'   evaluated inside `data` as in [stats::lm()] -- for example
 #'   `subset = x1 > 0`. A plain index, logical or row-name vector also
@@ -457,25 +499,13 @@ fastsimplexreg <- function(
   # Drop aliased columns before fitting and put NA back afterwards, as lm()
   # does. Fitting on the full rank-deficient design would return an arbitrary
   # split of one identified effect across the collinear group.
-  alias_x <- .simplex_aliased(X)
-  alias_z <- .simplex_aliased(Z)
-  if (any(alias_x) || any(alias_z)) {
-    warning("Design is rank deficient: ",
-            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
-                  collapse = ", "),
-            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
-            " a linear combination of the other columns and cannot be ",
-            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
-  }
+  alias <- .simplex_check_alias(X, Z)
+  alias_x <- alias$x
+  alias_z <- alias$z
   X_full <- X
   Z_full <- Z
   X <- X[, !alias_x, drop = FALSE]
   Z <- Z[, !alias_z, drop = FALSE]
-  if (ncol(X) == 0L || ncol(Z) == 0L) {
-    stop("Every column of the ", if (ncol(X) == 0L) "mean" else "dispersion",
-         " design is aliased; the model has no estimable parameters.",
-         call. = FALSE)
-  }
   p <- ncol(X)
   q <- ncol(Z)
   # numeric(0) is the backend's "no offset" sentinel.
