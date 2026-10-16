@@ -96,8 +96,8 @@ for the simplex is available in closed form and is block diagonal in
 definite by construction. The information step is roughly 4 to 6 times
 cheaper for a model with five parameters (more for larger models), but the
 total fit time changes by under about 10\% because the BFGS iterations
-dominate. The two agree asymptotically and, in the case measured at
-\eqn{n = 4000}, to within about 3\%. The default stays \code{"observed"} because
+dominate. The two agree asymptotically and, for a model with one mean and
+one dispersion covariate at \eqn{n = 4000}, to within about 3\%. The default stays \code{"observed"} because
 Efron and Hinkley (1978) argue it is the better variance estimator for
 conditional inference; \code{"expected"} is the more robust choice when the
 observed information is ill-conditioned.}

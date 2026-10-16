@@ -256,7 +256,7 @@ test_that("malformed cluster offsets error cleanly instead of crashing", {
                "0, ..., nrow", fixed = TRUE)
 })
 
-test_that("non-convergence is signalled and standard errors are withheld", {
+test_that("non-convergence is signaled and standard errors are withheld", {
   # This used to rely on cloglog happening to miss the gradient tolerance on
   # this data -- an accident that the 0.2.3 stopping rule removed. Drive the
   # failure deliberately instead: one iteration from a start far outside the

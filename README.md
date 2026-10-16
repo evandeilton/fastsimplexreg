@@ -265,20 +265,20 @@ predict(fit, newdata = new_dat, type = "both")
 
 The shipped benchmark was run with `fastsimplexreg` 0.2.1 (`simplexreg`
 1.3, `betareg` 3.2.4, R 4.5.2, 24 cores) and has not been re-run for
-later versions. At a single thread, `fastsimplexreg` was 5.3-13.4x
-faster than `simplexreg` and 2.3-4.4x faster than `betareg` (logit link)
-for sample sizes up to 1e5. At n = 5e5 the single-thread gain over
-`simplexreg` was 1.2x, and `fastsimplexreg` took about twice as long as
-`betareg`. On simulated data `fastsimplexreg` and `simplexreg` return
-the same estimates (largest coefficient difference 7.8e-7). On the three
-real data sets the mean coefficients agree (largest difference 3.5e-6),
-but the dispersion intercepts differ by 0.065 to 0.082 on the log scale.
-The gap equals log(n/(n-p)), with p the number of mean coefficients, so
-`simplexreg` appears to rescale the maximum-likelihood dispersion by
-n/(n-p) (deviance over residual degrees of freedom). `simplexreg` is
-archived on CRAN and not installed here, so its code was not read.
-`betareg` fits a different (beta) model, so that comparison is about
-speed only. See the [benchmark
+later versions. At a single thread and with the logit link,
+`fastsimplexreg` was 5.3-13.4x faster than `simplexreg` and 2.3-4.4x
+faster than `betareg` for sample sizes up to 1e5. At n = 5e5 the
+single-thread gain over `simplexreg` was 1.2x, and `fastsimplexreg` took
+about twice as long as `betareg`. On simulated data `fastsimplexreg` and
+`simplexreg` return the same estimates (largest coefficient difference
+7.8e-7). On the three real data sets the mean coefficients agree
+(largest difference 3.5e-6), but the dispersion intercepts differ by
+0.065 to 0.082 on the log scale. The gap equals log(n/(n-p)), with p the
+number of mean coefficients, so `simplexreg` appears to rescale the
+maximum-likelihood dispersion by n/(n-p) (deviance over residual degrees
+of freedom). `simplexreg` is archived on CRAN and was not available for
+this check, so its code was not read. `betareg` fits a different (beta)
+model, so that comparison is about speed only. See the [benchmark
 article](https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html)
 (the full reproducible study ships in `inst/benchmark/`).
 

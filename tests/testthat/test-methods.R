@@ -266,8 +266,9 @@ test_that("fitted, residuals and predict carry the observation labels", {
 
 
 # Quantile residuals (Dunn and Smyth, 1996). Under a correct model
-# these are EXACTLY standard normal, which neither Pearson nor deviance
-# residuals are once the fitted means move away from 1/2.
+# these are approximately standard normal (exactly so at the true parameters),
+# which neither Pearson nor deviance residuals are once the fitted means move
+# away from 1/2.
 test_that("quantile residuals are standard normal under a correct model", {
   set.seed(505)
   rate <- function(b0, phi0, B = 60L, n = 300L) {

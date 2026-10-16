@@ -148,8 +148,8 @@ win**: at $n = 5000$, $20000$ and $10^5$ four threads are *slower* than one
 (0.52 s against 0.04 s, 0.60 s against 0.15 s, and 1.45 s against 0.84 s), and
 the payoff appears at large scale (at $n = 5\times10^5$ the
 4-thread run, 3.25 s, is the fastest of all four). Version 0.2.1 computed the
-linear predictors through BLAS and later versions do not (see `NEWS.md`), so
-the threaded timings here may not carry over to them.
+linear predictors through BLAS and the current version does not (see
+`NEWS.md`), so the threaded timings here may not carry over to it.
 Second, the **single-thread $n = 5\times10^5$ cell** took 17.3 s against 0.84 s
 at $n = 10^5$ (21 times longer for 5 times the data, two repetitions), and we
 draw no advantage from it — only the 4-thread result there supports a claim.

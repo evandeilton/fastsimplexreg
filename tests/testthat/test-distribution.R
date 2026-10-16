@@ -1,7 +1,7 @@
 # Tests for the simplex density (dsimplex) and random generator (rsimplex).
 # All tests use n_threads = 1L and modest sample sizes for speed and
 # reproducibility. Correctness is verified purely through the documented public
-# R API described in the consensus contract (Section 3).
+# R API contract for the distribution functions.
 
 # Closed-form reference for the simplex log-density, used to cross-check the
 # compiled backend independently of any C++ symbol.

@@ -3,10 +3,10 @@
 ## Fixes
 
 * **`psimplex(lower.tail = FALSE)` for a small `mu`.** The upper tail lost
-  accuracy as `mu` shrank (absolute error 1e-5 at `mu = 1e-8`, 0.5 at
-  `mu = 1e-12`) because two terms of size ~1e8 were subtracted. Both tails are
-  now accurate: `F + S = 1` to 2e-16 for `mu` from 1e-12 to `1 - 1e-8`. Fits
-  were not affected.
+  accuracy as `mu` shrank (an absolute error of 1e-5 or more at `mu = 1e-8`,
+  up to 0.8 for `mu <= 1e-10`) because two terms of size ~1e8 were subtracted.
+  Both tails are now accurate: lower plus upper tail equals 1 to 2e-16 for `mu`
+  from 1e-12 to `1 - 1e-8`. Fits were not affected.
 * **`qsimplex(lower.tail = FALSE)` for a small `p`.** It lost digits below
   `p` = 1e-10 and returned 1 for `p` = 1e-20 (true value 0.959). Each tail is
   now solved directly, also with `log.p = TRUE` (`p` down to 1e-300 and
@@ -23,9 +23,11 @@
 * **Large single-thread fits no longer stall near the optimum.** The objective
   and score are now summed with compensated accumulation. The rounding noise of
   a plain sum of 1e6 terms exceeded the decrease the line search was looking
-  for. At n = 1e6 with one thread the fit takes 96 objective evaluations
-  instead of 608 (3.8 s instead of 19 s) and matches the 8-thread fit; results
-  for n <= 1e5 are unchanged to 1e-15.
+  for. In a simulated example with n = 1e6 and one thread the fit takes about
+  100 objective evaluations instead of about 600 (about 4 s instead of 20 s)
+  and matches the 8-thread fit. For n <= 1e5 the objective and score agree to
+  about 1e-14 and the estimates are identical or within the optimizer
+  tolerance (up to 2e-8 observed).
 
 ## New
 
