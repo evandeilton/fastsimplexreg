@@ -247,6 +247,15 @@ EvalResult evaluate_impl(
     for (const auto& g : grad_local) grad += g;
   }
 
+  // Only loglik_i is checked per observation, but the score can still overflow
+  // (e.g. 0 * Inf where the mean is clamped and phi is tiny, which gave a NaN
+  // gradient with valid = TRUE). A non-finite term never becomes finite by
+  // addition, so one check on the totals rejects the point like any other
+  // invalid one and the line search simply backs off.
+  if (!std::isfinite(nll) || (need_grad && !grad.is_finite())) {
+    return {std::numeric_limits<double>::infinity(), vec(d, arma::fill::zeros), false};
+  }
+
   return {nll, std::move(grad), true, n_saturated};
 }
 

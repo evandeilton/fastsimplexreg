@@ -556,6 +556,12 @@ EvalResult mixed_core(
   vec grad(dim, arma::fill::zeros);
   if (need_grad) for (const auto& g : grad_local) grad += g;
 
+  // Defensive: the per-cluster check covers loglik_j only, and an Inf score at a
+  // zero-weight node would turn into NaN in the weighted contraction. Reject such
+  // a point here, as the fixed-effects evaluator does (no case found in 9000
+  // random extreme evaluations).
+  if (!std::isfinite(nll) || (need_grad && !grad.is_finite())) return fail();
+
   return EvalResult{nll, std::move(grad), true, n_saturated};
 }
 

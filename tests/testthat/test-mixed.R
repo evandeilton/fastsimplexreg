@@ -79,6 +79,32 @@ test_that("analytic AGHQ gradient matches numerical differentiation", {
   expect_equal(ga, gn, tolerance = 1e-4)
 })
 
+test_that("the AGHQ gradient also matches numDeriv with a probit link and with q = 2", {
+  skip_if_not_installed("numDeriv")
+  ns <- getNamespace("fastsimplexreg")
+  # (q, link, theta); omega = (log d11, d21, log d22) for q = 2.
+  cases <- list(
+    list(q = 1L, link = 2L, th = c(0.2, -0.5, -0.3, 0.1, log(0.4))),
+    list(q = 2L, link = 1L, th = c(0.3, -0.6, -0.2, 0.3, log(0.5), 0.1, log(0.3)))
+  )
+  for (cs in cases) {
+    dat <- sim_mixed(J = 30L, nj = 8L, q = cs$q)
+    X <- cbind(1, dat$x1); W <- cbind(1, dat$z1)
+    Z <- if (cs$q == 1L) matrix(1, nrow(dat), 1) else cbind(1, dat$x1)
+    gi <- as.integer(dat$g); ord <- order(gi)
+    starts <- as.integer(c(0, cumsum(tabulate(gi, nlevels(dat$g)))))
+    yo <- dat$y[ord]; Xo <- X[ord, , drop = FALSE]; Zo <- Z[ord, , drop = FALSE]
+    Wo <- W[ord, , drop = FALSE]
+    f <- function(p) ns$simplex_mixed_eval_cpp(p, yo, Xo, Zo, Wo, starts, cs$q, cs$link,
+                                               25L, 1L)$value
+    ga <- as.numeric(ns$simplex_mixed_eval_cpp(cs$th, yo, Xo, Zo, Wo, starts, cs$q,
+                                               cs$link, 25L, 1L)$gradient)
+    gn <- numDeriv::grad(f, cs$th)
+    # Measured 8e-11 (probit) and 2e-10 (q = 2); 1e-6 leaves room for platforms.
+    expect_lt(max(abs(ga - gn)) / max(abs(gn)), 1e-6)
+  }
+})
+
 test_that("a random intercept + slope model (q = 2) fits", {
   dat <- sim_mixed(J = 120L, nj = 12L, sigma = 0.6, q = 2L)
   fit <- fastsimplexregmixed(y ~ x1 | z1, random = ~ 1 + x1 | g, data = dat,
