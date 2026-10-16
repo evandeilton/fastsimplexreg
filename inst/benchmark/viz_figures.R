@@ -7,9 +7,9 @@
 ##   results_path <- system.file("extdata", package = "fastsimplexreg")
 ##
 ## Dependencies: ggplot2, scales, patchwork, dplyr, tidyr
-## Palette anchored on the package diagnostic colours
+## Palette anchored on the package diagnostic colors
 ##   #1a5276 (primary) and #a93226 (accent); extended to a
-##   colour-blind-safe 4-hue categorical set (CVD adjacent dE 35.4,
+##   color-blind-safe 4-hue categorical set (CVD adjacent dE 35.4,
 ##   validated). Secondary encoding (linetype + shape) backs up hue on
 ##   the two lower-contrast series, per the accessibility relief rule.
 ## =====================================================================

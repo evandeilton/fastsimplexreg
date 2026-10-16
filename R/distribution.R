@@ -1,8 +1,8 @@
 # distribution.R
 # The simplex distribution family, following base R's d/p/q/r conventions.
 #
-# Conventions honoured throughout (see ?dnorm, ?dbeta for the reference
-# behaviour these mirror):
+# Conventions honored throughout (see ?dnorm, ?dbeta for the reference
+# behavior these mirror):
 #   * `x`/`q`/`p`, `mu` and `phi` are recycled to their common maximum length;
 #   * NA propagates as NA and NaN as NaN;
 #   * a parameter outside its domain (mu outside (0,1), phi <= 0, or non-finite)

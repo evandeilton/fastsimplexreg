@@ -14,7 +14,7 @@ Description: High-performance maximum-likelihood estimation of simplex
     dispersion are specified through a multi-part 'Formula' interface
     (y ~ x1 + x2 | z1 + z2), with 'logit', 'probit', 'cloglog' and 'neglog'
     links for the mean and a log link for the dispersion. The numerical hot path
-    -- log-likelihood, analytic score, a native 'BFGS' optimiser, density,
+    -- log-likelihood, analytic score, a native 'BFGS' optimizer, density,
     distribution and quantile functions, random generation, prediction and link
     inverses -- is implemented in C++ using 'RcppArmadillo', 'BLAS'/'LAPACK' and
     optional 'OpenMP' parallelism, so that models scale to large data sets. A
@@ -51,7 +51,7 @@ Suggests:
 VignetteBuilder: knitr
 URL: https://github.com/evandeilton/fastsimplexreg, https://evandeilton.github.io/fastsimplexreg/
 BugReports: https://github.com/evandeilton/fastsimplexreg/issues
-Language: en-GB
+Language: en-US
 Config/testthat/edition: 3
 Config/Needs/website: pkgdown
 Roxygen: list(markdown = TRUE)

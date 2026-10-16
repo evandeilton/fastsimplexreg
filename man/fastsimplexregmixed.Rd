@@ -61,7 +61,7 @@ the length is \code{ncol(X) + ncol(W) + q(q+1)/2} of the reduced designs.}
 \item{grad_tol}{Infinity-norm gradient tolerance.}
 
 \item{n_threads}{Number of OpenMP threads; the loop over clusters is
-parallelised. Zero uses all threads available to the backend. What
+parallelized. Zero uses all threads available to the backend. What
 parallelism buys here is governed by the work per CLUSTER, not by the number
 of clusters: measured on this design at 64000 observations, speed-up at 4
 threads was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x with
@@ -86,7 +86,7 @@ so a truncated inner solve expands around the wrong point.}
 
 \item{inner_tol}{Convergence tolerance of the inner solver.}
 
-\item{trace}{Logical; print optimiser progress.}
+\item{trace}{Logical; print optimizer progress.}
 
 \item{subset}{Optional expression selecting a subset of observations,
 evaluated inside \code{data} as in \code{\link[stats:lm]{stats::lm()}} -- for example
@@ -139,7 +139,7 @@ exact marginal likelihood, not of the \code{nAGQ}-point quadrature, so at
 cover 57\% rather than 95\%. Use \code{nAGQ >= 5}, and \code{nAGQ >= 11} when
 reporting inference.
 The per-cluster inner mode-finding, the quadrature and the analytic score are
-implemented in C++ (RcppArmadillo, BLAS) and parallelised over clusters with
+implemented in C++ (RcppArmadillo, BLAS) and parallelized over clusters with
 OpenMP, so the fit scales to large nested data sets. The random-effect
 covariance \eqn{\Sigma = D D^\top} is estimated on an unconstrained
 log-Cholesky scale, guaranteeing a positive-definite estimate.

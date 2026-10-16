@@ -18,13 +18,13 @@
 #' requested the panels are combined into a single figure with \pkg{patchwork}
 #' if that package is installed; otherwise they are drawn one after another. The
 #' (list of) `ggplot` object(s) is returned invisibly, so the plots can be
-#' further customised or re-arranged by the caller.
+#' further customized or re-arranged by the caller.
 #'
 #' @param x An object of class `"simplex_fast"`.
 #' @param which Integer vector selecting the panels to draw, a subset of
 #'   `1:4`.
 #' @param type Type of residual used in panels 1-3: `"quantile"` (the default;
-#'   randomised quantile residuals, which are exactly standard normal under a
+#'   randomized quantile residuals, which are exactly standard normal under a
 #'   correctly specified model), `"deviance"`, `"pearson"` or `"response"`.
 #'   See [residuals.simplex_fast()].
 #' @param smooth Logical; if `TRUE` (the default) a LOESS smoother is added to
@@ -45,7 +45,7 @@
 #' dat$y <- rsimplex(n, mu, exp(-0.5 + 0.4 * dat$z1))
 #' fit <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L)
 #' p <- plot(fit, which = 1:4)
-#' # 'p' is a ggplot/patchwork object that can be further customised.
+#' # 'p' is a ggplot/patchwork object that can be further customized.
 #'
 #' @export
 plot.simplex_fast <- function(x,

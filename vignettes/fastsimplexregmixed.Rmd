@@ -50,14 +50,14 @@ which has no closed form.
 ### Adaptive Gauss-Hermite quadrature
 
 The integral is approximated by **adaptive Gauss-Hermite quadrature** (AGHQ). For
-each cluster the integrand is centred at its posterior mode and rescaled by the
+each cluster the integrand is centered at its posterior mode and rescaled by the
 curvature there, after which a Gauss-Hermite rule with `nAGQ` points per
 dimension is applied. `nAGQ = 1` recovers the **Laplace approximation**; larger
 `nAGQ` refines the integral, at the cost of `nAGQ^q` evaluations per cluster.
 The random-effect covariance $\Sigma = D D^\top$ is estimated on an
 unconstrained log-Cholesky scale, so the estimate is always positive definite.
 The per-cluster inner mode-finding, the quadrature and the analytic score run in
-C++ and are parallelised over clusters with OpenMP.
+C++ and are parallelized over clusters with OpenMP.
 
 ### The `random` interface
 
@@ -162,7 +162,7 @@ grid has $\mathtt{nAGQ}^q$ nodes, keep the number of random effects small
 ($q \le 3$) and lower `nAGQ` as $q$ grows (good defaults, all comfortably
 above the supported minimum: `11` for $q = 1$, `9` for $q = 2$, `7` for
 $q = 3$). Because clusters are conditionally independent, the work is
-parallelised over clusters — set `n_threads = 0` to use all available cores.
+parallelized over clusters — set `n_threads = 0` to use all available cores.
 
 ## 5. Scope and extensions
 

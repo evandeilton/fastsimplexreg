@@ -226,7 +226,7 @@
 # Internal: detect columns of a design matrix that are aliased (linearly
 # dependent on earlier columns), using the same pivoted QR that lm() uses.
 #
-# Without this the optimiser happily converges on a rank-deficient design and
+# Without this the optimizer happily converges on a rank-deficient design and
 # reports a finite estimate for EVERY column, splitting one identified effect
 # arbitrarily across the collinear group. With x2 = 2 * x1 it returned
 # x1 = 0.105 and x2 = 0.210, two numbers that mean nothing individually --
@@ -318,7 +318,7 @@
 #'
 #' The mean supports the `logit`, `probit`, `cloglog` and `neglog` links; the
 #' dispersion uses a log link. The log-likelihood, the analytic score, the link
-#' inverses and the BFGS optimiser run entirely in C++. Matrix-vector products
+#' inverses and the BFGS optimizer run entirely in C++. Matrix-vector products
 #' use Armadillo/BLAS and the per-observation loop may use OpenMP.
 #'
 #' @param formula A multi-part formula, for example `y ~ x1 + x2 | z1 + z2`.
@@ -339,7 +339,7 @@
 #' @param rel_tol Numeric; relative tolerance on the objective function.
 #' @param grad_tol Numeric; tolerance on the infinity norm of the gradient.
 #' @param n_threads Integer number of OpenMP threads; the loop over observations
-#'   is parallelised. Use `0` to request all threads available to the backend.
+#'   is parallelized. Use `0` to request all threads available to the backend.
 #'   The linear predictors are accumulated inside that loop rather than through
 #'   BLAS, so performance does not depend on how your BLAS is configured.
 #'   Measured end-to-end speed-ups on a 24-core machine:
@@ -375,7 +375,7 @@
 #'   robust choice when the observed information is ill-conditioned.
 #' @param hessian_rel_step Numeric; the initial relative step for the Hessian,
 #'   obtained by central differences of the analytic gradient.
-#' @param trace Logical; if `TRUE`, prints optimiser progress.
+#' @param trace Logical; if `TRUE`, prints optimizer progress.
 #' @param subset Optional expression selecting a subset of observations,
 #'   evaluated inside `data` as in [stats::lm()] -- for example
 #'   `subset = x1 > 0`. A plain index, logical or row-name vector also

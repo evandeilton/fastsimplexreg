@@ -19,7 +19,7 @@
 \code{1:4}.}
 
 \item{type}{Type of residual used in panels 1-3: \code{"quantile"} (the default;
-randomised quantile residuals, which are exactly standard normal under a
+randomized quantile residuals, which are exactly standard normal under a
 correctly specified model), \code{"deviance"}, \code{"pearson"} or \code{"response"}.
 See \code{\link[=residuals.simplex_fast]{residuals.simplex_fast()}}.}
 
@@ -51,7 +51,7 @@ Each panel is a self-contained \code{ggplot} object. When more than one panel is
 requested the panels are combined into a single figure with \pkg{patchwork}
 if that package is installed; otherwise they are drawn one after another. The
 (list of) \code{ggplot} object(s) is returned invisibly, so the plots can be
-further customised or re-arranged by the caller.
+further customized or re-arranged by the caller.
 }
 \examples{
 set.seed(6)
@@ -61,7 +61,7 @@ mu <- simplex_linkinv(0.2 + 0.7 * dat$x1, link = "logit")
 dat$y <- rsimplex(n, mu, exp(-0.5 + 0.4 * dat$z1))
 fit <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L)
 p <- plot(fit, which = 1:4)
-# 'p' is a ggplot/patchwork object that can be further customised.
+# 'p' is a ggplot/patchwork object that can be further customized.
 
 }
 \seealso{

@@ -144,7 +144,7 @@
     # The diagonal entry is log D[j, j], where Sigma = D D'. That is the
     # marginal standard deviation ONLY for j = 1; for j >= 2 it is the
     # CONDITIONAL standard deviation of random effect j given effects 1..j-1.
-    # Labelling it "logsd." understated a random slope's SD by a factor of
+    # Labeling it "logsd." understated a random slope's SD by a factor of
     # nearly two in a measured q = 2 fit (0.389 against a true 0.758), read
     # straight off fit$omega. "logchol." names what the number actually is;
     # VarCorr() remains the only supported route to marginal SDs.
@@ -181,7 +181,7 @@
 #' cover 57% rather than 95%. Use `nAGQ >= 5`, and `nAGQ >= 11` when
 #' reporting inference.
 #' The per-cluster inner mode-finding, the quadrature and the analytic score are
-#' implemented in C++ (RcppArmadillo, BLAS) and parallelised over clusters with
+#' implemented in C++ (RcppArmadillo, BLAS) and parallelized over clusters with
 #' OpenMP, so the fit scales to large nested data sets. The random-effect
 #' covariance \eqn{\Sigma = D D^\top} is estimated on an unconstrained
 #' log-Cholesky scale, guaranteeing a positive-definite estimate.
@@ -223,7 +223,7 @@
 #' @param rel_tol Relative objective tolerance.
 #' @param grad_tol Infinity-norm gradient tolerance.
 #' @param n_threads Number of OpenMP threads; the loop over clusters is
-#'   parallelised. Zero uses all threads available to the backend. What
+#'   parallelized. Zero uses all threads available to the backend. What
 #'   parallelism buys here is governed by the work per CLUSTER, not by the number
 #'   of clusters: measured on this design at 64000 observations, speed-up at 4
 #'   threads was 1.2x with clusters of 4 observations, 3.0x with 32 and 3.6x with
@@ -243,7 +243,7 @@
 #'   Must be at least 10: the AGHQ expansion is taken at the posterior mode,
 #'   so a truncated inner solve expands around the wrong point.
 #' @param inner_tol Convergence tolerance of the inner solver.
-#' @param trace Logical; print optimiser progress.
+#' @param trace Logical; print optimizer progress.
 #' @param subset Optional expression selecting a subset of observations,
 #'   evaluated inside `data` as in [stats::lm()] -- for example
 #'   `subset = x1 > 0`. A plain index, logical or row-name vector also works.
@@ -356,7 +356,7 @@ fastsimplexregmixed <- function(
     warning("nAGQ = ", nAGQ, " is below the supported minimum of 5. The ",
             "analytic gradient approximates the score of the exact marginal ",
             "likelihood, not of the ", nAGQ, "-point quadrature, so the ",
-            "optimiser may stop early and the standard errors are not ",
+            "optimizer may stop early and the standard errors are not ",
             "reliable (measured coverage at nAGQ = 1 is 57%, not 95%). Use ",
             "nAGQ >= 5, and nAGQ >= 11 when reporting inference.",
             call. = FALSE)
@@ -470,7 +470,7 @@ fastsimplexregmixed <- function(
 
   # BLAS thread pinning, for the duration of this call only.
   #
-  # The mixed backend parallelises over CLUSTERS and each cluster does several
+  # The mixed backend parallelizes over CLUSTERS and each cluster does several
   # small Armadillo products and decompositions. A threaded BLAS then layers its
   # own team under ours -- 8 OpenMP threads times up to 24 BLAS threads on a
   # 24-core box -- and the machine spends its time on scheduling. Measured on a

@@ -8,7 +8,7 @@
 # large negative variances, and the floor turns them into a standard error of
 # exactly 0 -- i.e. z = Inf and p = 0 for a parameter the data cannot identify.
 # A missing standard error must never be reported as a confident one, so this
-# helper works from the eigen-decomposition of the symmetrised Hessian and:
+# helper works from the eigen-decomposition of the symmetrized Hessian and:
 #
 #   * inverts only the strictly positive part of the spectrum (a Moore-Penrose
 #     pseudo-inverse restricted to the directions that carry real curvature);
@@ -88,7 +88,7 @@
 
   # A parameter is unidentified if it has appreciable loading on a discarded
   # eigen-direction; its variance from the pseudo-inverse is a minimum-norm
-  # artefact, not an estimate, so it is reported as NA rather than as a number.
+  # artifact, not an estimate, so it is reported as NA rather than as a number.
   affected <- rep(FALSE, d)
   if (any(!keep)) {
     loading <- sqrt(rowSums(V[, !keep, drop = FALSE]^2))
@@ -105,7 +105,7 @@
     warning(what, ": the observed information matrix is not positive definite (",
             sum(negative), " negative eigenvalue(s) on the correlation scale, ",
             "smallest = ", format(min(lambda), digits = 3),
-            "). The optimiser did not reach a maximum, so the covariance matrix ",
+            "). The optimizer did not reach a maximum, so the covariance matrix ",
             "is not a valid variance estimate; standard errors for ",
             paste(unique(par_names[affected]), collapse = ", "),
             " are reported as NA.", call. = FALSE)

@@ -52,7 +52,7 @@ named \code{object}, \code{x} or \code{formula} to match the corresponding gener
 
 \item{...}{Additional arguments, currently ignored.}
 
-\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomised
+\item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomized
 quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
 standard normal under a correct model), \code{"response"}, \code{"pearson"} or
 \code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or \code{"scaled"}.}
@@ -81,7 +81,7 @@ call when \code{evaluate = FALSE}.
 \description{
 Standard extractor methods for objects of class \code{"simplex_fast"} produced by
 \code{\link[=fastsimplexreg]{fastsimplexreg()}}. They mirror the conventions of the corresponding generics
-for linear and generalised linear models.
+for linear and generalized linear models.
 
 \describe{
 \item{\code{coef}}{Returns the estimated coefficients. \code{model = "all"} returns
@@ -89,14 +89,14 @@ the full vector, \code{"mean"} the mean submodel and \code{"dispersion"} the
 dispersion submodel.}
 \item{\code{vcov}}{Returns the variance-covariance matrix of the estimates.
 Errors if the model was fitted with \code{inference = FALSE}.}
-\item{\code{logLik}}{Returns the maximised log-likelihood, with attributes \code{df}
+\item{\code{logLik}}{Returns the maximized log-likelihood, with attributes \code{df}
 (number of estimated parameters; aliased coefficients are not counted)
 and \code{nobs}, and class \code{"logLik"}.}
 \item{\code{nobs}}{Returns the number of observations used in the fit.}
 \item{\code{fitted}}{Returns the fitted means (\code{model = "mean"}) or fitted
 dispersions (\code{model = "dispersion"}).}
 \item{\code{residuals}}{Returns residuals. \code{type = "quantile"} (the default)
-gives randomised quantile residuals in the sense of Dunn and Smyth
+gives randomized quantile residuals in the sense of Dunn and Smyth
 (1996): they are exactly standard normal under a correctly specified
 model, which the other three types are not, so they are the ones to read
 for diagnostics. \code{type = "response"} gives

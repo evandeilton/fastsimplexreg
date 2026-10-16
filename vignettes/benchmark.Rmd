@@ -72,7 +72,7 @@ if (has_viz) {
 Fitting the identical simplex model (logit mean with two covariates, log dispersion
 with one) on simulated data, `fastsimplexreg` and `simplexreg` return the same MLE.
 The largest coefficient disagreement is around `1e-6` and *tightens* as $n$ grows —
-pure optimiser noise.
+pure optimizer noise.
 
 ```{r tab-accuracy, echo = FALSE, results = "asis"}
 # Built from the shipped results rather than hard-coded, so the table can never
@@ -125,7 +125,7 @@ At single thread, `fastsimplexreg` is **5–13&times; faster than `simplexreg`**
 **~2.3–4.4&times; faster than `betareg`** across $n$ up to $10^5$ — the range that
 covers most applied work. The scaling is near-linear (slope $\approx 1.0$ up to
 $10^5$); the competitors have slightly lower slopes but far larger constant
-factors, so the absolute time still favours `fastsimplexreg`.
+factors, so the absolute time still favors `fastsimplexreg`.
 
 ```{r fig-speedup, echo = FALSE, eval = has_viz, fig.width = 7.5, fig.height = 4.6}
 fig_speedup()

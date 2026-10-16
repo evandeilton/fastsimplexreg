@@ -51,7 +51,7 @@ g(\mu_{ij}) = \mathbf{x}_{ij}^\top \boldsymbol\beta + \mathbf{z}_{ij}^\top \math
 \log(\phi_{ij}) = \mathbf{w}_{ij}^\top \boldsymbol\gamma.$$
 
 Since the random effects are unobserved, estimation is performed by
-maximising the marginal likelihood:
+maximizing the marginal likelihood:
 
 $$L(\boldsymbol\beta, \boldsymbol\gamma, \boldsymbol\Sigma) = \prod_j \int_{\mathbb{R}^q} \left[ \prod_i f(y_{ij} \mid \mathbf{b}_j; \mu_{ij}, \phi_{ij}) \right] f(\mathbf{b}_j; \boldsymbol\Sigma) \, \mathrm{d}\mathbf{b}_j,$$
 
@@ -60,7 +60,7 @@ density. This high-dimensional integral is approximated using
 high-performance **adaptive Gauss-Hermite quadrature** (AGHQ).
 
 The entire numerical hot path – log-likelihood, analytic score, a native
-BFGS optimiser, density, random generation, prediction and link inverses
+BFGS optimizer, density, random generation, prediction and link inverses
 – is implemented in C++ with `RcppArmadillo`, BLAS/LAPACK and optional
 OpenMP parallelism, so that models scale to large data sets.
 
@@ -115,7 +115,7 @@ The `neglog` definition follows Zhang et al. (2016).
 
 We use the `ReadingSkills` data from the **betareg** package: the
 response `accuracy` is a reading-accuracy score in $(0, 1)$ for children
-with and without `dyslexia`, together with a standardised `iq`. We let
+with and without `dyslexia`, together with a standardized `iq`. We let
 the mean depend on both and the dispersion depend on dyslexia status.
 
 ``` r
@@ -242,8 +242,8 @@ predict(fit, newdata = new_dat, type = "both")
 ## Performance notes
 
 - **Analytic score** for every link, avoiding numerical differentiation
-  during optimisation.
-- **Native BFGS in C++**, so the optimiser does not cross the R/C++
+  during optimization.
+- **Native BFGS in C++**, so the optimizer does not cross the R/C++
   boundary at each objective evaluation.
 - **Armadillo/BLAS** linear algebra for the linear predictors.
 - **OpenMP** parallelism over observations; `n_threads = 0` requests all

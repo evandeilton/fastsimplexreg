@@ -3,7 +3,7 @@
 #' @description
 #' Standard extractor methods for objects of class `"simplex_fast"` produced by
 #' [fastsimplexreg()]. They mirror the conventions of the corresponding generics
-#' for linear and generalised linear models.
+#' for linear and generalized linear models.
 #'
 #' \describe{
 #'   \item{`coef`}{Returns the estimated coefficients. `model = "all"` returns
@@ -11,14 +11,14 @@
 #'     dispersion submodel.}
 #'   \item{`vcov`}{Returns the variance-covariance matrix of the estimates.
 #'     Errors if the model was fitted with `inference = FALSE`.}
-#'   \item{`logLik`}{Returns the maximised log-likelihood, with attributes `df`
+#'   \item{`logLik`}{Returns the maximized log-likelihood, with attributes `df`
 #'     (number of estimated parameters; aliased coefficients are not counted)
 #'     and `nobs`, and class `"logLik"`.}
 #'   \item{`nobs`}{Returns the number of observations used in the fit.}
 #'   \item{`fitted`}{Returns the fitted means (`model = "mean"`) or fitted
 #'     dispersions (`model = "dispersion"`).}
 #'   \item{`residuals`}{Returns residuals. `type = "quantile"` (the default)
-#'     gives randomised quantile residuals in the sense of Dunn and Smyth
+#'     gives randomized quantile residuals in the sense of Dunn and Smyth
 #'     (1996): they are exactly standard normal under a correctly specified
 #'     model, which the other three types are not, so they are the ones to read
 #'     for diagnostics. `type = "response"` gives
@@ -63,7 +63,7 @@
 #'   returned unevaluated.
 #' @param model For `coef`, one of `"all"`, `"mean"` or `"dispersion"`; for
 #'   `fitted`, `model.matrix` and `terms`, one of `"mean"` or `"dispersion"`.
-#' @param type For `residuals`, one of `"quantile"` (the default; randomised
+#' @param type For `residuals`, one of `"quantile"` (the default; randomized
 #'   quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
 #'   standard normal under a correct model), `"response"`, `"pearson"` or
 #'   `"deviance"`. For `deviance`, `"unscaled"` (default) or `"scaled"`.
@@ -465,7 +465,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 }
 
 
-#' @title Summarise a Simplex Regression Fit
+#' @title Summarize a Simplex Regression Fit
 #'
 #' @description
 #' Produces a summary of a fitted `"simplex_fast"` object, including coefficient
@@ -481,7 +481,7 @@ print.simplex_fast <- function(x, digits = max(3L, getOption("digits") - 3L), ..
 #'   component `coefficients` is itself a list with the `mean` and `dispersion`
 #'   coefficient tables (each with columns `Estimate`, `Std. Error`, `z value`
 #'   and `Pr(>|z|)`), together with the quantile residuals, the links, fit
-#'   statistics (log-likelihood, AIC, BIC, deviance) and optimiser diagnostics.
+#'   statistics (log-likelihood, AIC, BIC, deviance) and optimizer diagnostics.
 #'   The `print` method returns its argument invisibly.
 #'
 #' @seealso [fastsimplexreg()], [print.simplex_fast()]
