@@ -9,6 +9,10 @@
 \alias{nobs.simplex_fast_mixed}
 \alias{fitted.simplex_fast_mixed}
 \alias{residuals.simplex_fast_mixed}
+\alias{deviance.simplex_fast_mixed}
+\alias{model.matrix.simplex_fast_mixed}
+\alias{terms.simplex_fast_mixed}
+\alias{simulate.simplex_fast_mixed}
 \alias{ranef.simplex_fast_mixed}
 \alias{VarCorr.simplex_fast_mixed}
 \title{Extractor Methods for Simplex Mixed-Model Fits}
@@ -27,6 +31,14 @@
 
 \method{residuals}{simplex_fast_mixed}(object, type = c("quantile", "response", "pearson", "deviance"), ...)
 
+\method{deviance}{simplex_fast_mixed}(object, type = c("unscaled", "scaled"), ...)
+
+\method{model.matrix}{simplex_fast_mixed}(object, model = c("mean", "dispersion", "random"), ...)
+
+\method{terms}{simplex_fast_mixed}(x, model = c("mean", "dispersion", "random"), ...)
+
+\method{simulate}{simplex_fast_mixed}(object, nsim = 1, seed = NULL, ...)
+
 \method{ranef}{simplex_fast_mixed}(object, postVar = FALSE, ...)
 
 \method{VarCorr}{simplex_fast_mixed}(x, sigma = 1, ...)
@@ -35,7 +47,8 @@
 \item{object, x}{A fitted \code{"simplex_fast_mixed"} object.}
 
 \item{model}{For \code{coef}, one of \code{"all"}, \code{"mean"} or \code{"dispersion"}; for
-\code{fitted}, one of \code{"mean"} or \code{"dispersion"}.}
+\code{fitted}, one of \code{"mean"} or \code{"dispersion"}; for \code{model.matrix} and
+\code{terms}, one of \code{"mean"}, \code{"dispersion"} or \code{"random"}.}
 
 \item{...}{Additional arguments, currently ignored.}
 
@@ -47,7 +60,14 @@ names, over the full vector \code{c(beta, gamma, omega)}. Defaults to all.}
 \item{type}{For \code{residuals}, one of \code{"quantile"} (the default; randomised
 quantile residuals in the sense of Dunn and Smyth, 1996, which are exactly
 standard normal under a correctly specified model), \code{"response"},
-\code{"pearson"} or \code{"deviance"}.}
+\code{"pearson"} or \code{"deviance"}. For \code{deviance}, \code{"unscaled"} (default) or
+\code{"scaled"}.}
+
+\item{nsim}{For \code{simulate}, the number of response vectors to draw.}
+
+\item{seed}{For \code{simulate}, an optional seed, handled as in
+\code{\link[stats:simulate]{stats::simulate()}}: when supplied, the current RNG state is restored on
+exit and the seed is recorded in the \code{"seed"} attribute of the result.}
 
 \item{postVar}{For \code{ranef}, logical; attach posterior covariances.}
 
@@ -57,10 +77,12 @@ so the argument rescales nothing; supplying anything other than \code{1} raises
 a warning and is ignored.}
 }
 \value{
-\code{coef}, \code{fitted} and \code{residuals} return numeric vectors; \code{vcov}
-returns a matrix; \code{ranef} returns a matrix; \code{VarCorr} returns the
-covariance matrix with \code{stddev}/\code{correlation} attributes; \code{logLik} returns
-a \code{"logLik"} object.
+\code{coef}, \code{fitted} and \code{residuals} return numeric vectors; \code{vcov} and
+\code{model.matrix} return matrices; \code{ranef} returns a matrix; \code{VarCorr} returns
+the covariance matrix with \code{stddev}/\code{correlation} attributes; \code{logLik}
+returns a \code{"logLik"} object; \code{deviance} returns a single number; \code{terms}
+returns a \code{"terms"} object; \code{simulate} returns a \code{data.frame} with \code{nsim}
+columns (\code{sim_1}, \code{sim_2}, ...), each of length \code{nobs(object)}.
 }
 \description{
 Standard extractor methods for objects of class \code{"simplex_fast_mixed"}
@@ -68,8 +90,11 @@ produced by \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}.
 
 \describe{
 \item{\code{coef}}{Fixed-effect coefficients (\code{model = "all"}, \code{"mean"} or
-\code{"dispersion"}). Aliased coefficients are \code{NA}. Random effects are
-obtained with \code{ranef()}.}
+\code{"dispersion"}). \code{"all"} is the mean block followed by the dispersion
+block, whose names carry the \verb{(phi)_} prefix of the parameter vector, so
+that no name repeats; it holds the fixed effects only, not the variance
+components. Aliased coefficients are \code{NA}. Random effects are obtained
+with \code{ranef()}.}
 \item{\code{vcov}}{Covariance matrix of the estimated parameters
 \code{c(beta, gamma, omega)}. Aliased coefficients are not estimated and have
 no row or column.}
@@ -92,6 +117,22 @@ the \code{"postVar"} attribute.}
 that the intervals for the variance components are on the unconstrained
 log-Cholesky scale, where a Wald interval is defensible; on the variance
 scale it would not be, because the null lies on the boundary.}
+\item{\code{deviance}}{The unscaled deviance \eqn{\sum_i d(y_i;\hat\mu_i)} with
+the simplex unit deviance
+\eqn{d(y;\mu) = (y-\mu)^2 / \{y(1-y)\mu^2(1-\mu)^2\}}, evaluated at the
+fitted means conditional on the empirical-Bayes random effects.
+\code{type = "scaled"} gives \eqn{\sum_i d(y_i;\hat\mu_i)/\hat\phi_i}.}
+\item{\code{model.matrix}}{The mean (\code{model = "mean"}), dispersion
+(\code{"dispersion"}) or random-effects (\code{"random"}) design matrix. Requires
+the fit to have stored the design (\code{x = TRUE}) or the model frame
+(\code{model = TRUE}). The mean and dispersion matrices include any aliased
+columns.}
+\item{\code{terms}}{The \code{"terms"} object of the mean, dispersion or
+random-effects part.}
+\item{\code{simulate}}{Draws \code{nsim} response vectors with \code{\link[=rsimplex]{rsimplex()}} at the
+fitted means and dispersions. The means are CONDITIONAL on the estimated
+random effects, which are held fixed: new clusters are not drawn, so
+this is a parametric bootstrap of the within-cluster noise only.}
 }
 }
 \examples{
@@ -104,10 +145,14 @@ fit <- fastsimplexregmixed(y ~ x1, random = ~ 1 | g, data = dat,
                            nAGQ = 7, n_threads = 1)
 
 coef(fit)
+coef(fit, "all")
 VarCorr(fit)
 head(ranef(fit))
 confint(fit)
 ngrps(fit)
+deviance(fit)
+head(model.matrix(fit, "random"))
+head(simulate(fit, nsim = 2, seed = 1))
 }
 \references{
 Dunn, P. K. and Smyth, G. K. (1996). Randomized quantile residuals.

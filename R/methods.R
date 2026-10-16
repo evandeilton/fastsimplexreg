@@ -173,7 +173,13 @@ residuals.simplex_fast <- function(object, type = c("quantile", "response", "pea
 #' @export
 deviance.simplex_fast <- function(object,
                                   type = c("unscaled", "scaled"), ...) {
-  type <- match.arg(type)
+  .simplex_deviance(object, match.arg(type))
+}
+
+
+# Internal: simplex deviance of a fit, from its (conditional) fitted values.
+# Shared by the fixed-effects and mixed-effects deviance() methods.
+.simplex_deviance <- function(object, type) {
   mu <- object$fitted.values
   y <- .simplex_response(object)
   d <- (y - mu)^2 / (y * (1 - y) * mu^2 * (1 - mu)^2)
@@ -607,6 +613,14 @@ print.summary.simplex_fast <- function(x, digits = max(3L, getOption("digits") -
 #'
 #' @export
 simulate.simplex_fast <- function(object, nsim = 1, seed = NULL, ...) {
+  .simplex_simulate(object, nsim, seed)
+}
+
+
+# Internal: RNG bookkeeping and drawing shared by the simulate() methods of both
+# fit classes. Draws from the stored fitted means (conditional on the
+# empirical-Bayes random effects for a mixed fit) and dispersions.
+.simplex_simulate <- function(object, nsim, seed) {
   nsim <- as.integer(nsim)
   if (length(nsim) != 1L || is.na(nsim) || nsim < 1L) {
     stop("'nsim' must be a single positive integer.", call. = FALSE)
