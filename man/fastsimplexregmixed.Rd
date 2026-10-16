@@ -50,7 +50,9 @@ errors are then unreliable (see Details). \code{nAGQ = 1} is the Laplace
 approximation.}
 
 \item{start}{Optional starting vector \code{c(beta, gamma, omega)}. When \code{NULL},
-fast link-specific values are used.}
+fast link-specific values are used. As in \code{\link[=fastsimplexreg]{fastsimplexreg()}}, \code{beta} and
+\code{gamma} refer to the columns that remain after aliased ones are dropped, so
+the length is \code{ncol(X) + ncol(W) + q(q+1)/2} of the reduced designs.}
 
 \item{maxit}{Maximum number of BFGS iterations.}
 
@@ -93,23 +95,28 @@ evaluated inside \code{data} as in \code{\link[stats:lm]{stats::lm()}} -- for ex
 \item{na.action}{Missing-data handler.}
 
 \item{model, x, y}{Logical; store the model frame, the design matrices, and the
-response in the fitted object.}
+response in the fitted object. The stored mean and dispersion designs are
+the full ones, aliased columns included.}
 }
 \value{
 An object of S3 class \code{"simplex_fast_mixed"}: a list whose main
 components are \code{coefficients} (a list with the \code{mean} and \code{dispersion}
-fixed-effect estimates), \code{par} (the full vector \code{c(beta, gamma, omega)}),
-\code{omega} (the packed log-Cholesky parameters), \code{D} (the Cholesky factor) and
-\code{Sigma} (the estimated random-effect covariance), \code{ranef} (the
-empirical-Bayes modes, a groups-by-\code{q} matrix) with \code{ranef.postvar},
-\code{standard_errors}, \code{vcov}, \code{fitted.values} (means conditional on the
-random-effect modes), \code{dispersion.values}, \code{linear.predictors}, \code{residuals}
-(response residuals), \code{logLik} (the marginal log-likelihood), \code{AIC}, \code{BIC},
-\code{nobs}, \code{ngrps}, \code{groups}, \code{nAGQ}, \code{q}, \code{df}, \code{df.residual}, \code{convergence},
-\code{message}, \code{iterations}, the \code{offset} actually applied to each submodel and
-the stored \code{terms}/\code{design} metadata used for prediction. The same
-inference diagnostics as \code{\link[=fastsimplexreg]{fastsimplexreg()}} are stored -- \code{vcov_rank},
-\code{vcov_pseudo}, \code{vcov_eigenvalues}, \code{vcov_condition} and \code{n_saturated}.
+fixed-effect estimates), \code{par} (the full vector \code{c(beta, gamma, omega)},
+with \code{NA} for aliased coefficients), \code{aliased} (a named logical over the
+fixed-effect parameters, \code{TRUE} where aliased), \code{omega} (the packed
+log-Cholesky parameters), \code{D} (the Cholesky factor) and \code{Sigma} (the
+estimated random-effect covariance), \code{ranef} (the empirical-Bayes modes, a
+groups-by-\code{q} matrix) with \code{ranef.postvar}, \code{standard_errors}, \code{vcov} and
+\code{hessian} (over the estimable parameters), \code{fitted.values} (means
+conditional on the random-effect modes), \code{dispersion.values},
+\code{linear.predictors}, \code{residuals} (response residuals), \code{logLik} (the
+marginal log-likelihood), \code{AIC}, \code{BIC}, \code{nobs}, \code{ngrps}, \code{groups}, \code{nAGQ},
+\code{q}, \code{df} (the number of estimable parameters), \code{df.residual},
+\code{convergence}, \code{message}, \code{iterations}, the \code{offset} actually applied to
+each submodel and the stored \code{terms}/\code{design} metadata used for
+prediction. The same inference diagnostics as \code{\link[=fastsimplexreg]{fastsimplexreg()}} are
+stored -- \code{vcov_rank}, \code{vcov_pseudo}, \code{vcov_eigenvalues}, \code{vcov_condition}
+and \code{n_saturated}.
 }
 \description{
 Fits a two-level (nested) simplex mixed model for continuous proportions in
@@ -139,6 +146,16 @@ log-Cholesky scale, guaranteeing a positive-definite estimate.
 
 This version supports a single grouping factor (two-level nesting), Gaussian
 random effects in the mean submodel, and fixed-effect (variable) dispersion.
+
+Columns of the mean or dispersion design that are linear combinations of
+earlier columns (aliased) are detected with the same pivoted QR as
+\code{\link[stats:lm]{stats::lm()}}, reported in a warning and left out of the fit, as in
+\code{\link[=fastsimplexreg]{fastsimplexreg()}}. Their coefficients and standard errors are \code{NA}; the
+model is fitted on the reduced designs, so the estimates, the
+log-likelihood, \code{AIC} and \code{BIC} equal those of the equivalent reduced model.
+\code{vcov} and \code{hessian} cover the estimable parameters only. The random-effects
+design is not checked. If every column of the mean (or dispersion) design is
+aliased the function stops.
 }
 \examples{
 set.seed(1)

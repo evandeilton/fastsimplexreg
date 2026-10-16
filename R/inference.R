@@ -242,6 +242,16 @@
 }
 
 
+# Internal: number of ESTIMABLE parameters of a fit. `par` keeps one slot per
+# column of the full design, with NA for the aliased ones (flagged in `aliased`,
+# which covers the fixed effects only), so those are subtracted from its length.
+# For a mixed fit the variance components in `par` are all estimable.
+.simplex_n_est <- function(object) {
+  al <- object[["aliased"]]
+  length(object$par) - if (is.null(al)) 0L else sum(al)
+}
+
+
 # Diagnostics the fit object has always stored but never showed. A user who
 # saves a fit, restarts, and prints the summary would otherwise see a clean
 # table with no hint that a pseudo-inverse was used or that the mean

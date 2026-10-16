@@ -56,11 +56,14 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'
 #' \describe{
 #'   \item{`coef`}{Fixed-effect coefficients (`model = "all"`, `"mean"` or
-#'     `"dispersion"`). Random effects are obtained with `ranef()`.}
+#'     `"dispersion"`). Aliased coefficients are `NA`. Random effects are
+#'     obtained with `ranef()`.}
 #'   \item{`vcov`}{Covariance matrix of the estimated parameters
-#'     `c(beta, gamma, omega)`.}
-#'   \item{`logLik`}{Maximised marginal log-likelihood, with `df = p + r +
-#'     q(q+1)/2` and `nobs`.}
+#'     `c(beta, gamma, omega)`. Aliased coefficients are not estimated and have
+#'     no row or column.}
+#'   \item{`logLik`}{Maximized marginal log-likelihood, with `df` the number of
+#'     estimable parameters (aliased coefficients excluded, variance components
+#'     included) and `nobs`.}
 #'   \item{`nobs`}{Number of observations.}
 #'   \item{`ngrps`}{Number of groups.}
 #'   \item{`fitted`}{Fitted means (conditional on the empirical-Bayes random
@@ -73,10 +76,10 @@ ngrps.simplex_fast_mixed <- function(object, ...) object$ngrps
 #'   \item{`VarCorr`}{The estimated random-effect covariance matrix
 #'     \eqn{\Sigma}, with standard deviations and correlations.}
 #'   \item{`confint`}{Wald confidence intervals over the full parameter vector
-#'     `c(beta, gamma, omega)`. Note that the intervals for the variance
-#'     components are on the unconstrained log-Cholesky scale, where a Wald
-#'     interval is defensible; on the variance scale it would not be, because
-#'     the null lies on the boundary.}
+#'     `c(beta, gamma, omega)`; the rows of aliased coefficients are `NA`. Note
+#'     that the intervals for the variance components are on the unconstrained
+#'     log-Cholesky scale, where a Wald interval is defensible; on the variance
+#'     scale it would not be, because the null lies on the boundary.}
 #' }
 #'
 #' @param object,x A fitted `"simplex_fast_mixed"` object.
@@ -255,6 +258,17 @@ print.VarCorr.simplex_fast_mixed <- function(x, digits = max(3L, getOption("digi
 }
 
 
+# Internal: logical masks of the NON-aliased columns of the mean (x) and
+# dispersion (w) designs of a mixed fit. `aliased` spans the fixed effects only.
+.simplex_mixed_keep <- function(object) {
+  p <- length(object$coefficients$mean)
+  r <- length(object$coefficients$dispersion)
+  al <- object[["aliased"]]
+  if (is.null(al)) al <- rep(FALSE, p + r)
+  list(x = !al[seq_len(p)], w = !al[p + seq_len(r)])
+}
+
+
 #' Predictions from a Simplex Mixed-Model Fit
 #'
 #' Computes predictions from a fitted `"simplex_fast_mixed"` model, either on
@@ -296,6 +310,9 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
   population <- (length(re.form) == 1L && is.na(re.form)) ||
     (inherits(re.form, "formula") && identical(all.vars(re.form), character(0)))
   d <- object$design
+  # Aliased columns were never estimated and their coefficients are NA, so they
+  # are dropped from the design before it is multiplied (as predict.simplex_fast()).
+  keep <- .simplex_mixed_keep(object)
 
   if (is.null(newdata)) {
     if (population) {
@@ -321,10 +338,10 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
         stop("Population-level predictions need the design. Refit with ",
              "model = TRUE or x = TRUE, or supply 'newdata'.", call. = FALSE)
       }
-      beta <- object$coefficients$mean
-      gamma <- object$coefficients$dispersion
-      eta_mu <- as.numeric(X %*% beta)
-      eta_phi <- as.numeric(W %*% gamma)
+      beta <- object$coefficients$mean[keep$x]
+      gamma <- object$coefficients$dispersion[keep$w]
+      eta_mu <- as.numeric(X[, keep$x, drop = FALSE] %*% beta)
+      eta_phi <- as.numeric(W[, keep$w, drop = FALSE] %*% gamma)
       if (!is.null(object$offset$mean)) eta_mu <- eta_mu + object$offset$mean
       if (!is.null(object$offset$dispersion)) {
         eta_phi <- eta_phi + object$offset$dispersion
@@ -355,10 +372,10 @@ predict.simplex_fast_mixed <- function(object, newdata = NULL,
     W <- des$matrices$dispersion
     Z <- des$matrices$random
 
-    beta <- object$coefficients$mean
-    gamma <- object$coefficients$dispersion
-    eta_mu <- as.numeric(X %*% beta)
-    eta_phi <- as.numeric(W %*% gamma)
+    beta <- object$coefficients$mean[keep$x]
+    gamma <- object$coefficients$dispersion[keep$w]
+    eta_mu <- as.numeric(X[, keep$x, drop = FALSE] %*% beta)
+    eta_phi <- as.numeric(W[, keep$w, drop = FALSE] %*% gamma)
 
     # Offsets belong to the linear predictor and must be rebuilt from newdata.
     nd_keep <- newdata[des$keep, , drop = FALSE]
@@ -537,7 +554,7 @@ summary.simplex_fast_mixed <- function(object, ...) {
       vcov_condition = object$vcov_condition,
       n_saturated = object$n_saturated,
       aliased = object$aliased,
-      npar = length(object$par),
+      npar = .simplex_n_est(object),   # estimable parameters, as in the vcov
       no_inference = is.null(object$vcov),
       convergence = object$convergence, message = object$message,
       iterations = object$iterations

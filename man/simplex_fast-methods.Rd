@@ -90,7 +90,8 @@ dispersion submodel.}
 \item{\code{vcov}}{Returns the variance-covariance matrix of the estimates.
 Errors if the model was fitted with \code{inference = FALSE}.}
 \item{\code{logLik}}{Returns the maximised log-likelihood, with attributes \code{df}
-(number of estimated parameters) and \code{nobs}, and class \code{"logLik"}.}
+(number of estimated parameters; aliased coefficients are not counted)
+and \code{nobs}, and class \code{"logLik"}.}
 \item{\code{nobs}}{Returns the number of observations used in the fit.}
 \item{\code{fitted}}{Returns the fitted means (\code{model = "mean"}) or fitted
 dispersions (\code{model = "dispersion"}).}

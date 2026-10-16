@@ -68,10 +68,14 @@ produced by \code{\link[=fastsimplexregmixed]{fastsimplexregmixed()}}.
 
 \describe{
 \item{\code{coef}}{Fixed-effect coefficients (\code{model = "all"}, \code{"mean"} or
-\code{"dispersion"}). Random effects are obtained with \code{ranef()}.}
+\code{"dispersion"}). Aliased coefficients are \code{NA}. Random effects are
+obtained with \code{ranef()}.}
 \item{\code{vcov}}{Covariance matrix of the estimated parameters
-\code{c(beta, gamma, omega)}.}
-\item{\code{logLik}}{Maximised marginal log-likelihood, with \code{df = p + r + q(q+1)/2} and \code{nobs}.}
+\code{c(beta, gamma, omega)}. Aliased coefficients are not estimated and have
+no row or column.}
+\item{\code{logLik}}{Maximized marginal log-likelihood, with \code{df} the number of
+estimable parameters (aliased coefficients excluded, variance components
+included) and \code{nobs}.}
 \item{\code{nobs}}{Number of observations.}
 \item{\code{ngrps}}{Number of groups.}
 \item{\code{fitted}}{Fitted means (conditional on the empirical-Bayes random
@@ -84,10 +88,10 @@ the \code{"postVar"} attribute.}
 \item{\code{VarCorr}}{The estimated random-effect covariance matrix
 \eqn{\Sigma}, with standard deviations and correlations.}
 \item{\code{confint}}{Wald confidence intervals over the full parameter vector
-\code{c(beta, gamma, omega)}. Note that the intervals for the variance
-components are on the unconstrained log-Cholesky scale, where a Wald
-interval is defensible; on the variance scale it would not be, because
-the null lies on the boundary.}
+\code{c(beta, gamma, omega)}; the rows of aliased coefficients are \code{NA}. Note
+that the intervals for the variance components are on the unconstrained
+log-Cholesky scale, where a Wald interval is defensible; on the variance
+scale it would not be, because the null lies on the boundary.}
 }
 }
 \examples{

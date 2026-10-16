@@ -189,6 +189,16 @@
 #' This version supports a single grouping factor (two-level nesting), Gaussian
 #' random effects in the mean submodel, and fixed-effect (variable) dispersion.
 #'
+#' Columns of the mean or dispersion design that are linear combinations of
+#' earlier columns (aliased) are detected with the same pivoted QR as
+#' [stats::lm()], reported in a warning and left out of the fit, as in
+#' [fastsimplexreg()]. Their coefficients and standard errors are `NA`; the
+#' model is fitted on the reduced designs, so the estimates, the
+#' log-likelihood, `AIC` and `BIC` equal those of the equivalent reduced model.
+#' `vcov` and `hessian` cover the estimable parameters only. The random-effects
+#' design is not checked. If every column of the mean (or dispersion) design is
+#' aliased the function stops.
+#'
 #' @param formula A multi-part formula `y ~ mean_terms | dispersion_terms`. When
 #'   the dispersion part is omitted the dispersion is constant. Each part may
 #'   carry its own `offset()` term, added to the linear predictor of that
@@ -206,7 +216,9 @@
 #'   errors are then unreliable (see Details). `nAGQ = 1` is the Laplace
 #'   approximation.
 #' @param start Optional starting vector `c(beta, gamma, omega)`. When `NULL`,
-#'   fast link-specific values are used.
+#'   fast link-specific values are used. As in [fastsimplexreg()], `beta` and
+#'   `gamma` refer to the columns that remain after aliased ones are dropped, so
+#'   the length is `ncol(X) + ncol(W) + q(q+1)/2` of the reduced designs.
 #' @param maxit Maximum number of BFGS iterations.
 #' @param rel_tol Relative objective tolerance.
 #' @param grad_tol Infinity-norm gradient tolerance.
@@ -237,22 +249,27 @@
 #'   `subset = x1 > 0`. A plain index, logical or row-name vector also works.
 #' @param na.action Missing-data handler.
 #' @param model,x,y Logical; store the model frame, the design matrices, and the
-#'   response in the fitted object.
+#'   response in the fitted object. The stored mean and dispersion designs are
+#'   the full ones, aliased columns included.
 #'
 #' @return An object of S3 class `"simplex_fast_mixed"`: a list whose main
 #'   components are `coefficients` (a list with the `mean` and `dispersion`
-#'   fixed-effect estimates), `par` (the full vector `c(beta, gamma, omega)`),
-#'   `omega` (the packed log-Cholesky parameters), `D` (the Cholesky factor) and
-#'   `Sigma` (the estimated random-effect covariance), `ranef` (the
-#'   empirical-Bayes modes, a groups-by-`q` matrix) with `ranef.postvar`,
-#'   `standard_errors`, `vcov`, `fitted.values` (means conditional on the
-#'   random-effect modes), `dispersion.values`, `linear.predictors`, `residuals`
-#'   (response residuals), `logLik` (the marginal log-likelihood), `AIC`, `BIC`,
-#'   `nobs`, `ngrps`, `groups`, `nAGQ`, `q`, `df`, `df.residual`, `convergence`,
-#'   `message`, `iterations`, the `offset` actually applied to each submodel and
-#'   the stored `terms`/`design` metadata used for prediction. The same
-#'   inference diagnostics as [fastsimplexreg()] are stored -- `vcov_rank`,
-#'   `vcov_pseudo`, `vcov_eigenvalues`, `vcov_condition` and `n_saturated`.
+#'   fixed-effect estimates), `par` (the full vector `c(beta, gamma, omega)`,
+#'   with `NA` for aliased coefficients), `aliased` (a named logical over the
+#'   fixed-effect parameters, `TRUE` where aliased), `omega` (the packed
+#'   log-Cholesky parameters), `D` (the Cholesky factor) and `Sigma` (the
+#'   estimated random-effect covariance), `ranef` (the empirical-Bayes modes, a
+#'   groups-by-`q` matrix) with `ranef.postvar`, `standard_errors`, `vcov` and
+#'   `hessian` (over the estimable parameters), `fitted.values` (means
+#'   conditional on the random-effect modes), `dispersion.values`,
+#'   `linear.predictors`, `residuals` (response residuals), `logLik` (the
+#'   marginal log-likelihood), `AIC`, `BIC`, `nobs`, `ngrps`, `groups`, `nAGQ`,
+#'   `q`, `df` (the number of estimable parameters), `df.residual`,
+#'   `convergence`, `message`, `iterations`, the `offset` actually applied to
+#'   each submodel and the stored `terms`/`design` metadata used for
+#'   prediction. The same inference diagnostics as [fastsimplexreg()] are
+#'   stored -- `vcov_rank`, `vcov_pseudo`, `vcov_eigenvalues`, `vcov_condition`
+#'   and `n_saturated`.
 #'
 #' @references
 #' Barndorff-Nielsen, O. E. and Jorgensen, B. (1991). Some parametric models on
@@ -372,6 +389,18 @@ fastsimplexregmixed <- function(
   W <- design$W
   Z <- design$Z
   group <- design$group
+
+  # Drop aliased columns of the mean (X) and dispersion (W) designs before
+  # fitting and put NA back afterwards, exactly as fastsimplexreg() does. The
+  # random-effects design Z is not touched: its columns are not fixed-effect
+  # coefficients, and its variance components are estimated, not solved for.
+  alias <- .simplex_check_alias(X, W)
+  alias_x <- alias$x
+  alias_w <- alias$z
+  X_full <- X
+  W_full <- W
+  X <- X[, !alias_x, drop = FALSE]
+  W <- W[, !alias_w, drop = FALSE]
   p <- ncol(X); r <- ncol(W); q <- ncol(Z)
   J <- nlevels(group)
   m <- q * (q + 1L) / 2L
@@ -435,8 +464,8 @@ fastsimplexregmixed <- function(
     start <- as.numeric(start)
   }
   if (length(start) != p + r + m || any(!is.finite(start))) {
-    stop("'start' must be a finite numeric vector of length ncol(X) + ncol(W) + q(q+1)/2.",
-         call. = FALSE)
+    stop("'start' must be a finite numeric vector of length ncol(X) + ncol(W) + q(q+1)/2, ",
+         "counting only the non-aliased columns of X and W.", call. = FALSE)
   }
 
   # BLAS thread pinning, for the duration of this call only.
@@ -476,11 +505,7 @@ fastsimplexregmixed <- function(
   )
 
   theta <- as.numeric(opt$par)
-  beta <- theta[seq_len(p)]
-  gamma <- theta[p + seq_len(r)]
   omega <- theta[p + r + seq_len(m)]
-  names(beta) <- colnames(X)
-  names(gamma) <- colnames(W)
 
   re_names <- colnames(Z)
   D <- simplex_mixed_D_from_omega_cpp(omega, as.integer(q))
@@ -512,9 +537,19 @@ fastsimplexregmixed <- function(
   k <- length(theta)
   n <- length(response)
 
+  # `theta`, `par_names` and the Hessian span the ESTIMABLE parameters only
+  # (aliased columns were dropped above). The NA-padded full-design vectors are
+  # built after inference, for reporting.
   par_names <- c(.simplex_par_names(colnames(X), colnames(W)),
                  .omega_labels(re_names))
   names(theta) <- par_names
+  # Flag aliased fixed effects over the FULL designs; omega is never aliased.
+  aliased <- c(alias_x, alias_w)
+  names(aliased) <- .simplex_par_names(colnames(X_full), colnames(W_full))
+  par_names_full <- c(names(aliased), .omega_labels(re_names))
+  est_mask <- c(!aliased, rep(TRUE, m))
+  p_full <- ncol(X_full)
+  r_full <- ncol(W_full)
 
   converged <- as.integer(opt$convergence) == 0L
   if (!converged) {
@@ -551,6 +586,14 @@ fastsimplexregmixed <- function(
     vcov_condition <- inf$condition
   }
 
+  # Re-expand to the FULL design: aliased coefficients are reported as NA, like
+  # lm(), never as an arbitrary share of an identified effect. vcov and the
+  # Hessian stay over the ESTIMABLE parameters only.
+  theta_full <- stats::setNames(rep(NA_real_, length(par_names_full)), par_names_full)
+  theta_full[est_mask] <- theta
+  se_full <- stats::setNames(rep(NA_real_, length(par_names_full)), par_names_full)
+  se_full[est_mask] <- se
+
   .warn_saturated(opt$n_saturated, n, what = "fastsimplexregmixed()")
 
   obs_names <- rownames(design$model)
@@ -562,16 +605,18 @@ fastsimplexregmixed <- function(
     random = random,
     link = list(mean = link_spec$name, dispersion = "log"),
     coefficients = list(
-      mean = stats::setNames(beta, colnames(X)),
-      dispersion = stats::setNames(gamma, colnames(W))
+      mean = stats::setNames(theta_full[seq_len(p_full)], colnames(X_full)),
+      dispersion = stats::setNames(theta_full[p_full + seq_len(r_full)],
+                                   colnames(W_full))
     ),
-    par = theta,
+    par = theta_full,
+    aliased = aliased,
     omega = stats::setNames(omega, .omega_labels(re_names)),
     D = D,
     Sigma = Sigma,
     ranef = ranef_mat,
     ranef.postvar = re$postvar,
-    standard_errors = stats::setNames(se, par_names),
+    standard_errors = se_full,
     vcov = vc,
     vcov_rank = vcov_rank,
     vcov_pseudo = vcov_pseudo,
@@ -616,7 +661,7 @@ fastsimplexregmixed <- function(
   )
 
   if (isTRUE(model)) out$model <- design$model
-  if (isTRUE(x)) out$x <- list(mean = X, dispersion = W, random = Z)
+  if (isTRUE(x)) out$x <- list(mean = X_full, dispersion = W_full, random = Z)
   if (isTRUE(y)) out$y <- response
 
   structure(out, class = "simplex_fast_mixed")

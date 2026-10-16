@@ -243,6 +243,31 @@
 }
 
 
+# Internal: detect the aliased columns of the mean design X and the dispersion
+# design Z, warn naming them, and stop when a whole design is aliased. Shared by
+# fastsimplexreg() and fastsimplexregmixed() so both treat rank deficiency alike.
+# Returns list(x, z): logical vectors over the columns, TRUE where aliased.
+.simplex_check_alias <- function(X, Z) {
+  alias_x <- .simplex_aliased(X)
+  alias_z <- .simplex_aliased(Z)
+  if (any(alias_x) || any(alias_z)) {
+    warning("Design is rank deficient: ",
+            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
+                  collapse = ", "),
+            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
+            " a linear combination of the other columns and cannot be ",
+            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
+  }
+  # With every column aliased there is nothing left to fit.
+  if (all(alias_x) || all(alias_z)) {
+    stop("Every column of the ", if (all(alias_x)) "mean" else "dispersion",
+         " design is aliased; the model has no estimable parameters.",
+         call. = FALSE)
+  }
+  list(x = alias_x, z = alias_z)
+}
+
+
 # Internal helper: stable, link-specific starting values c(beta, gamma).
 .simplex_start <- function(y, X, Z, link) {
   p <- ncol(X)
@@ -457,25 +482,13 @@ fastsimplexreg <- function(
   # Drop aliased columns before fitting and put NA back afterwards, as lm()
   # does. Fitting on the full rank-deficient design would return an arbitrary
   # split of one identified effect across the collinear group.
-  alias_x <- .simplex_aliased(X)
-  alias_z <- .simplex_aliased(Z)
-  if (any(alias_x) || any(alias_z)) {
-    warning("Design is rank deficient: ",
-            paste(c(colnames(X)[alias_x], colnames(Z)[alias_z]),
-                  collapse = ", "),
-            " ", if (sum(alias_x, alias_z) == 1L) "is" else "are",
-            " a linear combination of the other columns and cannot be ",
-            "estimated. Coefficient(s) reported as NA.", call. = FALSE)
-  }
+  alias <- .simplex_check_alias(X, Z)
+  alias_x <- alias$x
+  alias_z <- alias$z
   X_full <- X
   Z_full <- Z
   X <- X[, !alias_x, drop = FALSE]
   Z <- Z[, !alias_z, drop = FALSE]
-  if (ncol(X) == 0L || ncol(Z) == 0L) {
-    stop("Every column of the ", if (ncol(X) == 0L) "mean" else "dispersion",
-         " design is aliased; the model has no estimable parameters.",
-         call. = FALSE)
-  }
   p <- ncol(X)
   q <- ncol(Z)
   # numeric(0) is the backend's "no offset" sentinel.

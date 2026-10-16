@@ -12,7 +12,8 @@
 #'   \item{`vcov`}{Returns the variance-covariance matrix of the estimates.
 #'     Errors if the model was fitted with `inference = FALSE`.}
 #'   \item{`logLik`}{Returns the maximised log-likelihood, with attributes `df`
-#'     (number of estimated parameters) and `nobs`, and class `"logLik"`.}
+#'     (number of estimated parameters; aliased coefficients are not counted)
+#'     and `nobs`, and class `"logLik"`.}
 #'   \item{`nobs`}{Returns the number of observations used in the fit.}
 #'   \item{`fitted`}{Returns the fitted means (`model = "mean"`) or fitted
 #'     dispersions (`model = "dispersion"`).}
@@ -134,7 +135,10 @@ vcov.simplex_fast <- function(object, ...) {
 #' @export
 logLik.simplex_fast <- function(object, ...) {
   out <- object$logLik
-  attr(out, "df") <- length(object$par)
+  # Count the ESTIMABLE parameters: `par` carries NA for aliased coefficients,
+  # which were dropped before fitting and cost no degree of freedom. Counting
+  # them made AIC()/BIC() disagree with the AIC/BIC stored on the fit.
+  attr(out, "df") <- .simplex_n_est(object)
   attr(out, "nobs") <- object$nobs
   class(out) <- "logLik"
   out
@@ -528,7 +532,7 @@ summary.simplex_fast <- function(object, ...) {
       vcov_condition = object$vcov_condition,
       n_saturated = object$n_saturated,
       aliased = object$aliased,
-      npar = length(object$par),
+      npar = .simplex_n_est(object),   # estimable parameters, as in the vcov
       no_inference = is.null(object$vcov),
       convergence = object$convergence,
       message = object$message,

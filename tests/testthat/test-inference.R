@@ -39,6 +39,41 @@ test_that("an exactly collinear column is dropped and reported as NA", {
                unname(predict(fit)[1:5]))
 })
 
+test_that("logLik, AIC and BIC count the estimable parameters only", {
+  set.seed(5L)
+  n <- 250L
+  dat <- data.frame(x1 = rnorm(n), z1 = rnorm(n))
+  dat$x2 <- 2 * dat$x1                   # aliased with x1
+  dat$y <- rsimplex(n, simplex_linkinv(0.3 + 0.5 * dat$x1, "logit"),
+                    exp(-0.4 + 0.3 * dat$z1))
+
+  fit <- suppressWarnings(
+    fastsimplexreg(y ~ x1 + x2 | z1, data = dat, n_threads = 1L))
+  reduced <- fastsimplexreg(y ~ x1 | z1, data = dat, n_threads = 1L)
+
+  # `par` has 5 slots (one is NA) but only 4 parameters were estimated.
+  k <- sum(!is.na(fit$par))
+  expect_identical(k, 4L)
+  expect_identical(length(fit$par), 5L)
+  expect_equal(attr(logLik(fit), "df"), k)
+  expect_equal(AIC(fit), fit$AIC)
+  expect_equal(BIC(fit), fit$BIC)
+  expect_equal(AIC(fit), AIC(reduced), tolerance = 1e-8)
+  expect_equal(BIC(fit), BIC(reduced), tolerance = 1e-8)
+  expect_equal(fit$df.residual, n - k)
+
+  # summary() reports the same count, so its rank line is not off by one.
+  expect_equal(summary(fit)$npar, k)
+  out <- capture.output(print(summary(fit)))
+  expect_false(any(grepl("Moore-Penrose", out)))
+
+  # Without aliasing nothing changes: df is the whole parameter vector.
+  expect_equal(attr(logLik(reduced), "df"), length(reduced$par))
+  expect_equal(AIC(reduced), reduced$AIC)
+  expect_equal(BIC(reduced), reduced$BIC)
+  expect_equal(summary(reduced)$npar, length(reduced$par))
+})
+
 test_that(".simplex_vcov withholds the standard error of a singular direction", {
   # The design-level guard above means a singular observed information no longer
   # arises from exact collinearity -- but the fail-safe inversion must still
