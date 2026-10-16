@@ -161,7 +161,7 @@ test_that("a fit never returns a non-finite gradient", {
   d <- data.frame(y = rsimplex(n, 0.4, 1))
   # A start inside the overflow region is rejected up front, like any invalid start ...
   expect_error(fastsimplexreg(y ~ 1, data = d, start = c(-30, -650)),
-               "non-finite objective")
+               "non-finite objective or gradient")
   # ... and starts next to it either fail the same way or end with a finite gradient.
   for (st in list(c(-30, -400), c(-25, -300), c(-12, -250))) {
     fit <- suppressWarnings(tryCatch(

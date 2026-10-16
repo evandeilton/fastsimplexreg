@@ -434,7 +434,7 @@ inline Rcpp::List bfgs_minimize(
 
   EvalResult current = eval(theta);
   if (!current.valid || !std::isfinite(current.nll)) {
-    Rcpp::stop("Initial parameter vector produces a non-finite objective.");
+    Rcpp::stop("Initial parameter vector produces a non-finite objective or gradient.");
   }
 
   int convergence = 1;
