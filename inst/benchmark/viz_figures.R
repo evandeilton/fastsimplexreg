@@ -104,9 +104,10 @@ theme_bench <- function(base_size = 11) {
 
 ## Compact provenance string + hard-wrap helper so captions never clip.
 sci_source <- paste0(
-  "Precomputed benchmark: R 4.5.2, OpenBLAS; simplexreg ",
-  meta$versions$simplexreg, ", betareg ", meta$versions$betareg,
-  "; seed ", meta$seed, "."
+  "Precomputed benchmark: fastsimplexreg ", meta$versions$fastsimplexreg,
+  ", simplexreg ", meta$versions$simplexreg,
+  ", betareg ", meta$versions$betareg,
+  "; R 4.5.2, OpenBLAS; seed ", meta$seed, "."
 )
 wrap_cap <- function(..., width = 96)
   paste(strwrap(paste0(...), width = width), collapse = "\n")
@@ -138,7 +139,7 @@ fig_scaling <- function() {
                         short = unit(0.05,"cm"), mid = unit(0.1,"cm"),
                         long = unit(0.15,"cm")) +
     labs(
-      title = "fastsimplexreg scales sub-linearly where CRAN slows down",
+      title = "Fit time versus sample size",
       subtitle = paste0("Median wall-clock time for one cold fit vs sample ",
                         "size (both axes log10; band = IQR over replications)"),
       x = "Sample size  n", y = "Fit time  (seconds)",
@@ -171,6 +172,11 @@ fig_speedup <- function() {
            package = factor(package, levels = c("simplexreg", "betareg")),
            xi   = as.integer(factor(n, levels = ns)),
            xpos = xi + ifelse(package == "simplexreg", -off, off))
+  # Ranges quoted in the caption, computed from the data (n <= 1e5, and the
+  # largest n separately).
+  rng <- function(pk) range(d$speedup[d$package == pk & d$n <= 1e5])
+  top <- function(pk) d$speedup[d$package == pk & d$n == max(ns)]
+  fmt <- function(x) sprintf("%.1f", x)
 
   ggplot(d, aes(xpos, speedup, colour = package)) +
     geom_hline(yintercept = 1, linetype = "dashed", colour = MUTED,
@@ -193,11 +199,15 @@ fig_speedup <- function() {
                         "time. Above the dashed line = fastsimplexreg wins."),
       x = "Sample size  n", y = "Speed-up factor  (log10, ×)",
       caption = wrap_cap(
-        "Single-core, like-for-like: fastsimplexreg is 3-15× faster than ",
-        "simplexreg throughout. betareg (a different, beta model) is a ",
-        "speed-only comparator; at n = 500,000 its single fit edges out the ",
-        "single-thread build, and the 4-thread build (Fig. 1) reclaims the ",
-        "lead. ", sci_source)
+        "Single-core, like-for-like: fastsimplexreg is ",
+        fmt(rng("simplexreg")[1]), "-", fmt(rng("simplexreg")[2]),
+        "× faster than simplexreg and ",
+        fmt(rng("betareg")[1]), "-", fmt(rng("betareg")[2]),
+        "× faster than betareg for n up to 100,000. At n = 500,000 the gain is ",
+        fmt(top("simplexreg")), "× over simplexreg and ", fmt(top("betareg")),
+        "× over betareg (below 1 means betareg is faster); the 4-thread build ",
+        "(Fig. 1) is the fastest there. betareg fits a different (beta) ",
+        "model, so it is a speed-only comparator. ", sci_source)
     ) +
     theme_bench() +
     theme(panel.grid.major.x = element_blank())
@@ -242,13 +252,13 @@ fig_accuracy <- function() {
 
   (p_scatter | p_diff) +
     plot_annotation(
-      title = "fastsimplexreg reproduces simplexreg's estimates exactly",
+      title = "fastsimplexreg and simplexreg estimates agree on simulated data",
       subtitle = wrap_cap("Same simplex likelihood, same data (n = 500 / 2,000 ",
                           "/ 8,000): every coefficient sits on the identity ",
-                          "line; the worst disagreement is ", worst,
-                          " (numerical noise).", width = 120),
-      caption = wrap_cap("Both are MLEs of the identical simplex model. ",
-                         sci_source, width = 120),
+                          "line; the largest difference is ", worst, ".",
+                          width = 100),
+      caption = wrap_cap("Both fit the same simplex model by maximum ",
+                         "likelihood. ", sci_source, width = 120),
       theme = theme_bench()
     )
 }
@@ -262,6 +272,8 @@ fig_links <- function() {
     summarise(med = median(time_sec), conv = all(converged), .groups = "drop") %>%
     mutate(package = factor(package, levels = c("fastsimplexreg","simplexreg")),
            link = factor(link, levels = c("logit","probit","cloglog","neglog")))
+  # Speed-up range across links, computed from the data.
+  sp <- with(d, med[package == "simplexreg"] / med[package == "fastsimplexreg"])
 
   ggplot(d, aes(link, med, fill = package)) +
     geom_col(position = position_dodge(width = 0.72), width = 0.66) +
@@ -277,7 +289,8 @@ fig_links <- function() {
                         "for both packages"),
       x = "Mean link function", y = "Fit time  (seconds)",
       caption = wrap_cap("fastsimplexreg supports logit / probit / cloglog / ",
-                       "neglog; each ~3-10× faster than simplexreg. ",
+                       "neglog; each ", sprintf("%.1f-%.1f", min(sp), max(sp)),
+                       "× faster than simplexreg. ",
                        sci_source, width = 88)
     ) +
     theme_bench() +
@@ -296,6 +309,14 @@ fig_realdata <- function() {
            dataset = factor(dataset,
                             levels = c("GasolineYield","ReadingSkills",
                                        "FoodExpenditure")))
+  # Dispersion-intercept gap (fast - simplexreg) per data set, from the
+  # shipped coefficients.
+  di <- coefs %>%
+    filter(scenario == "realdata", term == "disp:(Intercept)",
+           package %in% c("fastsimplexreg", "simplexreg")) %>%
+    select(dataset, package, estimate) %>%
+    pivot_wider(names_from = package, values_from = estimate) %>%
+    mutate(gap = abs(fastsimplexreg - simplexreg))
 
   ggplot(d, aes(dataset, med, fill = package)) +
     geom_col(position = position_dodge(width = 0.78), width = 0.72) +
@@ -311,9 +332,11 @@ fig_realdata <- function() {
                         "(constant dispersion, three-way match)"),
       x = NULL, y = "Fit time  (seconds)",
       caption = wrap_cap(
-        "fastsimplexreg vs simplexreg fitted means agree perfectly ",
-        "(cor = 1.00 on all three datasets). betareg fits a different (beta) ",
-        "model — compared on speed/capability only, not likelihood. ",
+        "fastsimplexreg vs simplexreg fitted means have cor = 1.00 on all ",
+        "three datasets, but the dispersion intercepts (log scale) differ by ",
+        sprintf("%.3f-%.3f", min(di$gap), max(di$gap)),
+        "; the cause was not investigated. betareg fits a different (beta) ",
+        "model — compared on speed only, not likelihood. ",
         sci_source)
     ) +
     theme_bench() +

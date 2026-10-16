@@ -197,10 +197,17 @@ predict(fit, newdata = new_dat, type = "both")
   BFGS iterations dominate. The default stays `"observed"`, following Efron and
   Hinkley (1978).
 
-In head-to-head benchmarks, `fastsimplexreg` returns **numerically identical
-maximum-likelihood estimates** to the CRAN package `simplexreg` (fitted-mean
-correlation = 1) while running roughly **5-13x faster** for sample sizes up to
-1e5, and is ~2-4x faster than `betareg` while fitting a richer model. See the
+The shipped benchmark was run with `fastsimplexreg` 0.2.1 (`simplexreg` 1.3,
+`betareg` 3.2.4, R 4.5.2, 24 cores) and has not been re-run for later versions.
+At a single thread, `fastsimplexreg` was 5.3-13.4x faster than `simplexreg` and
+2.3-4.4x faster than `betareg` for sample sizes up to 1e5. At n = 5e5 the
+single-thread gain was 1.2x over `simplexreg`, and `betareg` was faster (0.5x).
+On simulated data `fastsimplexreg` and `simplexreg` return the same estimates
+(largest coefficient difference 7.8e-7). On the three real data sets the mean
+coefficients agree (largest difference 3.5e-6), but the dispersion intercepts
+differ by 0.065 to 0.082 on the log scale; the cause was not investigated.
+`betareg` fits a different (beta) model, so that comparison is about speed
+only. See the
 [benchmark article](https://evandeilton.github.io/fastsimplexreg/articles/benchmark.html)
 (the full reproducible study ships in `inst/benchmark/`).
 

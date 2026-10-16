@@ -53,26 +53,29 @@ A deliberate omission: we **never** compare log-likelihoods across packages. On 
 very same fit where the coefficients agree to seven digits, the reported `logLik`
 values differ in sign and magnitude, because the packages use different additive
 conventions (and `betareg` is a different family). Accuracy is demonstrated the
-honest way — through coefficient agreement and fitted-value correlation.
+honest way — through coefficient agreement.
 
 ```{r methods-note, echo = FALSE, results = "asis"}
 if (has_viz) {
   cat(sprintf(
-    paste0("*All results are precomputed (R %s, %s; simplexreg %s, betareg %s; ",
-           "%d cores; seed %s). Each package receives the identical data per cell; ",
+    paste0("*All results are precomputed with `fastsimplexreg` %s, `simplexreg` %s ",
+           "and `betareg` %s (%s, BLAS %s; %d cores; seed %s; run on %s). ",
+           "They have not been re-run for later versions of `fastsimplexreg`. ",
+           "Each package receives the identical data per cell; ",
            "`fastsimplexreg` is timed single-core and at 4 threads, and the ",
            "single-core number is always shown.*\n"),
-    meta$r_version, meta$blas, meta$versions$simplexreg, meta$versions$betareg,
-    meta$n_cores, meta$seed))
+    meta$versions$fastsimplexreg, meta$versions$simplexreg,
+    meta$versions$betareg, meta$r_version, meta$blas, meta$n_cores, meta$seed,
+    substr(meta$date, 1, 10)))
 }
 ```
 
 ## 1. Accuracy: the same maximum-likelihood estimates
 
 Fitting the identical simplex model (logit mean with two covariates, log dispersion
-with one) on simulated data, `fastsimplexreg` and `simplexreg` return the same MLE.
-The largest coefficient disagreement is around `1e-6` and *tightens* as $n$ grows —
-pure optimizer noise.
+with one) on simulated data, `fastsimplexreg` and `simplexreg` return the same
+estimates. The largest coefficient difference is 7.8e-7 (at $n = 500$) and it
+*shrinks* as $n$ grows, to 1.1e-9 at $n = 8000$.
 
 ```{r tab-accuracy, echo = FALSE, results = "asis"}
 # Built from the shipped results rather than hard-coded, so the table can never
@@ -121,11 +124,13 @@ fig_scaling()
 | 100000  | 0.8370 | 1.4480 | 4.4300 | 1.9540 | 5.3&times;  | 2.3&times;  |
 | 500000  | 17.28  | 3.2475 | 20.94  | 8.6075 | 1.2&times;  | 0.5&times;  |
 
-At single thread, `fastsimplexreg` is **5–13&times; faster than `simplexreg`** and
-**~2.3–4.4&times; faster than `betareg`** across $n$ up to $10^5$ — the range that
-covers most applied work. The scaling is near-linear (slope $\approx 1.0$ up to
-$10^5$); the competitors have slightly lower slopes but far larger constant
-factors, so the absolute time still favors `fastsimplexreg`.
+With `fastsimplexreg` 0.2.1 at a single thread, the fit is
+**5.3–13.4&times; faster than `simplexreg`** and
+**2.3–4.4&times; faster than `betareg`** for $n$ up to $10^5$. At
+$n = 5\times10^5$ the single-thread advantage is much smaller: **1.2&times;**
+over `simplexreg`, and `betareg` is faster (**0.5&times;**). The scaling is
+near-linear up to $10^5$ (log-log slope $\approx 1.0$); the competitors have
+slightly lower slopes (about 0.9) but larger constant factors.
 
 ```{r fig-speedup, echo = FALSE, eval = has_viz, fig.width = 7.5, fig.height = 4.6}
 fig_speedup()
@@ -133,11 +138,13 @@ fig_speedup()
 
 Two honest points the figures make explicit. First, **multithreading is a
 scale-up story, not a free win**: at mid-$n$ (5000, 20000) four threads are
-*slower* than one, because thread startup and BLAS oversubscription dominate small
-per-fit work; the payoff appears at large scale (at $n = 5\times10^5$ the 4-thread
-run, 3.25 s, is the fastest of all four). Second, the **single-thread
-$n = 5\times10^5$ cell is BLAS-bound and noisy** and we draw no advantage from it —
-only the 4-thread result there supports a claim.
+*slower* than one, and the payoff appears at large scale (at $n = 5\times10^5$ the
+4-thread run, 3.25 s, is the fastest of all four). Version 0.2.1 computed the
+linear predictors through BLAS and 0.2.4 does not (see `NEWS.md`), so the
+threaded timings here may not carry over to 0.2.4.
+Second, the **single-thread $n = 5\times10^5$ cell** took 17.3 s against 0.84 s
+at $n = 10^5$ (21 times longer for 5 times the data, two repetitions), and we
+draw no advantage from it — only the 4-thread result there supports a claim.
 
 ## 3. All four mean links
 
@@ -153,17 +160,41 @@ fig_links()
 
 On the three standard datasets from `betareg` — `GasolineYield`, `ReadingSkills`
 and `FoodExpenditure` — all three packages fit a constant-dispersion model
-successfully. The correlation between the `fastsimplexreg` and `simplexreg` fitted
-means is **exactly 1.00 on every dataset**, confirming identical estimation on real
-data; `fastsimplexreg` is at least as fast as both references.
+successfully, and `fastsimplexreg` is at least as fast as both references. The
+`fastsimplexreg` and `simplexreg` fitted means have correlation 1.00 on every
+dataset and the mean coefficients agree, but the two packages do **not** return
+the same dispersion intercept:
+
+```{r tab-realdata, echo = FALSE, results = "asis"}
+# Built from the shipped coefficients, like the accuracy table above.
+if (has_viz) {
+  rd <- coefs[coefs$scenario == "realdata" &
+                coefs$package %in% c("fastsimplexreg", "simplexreg"), ]
+  cat("| data set | max &#124;mean coef diff&#124; | dispersion intercept, fastsimplexreg | dispersion intercept, simplexreg | difference (fast &minus; simplexreg) |\n")
+  cat("|:---------|:------------:|:--------:|:--------:|:--------:|\n")
+  for (ds in c("GasolineYield", "ReadingSkills", "FoodExpenditure")) {
+    z <- rd[rd$dataset == ds, ]
+    get <- function(pk, tm) z$estimate[z$package == pk & z$term == tm]
+    mt <- unique(z$term[grepl("^mean:", z$term)])
+    md <- max(abs(vapply(mt, function(tm) get("fastsimplexreg", tm) -
+                                         get("simplexreg", tm), numeric(1))))
+    a <- get("fastsimplexreg", "disp:(Intercept)")
+    b <- get("simplexreg", "disp:(Intercept)")
+    cat(sprintf("| %s | %.1e | %.3f | %.3f | %.3f |\n", ds, md, a, b, a - b))
+  }
+}
+```
+
+The dispersion intercepts are on the log scale. The cause of the difference was
+not investigated, so identical estimates are shown only on the simulated data of
+Section 1. `simplexreg` is archived on CRAN and was not re-run for this article.
 
 ```{r fig-realdata, echo = FALSE, eval = has_viz, fig.width = 7.2, fig.height = 4.6}
 fig_realdata()
 ```
 
 These datasets are tiny ($n \le 44$) with millisecond fit times, so the real-data
-speed-ups are directionally consistent rather than precise multipliers; their
-firm message is correctness (correlation $= 1$).
+speed-ups are directionally consistent rather than precise multipliers.
 
 ## 5. The mixed model — where nothing else exists
 
@@ -186,13 +217,14 @@ large $J$.
 
 ## Bottom line
 
-* **vs `simplexreg`:** numerically identical maximum-likelihood estimates
-  (max coefficient difference $\le 10^{-6}$; fitted-mean correlation $= 1$) while
-  running **~5–13&times; faster** at practical sizes ($n$ up to $10^5$) and across
-  all four mean links.
-* **vs `betareg`:** comparable-to-faster (~2–4&times; single-thread up to
-  $n = 10^5$) while fitting a *richer* model surface — variable dispersion, four
-  links, and mixed effects.
+* **vs `simplexreg`** (`fastsimplexreg` 0.2.1, single thread): the same
+  estimates on simulated data (max coefficient difference $7.8\times10^{-7}$),
+  **5.3–13.4&times; faster** for $n$ up to $10^5$ and 1.2&times; at
+  $n = 5\times10^5$. On the real data sets the fitted means agree but the
+  dispersion intercepts differ by 0.065–0.082 (cause not investigated).
+* **vs `betareg`** (a different, beta model; speed only): **2.3–4.4&times;
+  faster** single-thread for $n$ up to $10^5$, and 0.5&times; (slower) at
+  $n = 5\times10^5$.
 * **Mixed model:** the only tractable simplex GLMM available, linear in clusters,
   with nearly-free higher-order quadrature.
 
