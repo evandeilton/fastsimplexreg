@@ -6,7 +6,8 @@
   accuracy as `mu` shrank (an absolute error of 1e-5 or more at `mu = 1e-8`,
   up to 0.8 for `mu <= 1e-10`) because two terms of size ~1e8 were subtracted.
   Both tails are now accurate: lower plus upper tail equals 1 to 2e-16 for `mu`
-  from 1e-12 to `1 - 1e-8`. Fits were not affected.
+  from 1e-12 to `1 - 1e-8`, and `log.p = TRUE` keeps its relative accuracy when
+  the probability is close to 1. Fits were not affected.
 * **`qsimplex(lower.tail = FALSE)` for a small `p`.** It lost digits below
   `p` = 1e-10 and returned 1 for `p` = 1e-20 (true value 0.959). Each tail is
   now solved directly, also with `log.p = TRUE` (`p` down to 1e-300 and
