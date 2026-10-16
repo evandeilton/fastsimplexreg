@@ -43,7 +43,8 @@
   `grad_tol` and `rel_tol` are described as implemented.
 * Benchmark figures state the version they were measured with (0.2.1). Identical
   estimates are claimed for simulated data only; on the real data sets the
-  dispersion intercepts differ by 0.065 to 0.082.
+  dispersion intercepts differ by 0.065 to 0.082, which equals log(n/(n - p)):
+  simplexreg appears to rescale the dispersion by n/(n - p).
 * Spelling is en-US throughout (`Language: en-US`).
 
 ## Tests
